@@ -100,7 +100,9 @@ public sealed partial class MainWindow : Window
         {
             var idx = t;
             var style = t == i ? "TabButtonSelected" : "TabButton";
-            SideTabs.Children.Add(Btn(Tabs[t], () => Select(idx), style));
+            var sb = Btn(Tabs[t], () => Select(idx), style);
+            sb.HorizontalContentAlignment = HorizontalAlignment.Left;
+            SideTabs.Children.Add(sb);
             var b = Btn(Tabs[t], () => Select(idx), style);
             BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(b, t);

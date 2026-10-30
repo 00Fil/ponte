@@ -217,12 +217,12 @@
     <!-- Pulsanti: sempre tondi, alti 44 con area di 48, velo al 6 % in hover e al 12 % da premuti, 40 % se disattivati. -->
     <ControlTemplate x:Key="PillButtonTemplate" TargetType="Button">
         <Grid x:Name="Root" MinHeight="48" Background="Transparent">
-            <Border x:Name="Pill" Height="44" CornerRadius="9999" Background="{TemplateBinding Background}">
+            <Border x:Name="Pill" Height="44" CornerRadius="22" Background="{TemplateBinding Background}">
                 <Grid>
-                    <Border x:Name="Veil" CornerRadius="9999" Opacity="0" IsHitTestVisible="False"
+                    <Border x:Name="Veil" CornerRadius="22" Opacity="0" IsHitTestVisible="False"
                             Background="{TemplateBinding Foreground}" />
                     <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}" Padding="24,0"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
                 </Grid>
             </Border>
             <VisualStateManager.VisualStateGroups>
