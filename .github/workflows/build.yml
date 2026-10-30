@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.9 }
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Ponte-Android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: Ponte-Android.apk }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - name: Publish
+        working-directory: windows
+        run: dotnet publish Ponte.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -o ../out
+      - run: Compress-Archive -Path out\* -DestinationPath Ponte-Windows-x64.zip
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: Ponte-Windows-x64.zip }
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Publish release latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest --cleanup-tag -y || true
+          gh release create latest dist/* --title "Ponte (ultima build)" --notes "Build automatica. Android: installa l'APK. Windows: estrai lo zip e avvia Ponte.exe."
