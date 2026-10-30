@@ -1,0 +1,417 @@
+package it.ponte.ui
+
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.PowerManager
+import android.provider.OpenableColumns
+import android.provider.Settings
+import android.text.format.DateFormat
+import android.text.format.Formatter
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.activity.ComponentActivity
+import it.ponte.FileEntry
+import it.ponte.Router
+import it.ponte.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Date
+
+@Composable
+private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
+    val c = Canone.colors
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        LazyColumn(
+            Modifier.widthIn(max = 720.dp).fillMaxHeight(),
+            contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
+            verticalArrangement = Arrangement.spacedBy(Space.s4),
+        ) {
+            item { Text(title, style = CanoneType.title1, color = c.labelPrimary, modifier = Modifier.padding(top = Space.s5, bottom = Space.s2)) }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, color = Canone.colors.labelPrimary)
+
+@Composable
+private fun CChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = Canone.colors
+    Box(
+        Modifier.clip(CircleShape).background(if (selected) c.accentSubtle else c.bgSunken)
+            .border(BorderStroke(1.5.dp, if (selected) c.accent else androidx.compose.ui.graphics.Color.Transparent), CircleShape)
+            .clickable(onClick = onClick).padding(horizontal = Space.s4, vertical = Space.s2),
+    ) { Text(label, style = CanoneType.footnote, color = if (selected) c.accentOnSubtle else c.labelPrimary) }
+}
+
+private fun toast(ctx: Context, s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
+private fun imagesPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+private fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
+private fun listenerEnabled(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+private fun time(ts: Long, ctx: Context) = DateFormat.getTimeFormat(ctx).format(Date(ts))
+private fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(ctx).format(Date(ts)) + " " + time(ts, ctx)
+
+// ---------------------------------------------------------------- Dispositivi
+
+@Composable
+fun DevicesScreen(r: Router) {
+    val ctx = LocalContext.current
+    val devices by r.devices.collectAsState()
+    val hub by r.hubState.collectAsState()
+    var lan by remember { mutableStateOf(r.prefs.lanEnabled) }
+    var shots by remember { mutableStateOf(r.prefs.screenshots) }
+    var notif by remember { mutableStateOf(r.prefs.notifications) }
+    val askImages = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { r.reconfigure() }
+
+    val hubTone = when (hub) {
+        "Connesso" -> Tone.Positive
+        "Non configurato" -> Tone.Neutral
+        "Connessione in corso" -> Tone.Caution
+        else -> Tone.Critical
+    }
+    val near = devices.count { it.via == "lan" }
+
+    ScreenList("Dispositivi") {
+        item {
+            CCard {
+                SectionTitle("Collegamenti")
+                CRow("Server", "Per chi è fuori casa e per l'archivio") { CBadge(hub, hubTone) }
+                CDivider()
+                CRow("Rete locale", "Collegamento diretto, più veloce") {
+                    when {
+                        !lan -> CBadge("Disattivata")
+                        near == 0 -> CBadge("Nessun dispositivo")
+                        else -> CBadge("$near collegati", Tone.Positive)
+                    }
+                }
+            }
+        }
+        item {
+            CCard {
+                SectionTitle("Altri dispositivi")
+                if (devices.isEmpty()) {
+                    CText("Nessun altro dispositivo. Apri Ponte su un altro dispositivo, con lo stesso server e lo stesso token.")
+                } else devices.forEachIndexed { i, d ->
+                    if (i > 0) CDivider()
+                    val what = buildList {
+                        add(if (d.platform == "windows") "Windows" else "Android")
+                        if ("audio-src" in d.caps) add("sorgente audio")
+                        if ("audio-sink" in d.caps) add("riceve audio")
+                    }.joinToString(" · ")
+                    CRow(d.name, what) { CBadge(if (d.via == "lan") "Rete locale" else "Server", if (d.via == "lan") Tone.Accent else Tone.Neutral) }
+                }
+            }
+        }
+        item {
+            CCard {
+                SectionTitle("Funzioni")
+                CSwitchRow("Rete locale diretta", "Trova da solo i dispositivi sulla stessa rete", lan) {
+                    lan = it; r.prefs.lanEnabled = it; r.reconfigure()
+                }
+                CDivider()
+                CSwitchRow("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", shots) {
+                    shots = it; r.prefs.screenshots = it
+                    if (it && !has(ctx, imagesPermission())) askImages.launch(imagesPermission()) else r.reconfigure()
+                }
+                CDivider()
+                CSwitchRow("Notifiche sul PC", "Le notifiche di questo telefono compaiono su Windows", notif) {
+                    notif = it; r.prefs.notifications = it; r.reconfigure()
+                    if (it && !listenerEnabled(ctx)) ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Appunti
+
+@Composable
+fun ClipScreen(r: Router) {
+    val ctx = LocalContext.current
+    val history by r.clipboard.history.collectAsState()
+    ScreenList("Appunti") {
+        item {
+            CCard {
+                CText("Quello che copi su un dispositivo collegato arriva subito sugli altri.")
+                CButton("Invia appunti", {
+                    toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare")
+                }, kind = ButtonKind.Primary)
+                CText(
+                    "Android non lascia a un'app leggere gli appunti in background. Per inviare dal telefono usa questo pulsante, " +
+                        "il riquadro Invia appunti nelle impostazioni rapide o il pulsante nella notifica di Ponte.",
+                    tertiary = true,
+                )
+            }
+        }
+        if (history.isEmpty()) {
+            item { CCard { CText("Nessun appunto. Copia qualcosa su un dispositivo collegato e comparirà qui.") } }
+        } else {
+            items(history, key = { it.ts.toString() + it.text.hashCode() }) { h ->
+                CCard {
+                    CRow(h.text, (if (h.mine) "Inviato da qui" else r.deviceName(h.from)) + " · " + time(h.ts, ctx))
+                    CButton("Copia", { r.clipboard.copyLocal(h.text); toast(ctx, "Copiato") })
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Archivio
+
+private fun decodeThumb(path: String): Bitmap? {
+    val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, o)
+    if (o.outWidth <= 0) return null
+    var s = 1
+    while (o.outWidth / (s * 2) >= 480) s *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = s })
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ArchiveScreen(r: Router) {
+    val ctx = LocalContext.current
+    val c = Canone.colors
+    val all by r.files.items.collectAsState()
+    var filter by remember { mutableStateOf("") }
+    var toDelete by remember { mutableStateOf<FileEntry?>(null) }
+    val list = all.filter { filter.isEmpty() || it.kind == filter }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "file"
+            val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
+            toast(ctx, "File in invio")
+            r.scope.launch { r.files.sendUri(uri, name, mime, "file") }
+        }
+    }
+
+    fun open(e: FileEntry) {
+        try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(r.files.uriFor(e), e.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        } catch (_: ActivityNotFoundException) {
+            toast(ctx, "Nessuna app può aprire questo file")
+        }
+    }
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        LazyVerticalGrid(
+            GridCells.Adaptive(160.dp), Modifier.widthIn(max = 1024.dp).fillMaxHeight(),
+            contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
+            horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("Archivio", style = CanoneType.title1, color = c.labelPrimary, modifier = Modifier.padding(top = Space.s5, bottom = Space.s2))
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                CButton("Invia file", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    CChip("Tutto", filter == "") { filter = "" }
+                    CChip("Screenshot", filter == "screenshot") { filter = "screenshot" }
+                    CChip("File", filter == "file") { filter = "file" }
+                }
+            }
+            if (list.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    CCard { CText("Nessun elemento. Fai uno screenshot su un dispositivo collegato e comparirà qui.") }
+                }
+            }
+            items(list, key = { it.fid }) { e ->
+                Column(
+                    Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
+                        .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
+                        .combinedClickable(onClick = { open(e) }, onLongClick = { toDelete = e }).padding(Space.s2),
+                    verticalArrangement = Arrangement.spacedBy(Space.s2),
+                ) {
+                    val bmp by produceState<Bitmap?>(null, e.path) {
+                        value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null
+                    }
+                    // Raggio interno = 20 - margine 8 = 12.
+                    Box(Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(Radius.lg - Space.s2)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                        bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                            ?: Text(e.name.substringAfterLast('.', "file").take(5), style = CanoneType.figure, color = c.labelTertiary)
+                    }
+                    Column(Modifier.padding(horizontal = Space.s2).padding(bottom = Space.s2)) {
+                        Text(e.name, style = CanoneType.footnote, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(Formatter.formatShortFileSize(ctx, e.size) + " · " + dateTime(e.ts, ctx), style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+
+    toDelete?.let { e ->
+        AlertDialog(
+            onDismissRequest = { toDelete = null },
+            containerColor = c.bgSurface,
+            shape = RoundedCornerShape(36.dp),
+            title = { Text(if (e.kind == "screenshot") "Eliminare lo screenshot?" else "Eliminare il file?", style = CanoneType.title3, color = c.labelPrimary) },
+            text = { Text("Sparisce da questo dispositivo. Sugli altri resta.", style = CanoneType.body, color = c.labelSecondary) },
+            dismissButton = { CButton("Annulla", { toDelete = null }) },
+            confirmButton = { CButton("Elimina", { r.files.delete(e); toDelete = null }, kind = ButtonKind.Destructive) },
+        )
+    }
+}
+
+// ---------------------------------------------------------------- Audio
+
+@Composable
+fun AudioScreen(r: Router) {
+    val devices by r.devices.collectAsState()
+    val active by r.audio.activeSource.collectAsState()
+    val sources = devices.filter { "audio-src" in it.caps }
+    ScreenList("Audio") {
+        item {
+            CCard {
+                SectionTitle("Ascolta qui")
+                CText(
+                    "Collega le cuffie a questo dispositivo e scegli da quale altro vuoi sentire l'audio. " +
+                        "Le cuffie restano sempre collegate a questo dispositivo: cambia solo la sorgente.",
+                )
+                CText("Il ritardo è di circa 100 ms. Va bene per video e musica, meno per i giochi.", tertiary = true)
+            }
+        }
+        if (sources.isEmpty()) {
+            item { CCard { CText("Nessuna sorgente. Apri Ponte su un PC Windows e il suo audio comparirà qui.") } }
+        } else {
+            items(sources, key = { it.id }) { d ->
+                CCard {
+                    CRow(d.name, if (active == d.id) "In riproduzione su questo dispositivo" else "Disponibile") {
+                        if (active == d.id) CButton("Ferma", { r.audio.stopListening(d.id) })
+                        else CButton("Ascolta qui", { r.audio.listenTo(d.id) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Impostazioni
+
+@Composable
+fun SettingsScreen(r: Router) {
+    val ctx = LocalContext.current
+    var name by remember { mutableStateOf(r.prefs.name) }
+    var hub by remember { mutableStateOf(r.prefs.hubUrl) }
+    var token by remember { mutableStateOf(r.prefs.token) }
+    var tick by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(ctx) {
+        val lc = (ctx as? ComponentActivity)?.lifecycle
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
+        lc?.addObserver(obs)
+        onDispose { lc?.removeObserver(obs) }
+    }
+    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    val askImages = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++; r.reconfigure() }
+
+    @Composable
+    fun PermRow(title: String, note: String, granted: Boolean, action: () -> Unit) {
+        CRow(title, note) {
+            if (granted) CBadge("Concesso", Tone.Positive) else {
+                CBadge("Da concedere", Tone.Caution)
+                CButton("Concedi", action)
+            }
+        }
+    }
+
+    ScreenList("Impostazioni") {
+        item {
+            CCard {
+                SectionTitle("Questo dispositivo")
+                CField("Nome del dispositivo", name, { name = it }, "Tablet del salotto")
+                CField("Indirizzo del server", hub, { hub = it }, "ponte.esempio.it", mono = true)
+                CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
+                CButton("Salva", {
+                    r.prefs.name = name; r.prefs.hubUrl = hub; r.prefs.token = token
+                    r.reconfigure()
+                    toast(ctx, "Salvato")
+                }, kind = ButtonKind.Primary)
+            }
+        }
+        item {
+            @Suppress("UNUSED_EXPRESSION") tick
+            CCard {
+                SectionTitle("Permessi")
+                if (Build.VERSION.SDK_INT >= 33) {
+                    PermRow("Notifiche di Ponte", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
+                        askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    CDivider()
+                }
+                PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
+                CDivider()
+                PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {
+                    ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+                CDivider()
+                val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+                PermRow("Nessun risparmio batteria", "Evita che Android fermi Ponte", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+                    ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+        }
+    }
+}

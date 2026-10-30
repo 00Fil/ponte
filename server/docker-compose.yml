@@ -1,0 +1,14 @@
+services:
+  ponte:
+    build: .
+    restart: unless-stopped
+    environment:
+      PONTE_TOKEN: ${PONTE_TOKEN:?imposta PONTE_TOKEN, almeno 16 caratteri}
+      PONTE_MAX_FILE_MB: ${PONTE_MAX_FILE_MB:-200}
+    volumes:
+      - ponte-data:/data
+    expose:
+      - "8080"
+
+volumes:
+  ponte-data:

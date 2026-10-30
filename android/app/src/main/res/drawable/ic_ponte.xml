@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simbolo di Canone: quadrati arrotondati annidati (raggi concentrici). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M7,3H17A4,4 0 0 1 21,7V17A4,4 0 0 1 17,21H7A4,4 0 0 1 3,17V7A4,4 0 0 1 7,3Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6" />
+    <path
+        android:pathData="M9.5,7H14.5A2.5,2.5 0 0 1 17,9.5V14.5A2.5,2.5 0 0 1 14.5,17H9.5A2.5,2.5 0 0 1 7,14.5V9.5A2.5,2.5 0 0 1 9.5,7Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6" />
+</vector>
