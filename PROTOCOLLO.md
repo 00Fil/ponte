@@ -40,6 +40,7 @@ Sulla LAN il primo frame è `hello` con il campo `proof = hex(HMAC-SHA256(chiave
 | `audio.route` | `to` (la sorgente), `sink` (deviceId o `null`) | Chiede alla sorgente di mandare l'audio a `sink`, o di fermarsi |
 | `audio.start` | `sid` (u32), `to`, `rate` 48000, `ch` 2 | La sorgente annuncia il flusso al ricevitore |
 | `audio.stop` | `sid`, `to` | |
+| `bt.claim` | `hp` (indirizzo Bluetooth, maiuscolo, `AA:BB:CC:DD:EE:FF`) | Chi riceve e ha quelle cuffie segnate e collegate le scollega: al più un dispositivo le tiene. |
 
 ## Audio
 

@@ -32,7 +32,7 @@ private class TcpLink(private val r: Router, private val s: Socket) : Link {
             out.flush()
         }
         true
-    } catch (_: IOException) {
+    } catch (_: Exception) {
         close()
         false
     }

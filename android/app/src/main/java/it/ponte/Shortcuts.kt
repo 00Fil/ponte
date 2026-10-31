@@ -25,7 +25,9 @@ class ClipSendActivity : Activity() {
         PonteService.start(this)
         val r = Ponte.ensure(this)
         val ok = r.clipboard.sendCurrent()
-        Toast.makeText(this, if (ok) "Appunti inviati" else "Negli appunti non c'è niente da inviare", Toast.LENGTH_SHORT).show()
+        if (!intent.getBooleanExtra("silent", false)) {
+            Toast.makeText(this, if (ok) "Appunti inviati" else "Negli appunti non c'è niente da inviare", Toast.LENGTH_SHORT).show()
+        }
         finish()
     }
 }

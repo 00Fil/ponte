@@ -18,6 +18,8 @@ public sealed class Settings
     public bool Screenshots { get; set; } = true;
     public string ScreenshotFolder { get; set; } = "";
     public bool ShowPhoneNotifications { get; set; } = true;
+    public HashSet<string> Headphones { get; set; } = new();
+    public int IdleMinutes { get; set; } = 10;
 
     /// <summary>Il token sta su disco cifrato con DPAPI: si decifra solo con questo account Windows.</summary>
     [JsonIgnore]

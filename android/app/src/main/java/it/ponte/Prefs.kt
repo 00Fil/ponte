@@ -34,6 +34,16 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("notifications", false)
         set(v) = sp.edit().putBoolean("notifications", v).apply()
 
+    /** Indirizzi Bluetooth delle cuffie marcate come tali. */
+    var headphones: Set<String>
+        get() = sp.getStringSet("headphones", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("headphones", v.toSet()).apply()
+
+    /** Minuti di inattività dopo i quali scollegare le cuffie (0 = mai). */
+    var idleMinutes: Int
+        get() = sp.getInt("idleMinutes", 10)
+        set(v) = sp.edit().putInt("idleMinutes", v).apply()
+
     /** "wss://host/ws" a partire da quello che scrive l'utente (host, https://host, wss://host/ws...). */
     fun wsUrl(): String? {
         var u = hubUrl.trim().trimEnd('/')

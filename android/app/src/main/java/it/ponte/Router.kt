@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 class Router(val ctx: Context, val prefs: Prefs) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sender = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     private val links = CopyOnWriteArrayList<Link>()
     private val seen: MutableMap<String, Boolean> = Collections.synchronizedMap(
@@ -40,6 +41,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val clipboard = ClipboardSync(ctx, this)
     val files = FileStore(ctx, this)
     val audio = AudioSink(this)
+    val headphones = Headphones(ctx, this)
     private val hub = HubLink(this)
     private val lan = LanMesh(this)
     private val shots = ScreenshotWatcher(ctx, this)
@@ -47,6 +49,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     fun start() {
         clipboard.start()
+        headphones.start()
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)
             .createMulticastLock("ponte").apply { setReferenceCounted(false); acquire() }
         reconfigure()
@@ -105,7 +108,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
         } else {
             links.toList()
         }
-        for (l in targets) l.sendJson(text)
+        // Le scritture su socket non possono stare sul thread principale (NetworkOnMainThreadException).
+        sender.execute { for (l in targets) try { l.sendJson(text) } catch (_: Exception) {} }
     }
 
     fun onText(text: String, link: Link) {
@@ -129,6 +133,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "file.begin", "file.chunk", "file.end" -> files.onMessage(m)
             "audio.start" -> audio.onStart(m)
             "audio.stop" -> audio.onStop(m)
+            "bt.claim" -> headphones.onClaim(m)
         }
     }
 

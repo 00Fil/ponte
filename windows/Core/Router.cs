@@ -12,6 +12,7 @@ public sealed class Router
     public FileStore Files { get; }
     public AudioSource Audio { get; }
     public Notifier Notify { get; }
+    public Headphones Hp { get; }
 
     private readonly HubLink _hub;
     private readonly LanMesh _lan;
@@ -36,6 +37,7 @@ public sealed class Router
         Files = new FileStore(this);
         Audio = new AudioSource(this);
         Notify = new Notifier();
+        Hp = new Headphones(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
     }
@@ -44,6 +46,7 @@ public sealed class Router
     {
         Clip = new ClipboardSync(this, ui);
         Clip.Start();
+        Hp.Start();
         Reconfigure();
     }
 
@@ -206,6 +209,9 @@ public sealed class Router
                 break;
             case "notif" when S.ShowPhoneNotifications:
                 Notify.Show(m.S("app"), m.S("title"), m.S("text"));
+                break;
+            case "bt.claim":
+                Hp.OnClaim(m);
                 break;
             case "audio.route":
                 Audio.Route(m["sink"] is JsonValue v && v.TryGetValue<string>(out var sink) ? sink : null);

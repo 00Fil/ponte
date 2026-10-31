@@ -289,6 +289,37 @@ public sealed partial class MainWindow : Window
     private void RenderAudio()
     {
         var h = Reset("Audio");
+        var hps = _r.Hp.List;
+        var marked = _r.S.Headphones;
+        var hp = new List<UIElement>
+        {
+            Text("Cuffie", "Title3"),
+            Text("Segna le cuffie associate. Ponte tiene collegato un solo dispositivo alla volta: quando l'audio parte qui gli altri le lasciano, e dopo un po' di inattività le lascia anche il PC, così non occupi i due slot.", "Footnote"),
+        };
+        if (hps.Count == 0) hp.Add(Text("Nessuna cuffia associata a questo PC.", "FootnoteTertiary"));
+        foreach (var x in hps)
+        {
+            var addr = x.Address;
+            hp.Add(Toggle(x.Name, x.Connected ? "Collegate qui" : "Non collegate qui", marked.Contains(addr), on =>
+            {
+                if (on) _r.S.Headphones.Add(addr); else _r.S.Headphones.Remove(addr);
+                _r.S.Save();
+                RenderAudio();
+            }));
+            if (marked.Contains(addr))
+                hp.Add(x.Connected
+                    ? Btn("Libera le cuffie", () => _r.Hp.Release(addr))
+                    : Btn("Collega qui", () => _r.Hp.Connect(addr), "PrimaryButton"));
+        }
+        var opts = new[] { 0, 5, 10, 20, 30 };
+        hp.Add(Row("Scollega dopo", _r.S.IdleMinutes == 0 ? "Mai" : $"{_r.S.IdleMinutes} minuti senza audio", Btn("Cambia", () =>
+        {
+            _r.S.IdleMinutes = opts[(Array.IndexOf(opts, _r.S.IdleMinutes) + 1) % opts.Length];
+            _r.S.Save();
+            RenderAudio();
+        })));
+        h.Children.Add(Card(hp.ToArray()));
+
         var sinks = _r.Devices.Where(d => d.Caps.Contains("audio-sink")).ToList();
         var playingTo = _r.Audio.SinkId;
 

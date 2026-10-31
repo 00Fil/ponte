@@ -16,7 +16,40 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
 
     val history = MutableStateFlow<List<ClipItem>>(emptyList())
 
-    private val listener = ClipboardManager.OnPrimaryClipChangedListener { sendCurrent() }
+    @Volatile private var ignoreUntil = 0L
+
+    private val listener = ClipboardManager.OnPrimaryClipChangedListener {
+        if (System.currentTimeMillis() < ignoreUntil) return@OnPrimaryClipChangedListener
+        val text = read()
+        when {
+            // Con l'app in background Android restituisce vuoto: se c'è il permesso "sopra le altre app",
+            // un'attività trasparente passa un istante in primo piano e legge gli appunti.
+            text == null -> if (android.provider.Settings.canDrawOverlays(ctx)) launchReader()
+            text != lastApplied && text.isNotEmpty() && text.length <= 1_000_000 -> send(text)
+        }
+    }
+
+    private fun launchReader() {
+        try {
+            ctx.startActivity(
+                android.content.Intent(ctx, ClipSendActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                    .putExtra("silent", true),
+            )
+        } catch (_: Exception) {}
+    }
+
+    private fun read(): String? = try {
+        cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun apply(text: String) {
+        lastApplied = text
+        ignoreUntil = System.currentTimeMillis() + 1500
+        try { cm.setPrimaryClip(ClipData.newPlainText("Ponte", text)) } catch (_: Exception) {}
+    }
 
     fun start() {
         cm.removePrimaryClipChangedListener(listener)
@@ -28,11 +61,7 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
      * in background il sistema restituisce vuoto, e allora non si invia nulla.
      */
     fun sendCurrent(): Boolean {
-        val text = try {
-            cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
-        } catch (_: SecurityException) {
-            null
-        }
+        val text = read()
         if (text.isNullOrEmpty() || text == lastApplied || text.length > 1_000_000) return false
         send(text)
         return true
@@ -47,13 +76,12 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
         if (text.isEmpty() || text.length > 1_000_000) return
         lastApplied = text
         push(ClipItem(text, from, System.currentTimeMillis(), false))
-        main.post { cm.setPrimaryClip(ClipData.newPlainText("Ponte", text)) }
+        main.post { apply(text) }
     }
 
     /** Rimette negli appunti locali una voce della cronologia, senza rimandarla agli altri. */
     fun copyLocal(text: String) {
-        lastApplied = text
-        cm.setPrimaryClip(ClipData.newPlainText("Ponte", text))
+        apply(text)
     }
 
     private fun push(item: ClipItem) {

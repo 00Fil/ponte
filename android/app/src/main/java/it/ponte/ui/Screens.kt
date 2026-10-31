@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.OpenableColumns
@@ -322,7 +323,49 @@ fun AudioScreen(r: Router) {
     val devices by r.devices.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val sources = devices.filter { "audio-src" in it.caps }
+    val ctx = LocalContext.current
+    val hps by r.headphones.list.collectAsState()
+    val cannot by r.headphones.cannotDisconnect.collectAsState()
+    var marked by remember { mutableStateOf(r.prefs.headphones) }
+    var idle by remember { mutableIntStateOf(r.prefs.idleMinutes) }
+    var perm by remember { mutableStateOf(r.headphones.hasPermission()) }
+    val askBt = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm = r.headphones.hasPermission() }
     ScreenList("Audio") {
+        item {
+            CCard {
+                SectionTitle("Cuffie")
+                CText(
+                    "Segna le cuffie associate. Ponte tiene collegato un solo dispositivo alla volta: quando l'audio parte qui, " +
+                        "gli altri le lasciano, e dopo un po' di inattività le lascia anche questo, così non occupi i due slot.",
+                )
+                if (!perm) {
+                    CButton("Concedi l'accesso al Bluetooth", { askBt.launch(Manifest.permission.BLUETOOTH_CONNECT) }, kind = ButtonKind.Primary)
+                } else if (hps.isEmpty()) {
+                    CText("Nessuna cuffia associata a questo dispositivo.", tertiary = true)
+                } else {
+                    hps.forEach { h ->
+                        CSwitchRow(h.name, if (h.connected) "Collegate qui" else "Non collegate qui", h.address in marked) { on ->
+                            marked = if (on) marked + h.address else marked - h.address
+                            r.prefs.headphones = marked
+                        }
+                    }
+                    val options = listOf(0, 5, 10, 20, 30)
+                    CRow("Scollega dopo", if (idle == 0) "Mai" else "$idle minuti senza audio") {
+                        CButton("Cambia", {
+                            idle = options[(options.indexOf(idle) + 1) % options.size]
+                            r.prefs.idleMinutes = idle
+                        })
+                    }
+                }
+                if (cannot) {
+                    CText(
+                        "Android non permette a Ponte di scollegare le cuffie da questo dispositivo: lo fa solo con un permesso di sistema. " +
+                            "Gli altri dispositivi le rilasciano comunque, ma qui resta da scollegarle a mano.",
+                        tertiary = true,
+                    )
+                }
+            }
+        }
         item {
             CCard {
                 SectionTitle("Ascolta qui")
@@ -401,6 +444,10 @@ fun SettingsScreen(r: Router) {
                     }
                     CDivider()
                 }
+                PermRow("Mostra sopra altre app", "Per inviare gli appunti copiati con l'app in background", Settings.canDrawOverlays(ctx)) {
+                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
+                }
+                CDivider()
                 PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
                 CDivider()
                 PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {
