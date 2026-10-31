@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
             // Finestra nascosta: il gradiente si ferma, niente consumo.
             HeaderWeb.Visibility = Visibility.Collapsed;
         };
-        _ = InitWebAsync(HeaderWeb, "shape=rise&cell=14");
+        _ = InitWebAsync(HeaderWeb, "shape=band&cell=10");
         Root.ActualThemeChanged += (_, _) => OnThemeChanged();
         UpdateFades();
         Root.SizeChanged += (_, _) => ApplyLayout();
@@ -149,30 +149,44 @@ public sealed partial class MainWindow : Window
         Bottom.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    private readonly List<Button> _nav = new();
+
     private void Select(int i)
     {
         var dir = i >= _tab ? 1 : -1;
         var changed = i != _tab || PageTitle.Text.Length == 0;
+        var first = _nav.Count == 0;
         _tab = i;
         PageTitle.Text = Tabs[i];
-        if (changed)
-        {
-            Enter(PageTitle, 0, 14 * dir, 380);
-            Enter(_pages[i], 28 * dir, 0, 360, 40);
-        }
         for (var p = 0; p < _pages.Length; p++) _pages[p].Visibility = p == i ? Visibility.Visible : Visibility.Collapsed;
+        if (changed && !first)
+        {
+            // Titolo e pagina si muovono insieme, nella stessa direzione della voce scelta.
+            Enter(PageTitle, 0, 10 * dir, 340);
+            Enter(_pages[i], 0, 10 * dir, 340);
+        }
 
-        SideTabs.Children.Clear();
+        // Barra laterale: le voci restano, cambia lo stile e l'indicatore scivola con una molla.
+        if (first)
+        {
+            for (var t = 0; t < Tabs.Length; t++)
+            {
+                var idx = t;
+                var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
+                nb.Click += (_, _) => Select(idx);
+                _nav.Add(nb);
+                SideTabs.Children.Add(nb);
+            }
+        }
+        for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
+        MoveIndicator(i, animate: !first);
+
         BottomTabs.Children.Clear();
         BottomTabs.ColumnDefinitions.Clear();
         for (var t = 0; t < Tabs.Length; t++)
         {
             var idx = t;
-            var style = t == i ? "TabButtonSelected" : "TabButton";
-            var sb = new Button { Style = St(t == i ? "NavItemSelected" : "NavItem"), Content = NavContent(t) };
-            sb.Click += (_, _) => Select(idx);
-            SideTabs.Children.Add(sb);
-            var b = Btn(Tabs[t], () => Select(idx), style);
+            var b = Btn(Tabs[t], () => Select(idx), t == i ? "TabButtonSelected" : "TabButton");
             BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(b, t);
             BottomTabs.Children.Add(b);

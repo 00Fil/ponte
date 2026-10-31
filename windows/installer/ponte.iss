@@ -1,67 +1,55 @@
-; Installer di Ponte: per utente (niente amministratore), cartella scrivibile così gli aggiornamenti automatici funzionano.
+; Ponte-Setup.exe: solo un contenitore. Estrae Ponte in una cartella temporanea e lancia "Ponte.exe --setup",
+; che mostra l'installazione con lo stile dell'app e copia i file in %LOCALAPPDATA%\Programs\Ponte.
+; Inno Setup non mostra nessuna finestra: InitializeSetup restituisce False dopo che Ponte ha finito.
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
 
 [Setup]
-AppId={{6E1D0C2A-7B5F-4C33-9A41-50E7E0A1C0DE}
 AppName=Ponte
 AppVersion={#AppVersion}
-AppVerName=Ponte {#AppVersion}
 AppPublisher=Ponte
 VersionInfoVersion={#AppVersion}.0
-DefaultDirName={autopf}\Ponte
-DefaultGroupName=Ponte
-DisableProgramGroupPage=yes
+VersionInfoDescription=Installa Ponte
+CreateAppDir=no
+Uninstallable=no
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\..
 OutputBaseFilename=Ponte-Setup
 SetupIconFile=..\Assets\ponte.ico
-UninstallDisplayIcon={app}\Ponte.exe
-WizardStyle=modern
-Compression=lzma2/max
+Compression=lzma2/normal
 SolidCompression=yes
-CloseApplications=no
-RestartApplications=no
-
-[Languages]
-Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
-
-[Tasks]
-Name: "autostart"; Description: "Avvia Ponte all'accesso di Windows"
-Name: "desktopicon"; Description: "Icona sul desktop"; Flags: unchecked
 
 [Files]
-Source: "..\..\out\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion createallsubdirs
-
-[Icons]
-Name: "{autoprograms}\Ponte"; Filename: "{app}\Ponte.exe"
-Name: "{autodesktop}\Ponte"; Filename: "{app}\Ponte.exe"; Tasks: desktopicon
-
-[Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Ponte"; ValueData: """{app}\Ponte.exe"" --background"; Tasks: autostart; Flags: uninsdeletevalue
-
-[Run]
-Filename: "{app}\Ponte.exe"; Description: "Apri Ponte"; Flags: nowait postinstall skipifsilent
+Source: "..\..\out\*"; DestDir: "{tmp}\payload"; Flags: dontcopy recursesubdirs createallsubdirs
 
 [Code]
-procedure CloseRunning();
-var R: Integer;
+procedure ExtractLevel(const Pattern: String);
 begin
-  Exec('taskkill.exe', '/IM Ponte.exe /F', '', SW_HIDE, ewWaitUntilTerminated, R);
+  try
+    ExtractTemporaryFiles(Pattern);
+  except
+    { nessun file a questo livello }
+  end;
 end;
 
 function InitializeSetup(): Boolean;
+var
+  Code: Integer;
+  Base: String;
 begin
-  CloseRunning();
-  Result := True;
-end;
-
-function InitializeUninstall(): Boolean;
-begin
-  CloseRunning();
-  Result := True;
+  Base := ExpandConstant('{tmp}\payload');
+  ExtractLevel('{tmp}\payload\*');
+  { Se * non scende nelle sottocartelle, si estraggono livello per livello. }
+  if not FileExists(Base + '\Assets\Web\gradient.html') then
+  begin
+    ExtractLevel('{tmp}\payload\*\*');
+    ExtractLevel('{tmp}\payload\*\*\*');
+    ExtractLevel('{tmp}\payload\*\*\*\*');
+    ExtractLevel('{tmp}\payload\*\*\*\*\*');
+  end;
+  if not Exec(Base + '\Ponte.exe', '--setup', Base, SW_SHOWNORMAL, ewWaitUntilTerminated, Code) then
+    MsgBox('Non riesco ad avviare l''installazione di Ponte (errore ' + IntToStr(Code) + ').', mbError, MB_OK);
+  Result := False;
 end;

@@ -1,4 +1,7 @@
+using System.Numerics;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -48,50 +51,80 @@ public sealed partial class MainWindow
     private void UpdateFades()
     {
         var bg = (ContentArea.Background as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Black;
-        Brush Fade(double from) => new LinearGradientBrush
+        Brush Fade(double from, double to, bool horizontal) => new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0),
-            EndPoint = new Windows.Foundation.Point(0, 1),
+            EndPoint = horizontal ? new Windows.Foundation.Point(1, 0) : new Windows.Foundation.Point(0, 1),
             GradientStops =
             {
-                new GradientStop { Color = Windows.UI.Color.FromArgb(0, bg.R, bg.G, bg.B), Offset = from },
-                new GradientStop { Color = bg, Offset = 1 },
+                new GradientStop { Color = horizontal ? bg : Windows.UI.Color.FromArgb(0, bg.R, bg.G, bg.B), Offset = from },
+                new GradientStop { Color = horizontal ? Windows.UI.Color.FromArgb(0, bg.R, bg.G, bg.B) : bg, Offset = to },
             },
         };
-        HeaderFade.Background = Fade(0.5);
-        OnboardFade.Background = Fade(0.35);
+        HeaderFade.Background = Fade(0.45, 1, false);
+        // Configurazione iniziale: testo a sinistra sul fondo pieno, fibre libere a destra.
+        OnboardFade.Background = Fade(0.36, 0.75, true);
     }
 
     // ---------------------------------------------------------------- animazioni
 
-    /// <summary>Entrata morbida: l'elemento compare scivolando di poco nella sua posizione.</summary>
-    private static void Enter(UIElement el, double dx, double dy, int ms = 360, int delay = 0)
+    // Una sola curva per tutto: parte veloce e si posa piano (decelerazione enfatizzata), come un oggetto che frena.
+    private static CompositionEasingFunction Ease(Compositor c) =>
+        c.CreateCubicBezierEasingFunction(new Vector2(0.2f, 0f), new Vector2(0f, 1f));
+
+    /// <summary>
+    /// Entrata: l'elemento arriva da pochi pixel di distanza e si posa. Animazione sul compositore (fuori dal thread della UI,
+    /// quindi niente scatti) e valori iniziali applicati subito, prima di un eventuale ritardo.
+    /// </summary>
+    private static void Enter(UIElement el, double dx, double dy, int ms = 340, int delay = 0)
     {
-        var tt = new TranslateTransform { X = dx, Y = dy };
-        el.RenderTransform = tt;
-        el.Opacity = 0;
-        var sb = new Storyboard();
-        var ease = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 };
-        void Add(DependencyObject target, string prop, double from)
+        var v = ElementCompositionPreview.GetElementVisual(el);
+        var c = v.Compositor;
+        ElementCompositionPreview.SetIsTranslationEnabled(el, true);
+        el.Opacity = 1;
+        var t = c.CreateVector3KeyFrameAnimation();
+        t.InsertKeyFrame(0f, new Vector3((float)dx, (float)dy, 0f));
+        t.InsertKeyFrame(1f, Vector3.Zero, Ease(c));
+        t.Duration = TimeSpan.FromMilliseconds(ms);
+        var o = c.CreateScalarKeyFrameAnimation();
+        o.InsertKeyFrame(0f, 0f);
+        o.InsertKeyFrame(1f, 1f, c.CreateCubicBezierEasingFunction(new Vector2(0.3f, 0f), new Vector2(0.4f, 1f)));
+        o.Duration = TimeSpan.FromMilliseconds(ms * 0.7);
+        if (delay > 0)
         {
-            var a = new DoubleAnimation
-            {
-                From = from, To = prop == "Opacity" ? 1 : 0,
-                Duration = TimeSpan.FromMilliseconds(ms), BeginTime = TimeSpan.FromMilliseconds(delay), EasingFunction = ease,
-            };
-            Storyboard.SetTarget(a, target);
-            Storyboard.SetTargetProperty(a, prop);
-            sb.Children.Add(a);
+            t.DelayTime = o.DelayTime = TimeSpan.FromMilliseconds(delay);
+            t.DelayBehavior = o.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
         }
-        Add(el, "Opacity", 0);
-        Add(tt, "X", dx);
-        Add(tt, "Y", dy);
-        sb.Begin();
+        v.StartAnimation("Translation", t);
+        v.StartAnimation("Opacity", o);
+    }
+
+    /// <summary>Indicatore della barra laterale: una molla smorzata, così se cambi voce a metà corsa riparte dalla velocità che ha.</summary>
+    private void MoveIndicator(int index, bool animate)
+    {
+        const float pitch = 42f; // voce 40 + spaziatura 2
+        var v = ElementCompositionPreview.GetElementVisual(NavIndicator);
+        var c = v.Compositor;
+        ElementCompositionPreview.SetIsTranslationEnabled(NavIndicator, true);
+        var target = new Vector3(0f, index * pitch, 0f);
+        if (!animate)
+        {
+            var snap = c.CreateVector3KeyFrameAnimation();
+            snap.InsertKeyFrame(1f, target);
+            snap.Duration = TimeSpan.FromMilliseconds(1);
+            v.StartAnimation("Translation", snap);
+            return;
+        }
+        var spring = c.CreateSpringVector3Animation();
+        spring.FinalValue = target;
+        spring.DampingRatio = 0.78f;
+        spring.Period = TimeSpan.FromMilliseconds(48);
+        v.StartAnimation("Translation", spring);
     }
 
     private static void FadeTo(UIElement el, double to, int ms)
     {
-        var a = new DoubleAnimation { To = to, Duration = TimeSpan.FromMilliseconds(ms), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        var a = new DoubleAnimation { To = to, Duration = TimeSpan.FromMilliseconds(ms), EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 4 } };
         Storyboard.SetTarget(a, el);
         Storyboard.SetTargetProperty(a, "Opacity");
         var sb = new Storyboard();
@@ -111,7 +144,7 @@ public sealed partial class MainWindow
         if (!_onboardWebReady)
         {
             _onboardWebReady = true;
-            _ = InitWebAsync(OnboardWeb, "shape=horizon&cell=16");
+            _ = InitWebAsync(OnboardWeb, "shape=hero");
         }
         _step = 0;
         RenderStep(1);
@@ -139,15 +172,15 @@ public sealed partial class MainWindow
         for (var i = 0; i < items.Count; i++)
         {
             OnboardHost.Children.Add(items[i]);
-            Enter(items[i], 32 * dir, 18, 620, 80 + i * 90);
+            Enter(items[i], 16 * dir, 0, 420, i * 45);
         }
         OnboardDots.Children.Clear();
         for (var i = 0; i < 4; i++)
         {
             OnboardDots.Children.Add(new Border
             {
-                Height = 8, Width = i == _step ? 24 : 8, CornerRadius = new CornerRadius(4),
-                Background = i == _step ? (Brush)Application.Current.Resources["BrandGradient"] : (Brush)Application.Current.Resources["LineStrong"],
+                Height = 3, Width = 28, CornerRadius = new CornerRadius(1.5),
+                Background = i <= _step ? (Brush)Application.Current.Resources["AccentDefault"] : (Brush)Application.Current.Resources["LineStrong"],
             });
         }
     }
@@ -155,12 +188,12 @@ public sealed partial class MainWindow
     private List<UIElement> StepWelcome()
     {
         var title = Text("Ponte", "Display");
-        title.FontSize = 64;
-        title.LineHeight = 68;
+        title.FontSize = 48;
+        title.LineHeight = 52;
         return new List<UIElement>
         {
             title,
-            Text("I tuoi dispositivi, un solo spazio.", "Title3"),
+            Text("I tuoi dispositivi, un solo spazio.", "SectionTitle"),
             Text("Appunti, file, screenshot, notifiche e cuffie passano da un dispositivo all'altro senza che tu ci pensi.", "BodyText"),
             Btn("Inizia", () => Go(1), "PrimaryButton"),
         };
@@ -173,7 +206,7 @@ public sealed partial class MainWindow
         var hub = new TextBox { Text = s.HubUrl, PlaceholderText = "ponte.esempio.it", FontFamily = (FontFamily)Application.Current.Resources["FontMono"] };
         var token = new PasswordBox { Password = s.Token, PlaceholderText = "Lo stesso del server" };
         var title = Text("Collega i tuoi dispositivi", "Display");
-        title.FontSize = 31;
+        title.FontSize = 30;
         return new List<UIElement>
         {
             title,
@@ -196,7 +229,7 @@ public sealed partial class MainWindow
     {
         var s = _r.S;
         var title = Text("Come vuoi usarlo", "Display");
-        title.FontSize = 31;
+        title.FontSize = 30;
         return new List<UIElement>
         {
             title,
@@ -215,12 +248,12 @@ public sealed partial class MainWindow
 
     private List<UIElement> StepReady()
     {
-        var check = new Grid { Width = 96, Height = 96, HorizontalAlignment = HorizontalAlignment.Left };
-        check.Children.Add(new Ellipse { Fill = (Brush)Application.Current.Resources["BrandGradient"] });
-        check.Children.Add(new TextBlock
+        var check = new Grid { Width = 48, Height = 48, HorizontalAlignment = HorizontalAlignment.Left };
+        check.Children.Add(new Ellipse { Fill = (Brush)Application.Current.Resources["AccentDefault"] });
+        check.Children.Add(new FontIcon
         {
-            Text = "✓", FontSize = 48, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Glyph = "\uE73E", FontSize = 20, Foreground = (Brush)Application.Current.Resources["AccentOnAccent"],
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
         });
         return new List<UIElement>
         {

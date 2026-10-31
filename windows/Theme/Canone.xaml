@@ -18,9 +18,10 @@
             <SolidColorBrush x:Key="LineStrong" Color="#CACAC5" />
             <SolidColorBrush x:Key="FillControl" Color="#CACAC5" />
             <SolidColorBrush x:Key="FillSelected" Color="#121212" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#1E3FD8" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#EAF0FF" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1730A8" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#ECEFFF" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1F33C7" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#E5F2EA" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#17603C" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#FBF0E0" />
@@ -30,15 +31,15 @@
             <SolidColorBrush x:Key="CriticalOnSubtle" Color="#A11F24" />
             <SolidColorBrush x:Key="CriticalOnCritical" Color="#FFFFFF" />
             <!-- Interruttori: acceso = fill-selected, spento = fill-control, pomello = bg-surface. -->
-            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#1E3FD8" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#1E3FD8" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#1E3FD8" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2E4BFF" />
             <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#CACAC5" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#1E3FD8" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#1E3FD8" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#1E3FD8" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#2E4BFF" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#CACAC5" />
@@ -66,9 +67,10 @@
             <SolidColorBrush x:Key="LineStrong" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillControl" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillSelected" Color="#F2F2F0" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#38BDF8" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#0E1D4F" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#A5D8FF" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#7D8FFF" />
+            <SolidColorBrush x:Key="AccentOnAccent" Color="#0E0E0F" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#161C45" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#B8C2FF" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#12301F" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#4CC38A" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#3A2508" />
@@ -77,15 +79,15 @@
             <SolidColorBrush x:Key="CriticalSubtle" Color="#3D1517" />
             <SolidColorBrush x:Key="CriticalOnSubtle" Color="#FF7A73" />
             <SolidColorBrush x:Key="CriticalOnCritical" Color="#0E0E0F" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#38BDF8" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#38BDF8" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#38BDF8" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#7D8FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#7D8FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#7D8FFF" />
             <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#3A3A3C" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#3A3A3C" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#3A3A3C" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#38BDF8" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#38BDF8" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#38BDF8" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#7D8FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#7D8FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#7D8FFF" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#3A3A3C" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#3A3A3C" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#3A3A3C" />
@@ -101,10 +103,10 @@
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
-    <!-- Il gradiente di Ponte (gli stessi blu del gradiente ASCII): pochi punti di colore, mai sfondi interi. -->
+    <!-- Il gradiente di Ponte, oltremare e ciano come le fibre: solo nel marchio. -->
     <LinearGradientBrush x:Key="BrandGradient" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#1E3FD8" Offset="0" />
-        <GradientStop Color="#38BDF8" Offset="1" />
+        <GradientStop Color="#2E4BFF" Offset="0" />
+        <GradientStop Color="#22C3EE" Offset="1" />
     </LinearGradientBrush>
 
     <!-- Geist e Geist Mono, con ripiego sul font di sistema. -->
@@ -188,22 +190,22 @@
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />
         <Setter Property="BorderBrush" Value="{ThemeResource LineSeparator}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="16" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="20,16" />
     </Style>
     <Style x:Key="TileStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />
         <Setter Property="BorderBrush" Value="{ThemeResource LineSeparator}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="Padding" Value="8" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="6" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <!-- Anteprima dentro una scheda: raggio interno = 20 - margine 8 = 12. -->
     <Style x:Key="ThumbStyle" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource BgSunken}" />
-        <Setter Property="CornerRadius" Value="9" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Height" Value="112" />
     </Style>
     <Style x:Key="BarStyle" TargetType="Border">
@@ -218,8 +220,8 @@
     </Style>
     <Style x:Key="BadgeNeutral" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource BgSunken}" />
-        <Setter Property="CornerRadius" Value="9999" />
-        <Setter Property="Padding" Value="10,2" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8,2" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style x:Key="BadgePositive" TargetType="Border" BasedOn="{StaticResource BadgeNeutral}">
@@ -235,25 +237,28 @@
         <Setter Property="Background" Value="{ThemeResource AccentSubtle}" />
     </Style>
 
-    <!-- Pulsanti: sempre tondi, alti 44 con area di 48, velo al 6 % in hover e al 12 % da premuti, 40 % se disattivati. -->
+    <!-- Pulsanti: alti 32 (area 36), raggio 8, velo al 6 % in hover e al 12 % da premuti con dissolvenza di 120 ms, 40 % se disattivati. -->
     <ControlTemplate x:Key="PillButtonTemplate" TargetType="Button">
-        <Grid x:Name="Root" MinHeight="40" Background="Transparent">
-            <Border x:Name="Pill" Height="34" CornerRadius="17" Background="{TemplateBinding Background}">
+        <Grid x:Name="Root" MinHeight="36" Background="Transparent">
+            <Border x:Name="Pill" Height="32" CornerRadius="8" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                 <Grid>
-                    <Border x:Name="Veil" CornerRadius="17" Opacity="0" IsHitTestVisible="False"
+                    <Border x:Name="Veil" CornerRadius="7" Opacity="0" IsHitTestVisible="False"
                             Background="{TemplateBinding Foreground}" />
-                    <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}" Padding="18,0"
+                    <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}" Padding="14,0" Foreground="{TemplateBinding Foreground}"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
                 </Grid>
             </Border>
             <VisualStateManager.VisualStateGroups>
                 <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Normal">
+                        <Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18" /></Storyboard>
+                    </VisualState>
                     <VisualState x:Name="PointerOver">
-                        <VisualState.Setters><Setter Target="Veil.Opacity" Value="0.06" /></VisualState.Setters>
+                        <Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0.07" Duration="0:0:0.12" /></Storyboard>
                     </VisualState>
                     <VisualState x:Name="Pressed">
-                        <VisualState.Setters><Setter Target="Veil.Opacity" Value="0.12" /></VisualState.Setters>
+                        <Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0.14" Duration="0:0:0.06" /></Storyboard>
                     </VisualState>
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters><Setter Target="Pill.Opacity" Value="0.4" /></VisualState.Setters>
@@ -270,11 +275,13 @@
         <Setter Property="Padding" Value="0" />
     </Style>
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
-        <Setter Property="Background" Value="{StaticResource BrandGradient}" />
-        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="Background" Value="{ThemeResource AccentDefault}" />
+        <Setter Property="Foreground" Value="{ThemeResource AccentOnAccent}" />
     </Style>
     <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
-        <Setter Property="Background" Value="{ThemeResource BgSunken}" />
+        <Setter Property="Background" Value="{ThemeResource BgSurface}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource LineStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{ThemeResource LabelPrimary}" />
     </Style>
     <Style x:Key="DestructiveButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
@@ -308,17 +315,17 @@
     <!-- Barra laterale: voci con icona, riquadro arrotondato. -->
     <ControlTemplate x:Key="NavItemTemplate" TargetType="Button">
         <Grid MinHeight="40" Background="Transparent">
-            <Border x:Name="Bg" Height="36" CornerRadius="10" Background="{TemplateBinding Background}">
+            <Border x:Name="Bg" Height="34" CornerRadius="8" Background="{TemplateBinding Background}">
                 <Grid>
-                    <Border x:Name="Veil" CornerRadius="10" Opacity="0" IsHitTestVisible="False" Background="{TemplateBinding Foreground}" />
+                    <Border x:Name="Veil" CornerRadius="8" Opacity="0" IsHitTestVisible="False" Background="{TemplateBinding Foreground}" />
                     <ContentPresenter Content="{TemplateBinding Content}" Padding="12,0" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{TemplateBinding Foreground}" />
                 </Grid>
             </Border>
             <VisualStateManager.VisualStateGroups>
                 <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Veil.Opacity" Value="0.06" /></VisualState.Setters></VisualState>
-                    <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Veil.Opacity" Value="0.12" /></VisualState.Setters></VisualState>
+                    <VisualState x:Name="Normal"><Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18" /></Storyboard></VisualState>
+                    <VisualState x:Name="PointerOver"><Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0.06" Duration="0:0:0.12" /></Storyboard></VisualState>
+                    <VisualState x:Name="Pressed"><Storyboard><DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0.12" Duration="0:0:0.06" /></Storyboard></VisualState>
                 </VisualStateGroup>
             </VisualStateManager.VisualStateGroups>
         </Grid>
@@ -333,8 +340,7 @@
         <Setter Property="Padding" Value="0" />
     </Style>
     <Style x:Key="NavItemSelected" TargetType="Button" BasedOn="{StaticResource NavItem}">
-        <Setter Property="Background" Value="{ThemeResource AccentSubtle}" />
-        <Setter Property="Foreground" Value="{ThemeResource AccentOnSubtle}" />
+        <Setter Property="Foreground" Value="{ThemeResource LabelPrimary}" />
         <Setter Property="FontFamily" Value="{StaticResource FontSansMedium}" />
     </Style>
 
@@ -342,10 +348,10 @@
     <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
         <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="38" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,8,12,8" />
+        <Setter Property="Padding" Value="10,6,10,6" />
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />
         <Setter Property="BorderBrush" Value="{ThemeResource LineStrong}" />
         <Setter Property="Foreground" Value="{ThemeResource LabelPrimary}" />
@@ -353,10 +359,10 @@
     <Style TargetType="PasswordBox" BasedOn="{StaticResource DefaultPasswordBoxStyle}">
         <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinHeight" Value="38" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,8,12,8" />
+        <Setter Property="Padding" Value="10,6,10,6" />
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />
         <Setter Property="BorderBrush" Value="{ThemeResource LineStrong}" />
         <Setter Property="Foreground" Value="{ThemeResource LabelPrimary}" />
