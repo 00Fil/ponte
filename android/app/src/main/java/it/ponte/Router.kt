@@ -48,6 +48,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
     val clipLog = ClipLogWatcher(ctx, this)
+    val updater = Updater(ctx, this)
     private val hub = HubLink(this)
     private val lan = LanMesh(this)
     val bt = BtMesh(ctx, this)
@@ -77,6 +78,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         headphones.start()
         clipLog.start()
         bt.start()
+        updater.start()
         p2p.start()
         screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)

@@ -25,7 +25,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import it.ponte.ui.GradientView
+import it.ponte.ui.Onboarding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,68 +84,108 @@ private val TABS = listOf("Dispositivi", "Appunti", "Archivio", "Audio", "Impost
 
 @Composable
 private fun PonteApp(r: Router) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
-    var tab by remember { mutableIntStateOf(0) }
-
-    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
-        if (r.prefs.token.isEmpty()) tab = TABS.indexOf("Impostazioni")
+    var onboarding by remember { mutableStateOf(!r.prefs.onboarded) }
+    // Passaggio tra onboarding e app: dissolvenza lunga e morbida.
+    AnimatedContent(onboarding, transitionSpec = { fadeIn(tween(600)).togetherWith(fadeOut(tween(400))) }, label = "avvio") { show ->
+        if (show) Onboarding(r) { onboarding = false }
+        else MainShell(r) { r.prefs.onboarded = false; onboarding = true }
     }
+}
 
-    val content: @Composable () -> Unit = {
-        when (tab) {
+@Composable
+private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
+    val c = Canone.colors
+    var tab by remember { mutableIntStateOf(0) }
+    var previous by remember { mutableIntStateOf(0) }
+    fun select(i: Int) { previous = tab; tab = i }
+
+    val content: @Composable (Int) -> Unit = { t ->
+        when (t) {
             0 -> DevicesScreen(r)
             1 -> ClipScreen(r)
             2 -> ArchiveScreen(r)
             3 -> AudioScreen(r)
-            else -> SettingsScreen(r)
+            else -> SettingsScreen(r, replayOnboarding)
         }
     }
 
+    // Testata con il gradiente ASCII e il titolo della pagina, che scorre al cambio di scheda.
+    val header: @Composable () -> Unit = {
+        Box(Modifier.fillMaxWidth().height(152.dp)) {
+            GradientView(Modifier.matchParentSize(), shape = "rise", cell = 14, intro = true)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to c.bgCanvas)))
+            AnimatedContent(
+                tab,
+                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = Space.s5, vertical = Space.s3),
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (slideInVertically(tween(380)) { it / 2 * dir } + fadeIn(tween(320)))
+                        .togetherWith(slideOutVertically(tween(260)) { -it / 2 * dir } + fadeOut(tween(200)))
+                },
+                label = "titolo",
+            ) { t -> Text(TABS[t], style = CanoneType.title1, color = c.labelPrimary) }
+        }
+    }
+
+    val pages: @Composable (Modifier) -> Unit = { m ->
+        AnimatedContent(
+            tab, modifier = m,
+            transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(tween(360)) { it / 8 * dir } + fadeIn(tween(300, 60)))
+                    .togetherWith(slideOutHorizontally(tween(260)) { -it / 8 * dir } + fadeOut(tween(180)))
+            },
+            label = "pagina",
+        ) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
+    }
+
     // Il layout segue la finestra, non il dispositivo: barra laterale da 1024, barra in basso sotto.
-    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas).statusBarsPadding()) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
         if (maxWidth >= 1024.dp) {
-            Row(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 Column(
                     Modifier.width(240.dp).fillMaxHeight().padding(Space.s4),
                     verticalArrangement = Arrangement.spacedBy(Space.s1),
                 ) {
                     Text("Ponte", style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s3, Space.s4, Space.s3, Space.s5))
-                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.fillMaxWidth()) { tab = i } }
+                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.fillMaxWidth(), start = true) { select(i) } }
                 }
-                Box(Modifier.weight(1f).fillMaxHeight()) { content() }
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    header()
+                    pages(Modifier.weight(1f).fillMaxWidth())
+                }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+                Box(Modifier.statusBarsPadding()) { header() }
+                pages(Modifier.weight(1f).fillMaxWidth())
                 Row(
                     Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding().padding(horizontal = Space.s2, vertical = Space.s2),
                     horizontalArrangement = Arrangement.spacedBy(Space.s1),
                 ) {
-                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.weight(1f)) { tab = i } }
+                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.weight(1f)) { select(i) } }
                 }
             }
         }
     }
 }
 
-/** Voce della TabBar: solo testo, selezione con tinta e peso. */
+/** Voce della TabBar: la selezione si accende con il colore dell'accento, con una transizione morbida. */
 @Composable
-private fun TabItem(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun TabItem(label: String, selected: Boolean, modifier: Modifier, start: Boolean = false, onClick: () -> Unit) {
     val c = Canone.colors
+    val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(240), label = "fondo")
+    val fg by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(240), label = "testo")
     Box(
-        modifier.height(44.dp).clip(CircleShape).background(if (selected) c.bgSunken else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(role = Role.Tab, onClick = onClick),
-        contentAlignment = Alignment.Center,
+        modifier.height(44.dp).clip(CircleShape).background(bg)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .padding(horizontal = if (start) Space.s4 else 0.dp),
+        contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
     ) {
         Text(
             label, maxLines = 1,
-            style = if (selected) CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium) else CanoneType.footnote,
-            color = if (selected) c.labelPrimary else c.labelSecondary,
+            style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote,
+            color = fg,
         )
     }
 }

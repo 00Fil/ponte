@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { WebSocket } from 'ws';
 import { start } from '../src/server.js';
 
@@ -170,4 +171,35 @@ test('la lista dispositivi porta gli indirizzi diretti', async () => {
   assert.deepEqual(me.addrs, ['100.64.0.5']);
   assert.equal(me.port, 47800);
   a.close();
+});
+
+test('aggiornamenti: gira la release di GitHub ai dispositivi', async () => {
+  const gh = http.createServer((req, res) => {
+    const base = `http://127.0.0.1:${gh.address().port}`;
+    if (req.url === '/repos/io/ponte/releases/tags/latest') {
+      res.setHeader('content-type', 'application/json');
+      return res.end(JSON.stringify({ assets: [
+        { name: 'version.json', url: `${base}/asset/1`, size: 14 },
+        { name: 'Ponte-Android.apk', url: `${base}/asset/2`, size: 4 },
+      ] }));
+    }
+    if (req.url === '/asset/1') return res.end('{"build": 42}');
+    if (req.url === '/asset/2') return res.end('APK!');
+    res.statusCode = 404;
+    res.end();
+  });
+  await new Promise((r) => gh.listen(0, r));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ponte-up-'));
+  const s2 = await start({ port: 0, token: TOKEN, dataDir: d, github: { repo: 'io/ponte', token: 'x', api: `http://127.0.0.1:${gh.address().port}` } });
+  const auth = { headers: { Authorization: `Bearer ${TOKEN}` } };
+  const info = await (await fetch(`http://127.0.0.1:${s2.port}/api/update`, auth)).json();
+  assert.deepEqual(info, { build: 42, android: true, windows: false });
+  const apk = await fetch(`http://127.0.0.1:${s2.port}/api/update/android`, auth);
+  assert.equal(apk.status, 200);
+  assert.equal(await apk.text(), 'APK!');
+  assert.equal((await fetch(`http://127.0.0.1:${s2.port}/api/update/windows`, auth)).status, 404);
+  assert.equal((await fetch(`http://127.0.0.1:${s2.port}/api/update`)).status, 401);
+  await s2.close();
+  gh.close();
+  fs.rmSync(d, { recursive: true, force: true });
 });

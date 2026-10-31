@@ -48,11 +48,17 @@ public sealed partial class MainWindow : Window
             if (_exiting) return;
             e.Cancel = true;
             AppWindow.Hide();
+            // Finestra nascosta: il gradiente si ferma, niente consumo.
+            HeaderWeb.Visibility = Visibility.Collapsed;
         };
+        _ = InitWebAsync(HeaderWeb, "shape=rise&cell=14");
+        Root.ActualThemeChanged += (_, _) => OnThemeChanged();
+        UpdateFades();
         Root.SizeChanged += (_, _) => ApplyLayout();
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
 
         Select(_r.S.Token.Length == 0 ? 4 : 0);
+        if (!_r.S.Onboarded) ShowOnboarding();
     }
 
     public void InitTray()
@@ -63,6 +69,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowWindow()
     {
+        HeaderWeb.Visibility = Visibility.Visible;
         AppWindow.Show();
         Activate();
     }
@@ -92,7 +99,15 @@ public sealed partial class MainWindow : Window
 
     private void Select(int i)
     {
+        var dir = i >= _tab ? 1 : -1;
+        var changed = i != _tab || PageTitle.Text.Length == 0;
         _tab = i;
+        PageTitle.Text = Tabs[i];
+        if (changed)
+        {
+            Enter(PageTitle, 0, 14 * dir, 380);
+            Enter(_pages[i], 28 * dir, 0, 360, 40);
+        }
         for (var p = 0; p < _pages.Length; p++) _pages[p].Visibility = p == i ? Visibility.Visible : Visibility.Collapsed;
 
         SideTabs.Children.Clear();
@@ -127,11 +142,9 @@ public sealed partial class MainWindow : Window
 
     private StackPanel Reset(string title)
     {
+        // Il titolo sta nella testata animata sopra la pagina.
         var h = _hosts[_tab];
         h.Children.Clear();
-        var t = Text(title, "Title1");
-        t.Margin = new Thickness(0, 16, 0, 8);
-        h.Children.Add(t);
         return h;
     }
 
@@ -407,6 +420,14 @@ public sealed partial class MainWindow : Window
             Toggle("Notifiche del telefono", "Le notifiche inoltrate dal telefono compaiono come notifiche di Windows", s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); }),
             Divider(),
             Toggle("Avvia con Windows", "Ponte parte in background all'accesso", GetAutostart(), SetAutostart)));
+
+        h.Children.Add(Card(
+            Text("Aggiornamenti", "Title3"),
+            Row($"Versione 1.0.{_r.Update.Current}",
+                _r.Update.Status.Length > 0 ? _r.Update.Status : "Si aggiorna da sola dalle release su GitHub, tramite il tuo server",
+                Btn("Cerca ora", () => { _ = Task.Run(() => _r.Update.CheckAsync(install: true)); }))));
+
+        h.Children.Add(Btn("Rivedi la configurazione iniziale", ShowOnboarding));
     }
 
     private void Apply()

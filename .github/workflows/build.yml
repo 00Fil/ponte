@@ -19,9 +19,21 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.9 }
+      - name: Chiave di firma (dai segreti del repo)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ponte.keystore"
+            echo "PONTE_KEYSTORE=$RUNNER_TEMP/ponte.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Segreto ANDROID_KEYSTORE_B64 mancante: APK con firma di debug, gli aggiornamenti automatici non funzioneranno."
+          fi
       - name: Build APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        env:
+          PONTE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: gradle assembleDebug --no-daemon -PponteBuild=${{ github.run_number }}
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk Ponte-Android.apk
       - uses: actions/upload-artifact@v4
         with: { name: android, path: Ponte-Android.apk }
@@ -34,7 +46,7 @@ jobs:
         with: { dotnet-version: 8.0.x }
       - name: Publish
         working-directory: windows
-        run: dotnet publish Ponte.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -o ../out
+        run: dotnet publish Ponte.csproj -c Release -r win-x64 -p:Platform=x64 -p:Version=1.0.${{ github.run_number }} --self-contained true -o ../out
       - run: Compress-Archive -Path out\* -DestinationPath Ponte-Windows-x64.zip
         shell: pwsh
       - uses: actions/upload-artifact@v4
@@ -46,10 +58,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
+      - name: Numero di build per gli aggiornamenti automatici
+        run: echo "{\"build\": ${{ github.run_number }}, \"commit\": \"${GITHUB_SHA::7}\"}" > dist/version.json
       - name: Publish release latest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete latest --cleanup-tag -y || true
-          gh release create latest dist/* --title "Ponte (ultima build)" --notes "Build automatica. Android: installa l'APK. Windows: estrai lo zip e avvia Ponte.exe."
+          gh release create latest dist/* --title "Ponte 1.0.${{ github.run_number }}" --notes "Build automatica ${{ github.run_number }}. Le app installate si aggiornano da sole. Prima installazione: Android, installa l'APK; Windows, estrai lo zip e avvia Ponte.exe."

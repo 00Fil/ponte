@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { GALLERY_HTML } from './gallery.js';
 
@@ -21,7 +22,64 @@ function cleanName(name) {
   return (base || 'file').slice(0, 200);
 }
 
-export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 1024 * 1024 }) {
+export async function start({
+  port = 8080, token, dataDir, maxFileBytes = 200 * 1024 * 1024,
+  github = { repo: '00Fil/ponte', token: '', api: 'https://api.github.com' },
+}) {
+  // Aggiornamenti: il server legge la release "latest" su GitHub (anche da repo privato, con un token)
+  // e la gira ai dispositivi, che così si aggiornano da soli senza credenziali GitHub.
+  const UPDATE_ASSETS = { android: 'Ponte-Android.apk', windows: 'Ponte-Windows-x64.zip' };
+  let releaseCache = { at: 0, data: null };
+  const ghHeaders = (accept) => ({
+    accept, 'user-agent': 'ponte-server', 'x-github-api-version': '2022-11-28',
+    ...(github.token ? { authorization: `Bearer ${github.token}` } : {}),
+  });
+  const latestRelease = async () => {
+    if (releaseCache.data && Date.now() - releaseCache.at < 10 * 60_000) return releaseCache.data;
+    const r = await fetch(`${github.api}/repos/${github.repo}/releases/tags/latest`, { headers: ghHeaders('application/vnd.github+json') });
+    if (!r.ok) throw new Error(`github ${r.status}`);
+    const rel = await r.json();
+    const assets = Object.fromEntries((rel.assets ?? []).map((a) => [a.name, a]));
+    let build = 0;
+    if (assets['version.json']) {
+      const v = await fetch(assets['version.json'].url, { headers: ghHeaders('application/octet-stream') });
+      if (v.ok) build = Number((await v.json()).build) || 0;
+    }
+    releaseCache = { at: Date.now(), data: { build, assets } };
+    return releaseCache.data;
+  };
+  const handleUpdate = async (url, res) => {
+    let rel;
+    try { rel = await latestRelease(); } catch {
+      res.statusCode = 502;
+      return void res.end();
+    }
+    if (url.pathname === '/api/update') {
+      res.setHeader('content-type', 'application/json');
+      res.setHeader('cache-control', 'no-store');
+      return void res.end(JSON.stringify({
+        build: rel.build,
+        android: Boolean(rel.assets[UPDATE_ASSETS.android]),
+        windows: Boolean(rel.assets[UPDATE_ASSETS.windows]),
+      }));
+    }
+    const which = url.pathname.slice('/api/update/'.length);
+    const asset = rel.assets[UPDATE_ASSETS[which] ?? ''];
+    if (!asset) {
+      res.statusCode = 404;
+      return void res.end();
+    }
+    const a = await fetch(asset.url, { headers: ghHeaders('application/octet-stream') });
+    if (!a.ok || !a.body) {
+      res.statusCode = 502;
+      return void res.end();
+    }
+    res.setHeader('content-type', 'application/octet-stream');
+    res.setHeader('content-length', asset.size);
+    res.setHeader('x-ponte-build', String(rel.build));
+    Readable.fromWeb(a.body).pipe(res);
+  };
+
   const filesDir = path.join(dataDir, 'files');
   const tmpDir = path.join(dataDir, 'tmp');
   const indexPath = path.join(dataDir, 'index.jsonl');
@@ -91,6 +149,9 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     if (!(h.startsWith('Bearer ') && safeEqual(h.slice(7), token))) {
       res.statusCode = 401;
       return void res.end();
+    }
+    if (url.pathname === '/api/update' || url.pathname.startsWith('/api/update/')) {
+      return void handleUpdate(url, res).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
     }
     if (url.pathname === '/api/clips') {
       const since = Number(url.searchParams.get('since') ?? 0) || 0;

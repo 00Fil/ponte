@@ -5,6 +5,9 @@ services:
     environment:
       PONTE_TOKEN: ${PONTE_TOKEN:?imposta PONTE_TOKEN, almeno 16 caratteri}
       PONTE_MAX_FILE_MB: ${PONTE_MAX_FILE_MB:-200}
+      # Aggiornamenti automatici delle app: repo delle release e token GitHub in sola lettura (serve se il repo è privato).
+      PONTE_GITHUB_REPO: ${PONTE_GITHUB_REPO:-00Fil/ponte}
+      PONTE_GITHUB_TOKEN: ${PONTE_GITHUB_TOKEN:-}
     volumes:
       - ponte-data:/data
     expose:

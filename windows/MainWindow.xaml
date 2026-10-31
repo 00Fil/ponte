@@ -21,19 +21,42 @@
             <StackPanel x:Name="SideTabs" Spacing="4" />
         </StackPanel>
 
-        <!-- Le cinque pagine: una alla volta, ricostruite dal codice. -->
+        <!-- Testata con il gradiente ASCII e il titolo della pagina; sotto, le cinque pagine (una alla volta, ricostruite dal codice). -->
         <Grid Grid.Row="0" Grid.Column="1">
-            <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" MaxWidth="720" Margin="24,24,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-            <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="720" Margin="24,24,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-            <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="1024" Margin="24,24,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-            <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="720" Margin="24,24,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-            <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="720" Margin="24,24,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="152" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid x:Name="Header">
+                <WebView2 x:Name="HeaderWeb" />
+                <Border x:Name="HeaderFade" IsHitTestVisible="False" />
+                <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" Margin="32,0,32,12" VerticalAlignment="Bottom" IsHitTestVisible="False" />
+            </Grid>
+            <Grid Grid.Row="1">
+                <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="1024" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+            </Grid>
         </Grid>
 
         <!-- Barra in basso, sotto i 1024. -->
         <Border x:Name="Bottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource BarStyle}" Visibility="Collapsed">
             <Grid x:Name="BottomTabs" ColumnSpacing="4" />
         </Border>
+
+        <!-- Configurazione iniziale: sopra a tutto, finché non è completata. -->
+        <Grid x:Name="Onboard" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{ThemeResource BgCanvas}">
+            <WebView2 x:Name="OnboardWeb" />
+            <Border x:Name="OnboardFade" IsHitTestVisible="False" />
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <Grid MinHeight="560">
+                    <StackPanel x:Name="OnboardHost" MaxWidth="520" Margin="32,48,32,96" Spacing="16" VerticalAlignment="Center" />
+                </Grid>
+            </ScrollViewer>
+            <StackPanel x:Name="OnboardDots" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,32" />
+        </Grid>
 
         <tb:TaskbarIcon x:Name="Tray" ToolTipText="Ponte" IconSource="ms-appx:///Assets/ponte.ico" NoLeftClickDelay="True">
             <tb:TaskbarIcon.ContextFlyout>

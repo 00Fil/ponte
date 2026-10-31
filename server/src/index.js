@@ -11,6 +11,11 @@ const s = await start({
   token,
   dataDir: process.env.PONTE_DATA ?? './data',
   maxFileBytes: Number(process.env.PONTE_MAX_FILE_MB ?? 200) * 1024 * 1024,
+  github: {
+    repo: process.env.PONTE_GITHUB_REPO ?? '00Fil/ponte',
+    token: process.env.PONTE_GITHUB_TOKEN ?? '',
+    api: 'https://api.github.com',
+  },
 });
 console.log(`Ponte in ascolto sulla porta ${s.port}`);
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,15 +60,22 @@ fun CCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
 fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, kind: ButtonKind = ButtonKind.Secondary, enabled: Boolean = true) {
     val c = Canone.colors
     val (bg, fg) = when (kind) {
-        ButtonKind.Primary -> c.bgInverse to c.labelInverse
+        ButtonKind.Primary -> Brand.royal to Color.White
         ButtonKind.Secondary -> c.bgSunken to c.labelPrimary
         ButtonKind.Tertiary -> Color.Transparent to c.accent
         ButtonKind.Destructive -> c.critical to c.criticalOnCritical
     }
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
+    // Al tocco il pulsante cede appena, come un tasto vero.
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        if (pressed) 0.96f else 1f, androidx.compose.animation.core.spring(stiffness = 600f), label = "pressione",
+    )
+    val fill = if (kind == ButtonKind.Primary) Modifier.background(Brand.gradient) else Modifier.background(bg)
     Box(
-        modifier.minimumInteractiveComponentSize().height(44.dp).clip(CircleShape).background(bg).alpha(if (enabled) 1f else 0.4f)
+        modifier.minimumInteractiveComponentSize().height(44.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape).then(fill).alpha(if (enabled) 1f else 0.4f)
             .clickable(interactionSource = src, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -102,7 +110,7 @@ fun CSwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Bo
         Switch(
             checked = checked, onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = c.bgSurface, checkedTrackColor = c.fillSelected, checkedBorderColor = Color.Transparent,
+                checkedThumbColor = Color.White, checkedTrackColor = c.accent, checkedBorderColor = Color.Transparent,
                 uncheckedThumbColor = c.bgSurface, uncheckedTrackColor = c.fillControl, uncheckedBorderColor = Color.Transparent,
             ),
         )

@@ -30,6 +30,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("screenshots", true)
         set(v) = sp.edit().putBoolean("screenshots", v).apply()
 
+    /** Configurazione iniziale completata. */
+    var onboarded: Boolean
+        get() = sp.getBoolean("onboarded", false)
+        set(v) = sp.edit().putBoolean("onboarded", v).apply()
+
     var notifications: Boolean
         get() = sp.getBoolean("notifications", false)
         set(v) = sp.edit().putBoolean("notifications", v).apply()

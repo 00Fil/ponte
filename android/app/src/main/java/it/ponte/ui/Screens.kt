@@ -85,7 +85,7 @@ private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
             contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
             verticalArrangement = Arrangement.spacedBy(Space.s4),
         ) {
-            item { Text(title, style = CanoneType.title1, color = c.labelPrimary, modifier = Modifier.padding(top = Space.s5, bottom = Space.s2)) }
+            // Il titolo sta nella testata animata sopra la pagina.
             content()
         }
     }
@@ -104,10 +104,10 @@ private fun CChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) { Text(label, style = CanoneType.footnote, color = if (selected) c.accentOnSubtle else c.labelPrimary) }
 }
 
-private fun toast(ctx: Context, s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
-private fun imagesPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-private fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
-private fun listenerEnabled(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+internal fun toast(ctx: Context, s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
+internal fun imagesPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+internal fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
+internal fun listenerEnabled(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 private fun time(ts: Long, ctx: Context) = DateFormat.getTimeFormat(ctx).format(Date(ts))
 private fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(ctx).format(Date(ts)) + " " + time(ts, ctx)
 
@@ -261,9 +261,6 @@ fun ArchiveScreen(r: Router) {
             contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
             horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Archivio", style = CanoneType.title1, color = c.labelPrimary, modifier = Modifier.padding(top = Space.s5, bottom = Space.s2))
-            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 CButton("Invia file", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
             }
@@ -432,7 +429,7 @@ fun AudioScreen(r: Router) {
 // ---------------------------------------------------------------- Impostazioni
 
 @Composable
-fun SettingsScreen(r: Router) {
+fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
     val ctx = LocalContext.current
     var name by remember { mutableStateOf(r.prefs.name) }
     var hub by remember { mutableStateOf(r.prefs.hubUrl) }
@@ -518,6 +515,18 @@ fun SettingsScreen(r: Router) {
                     ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                 }
             }
+        }
+        item {
+            val status by r.updater.status.collectAsState()
+            CCard {
+                SectionTitle("Aggiornamenti")
+                CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola dalle release su GitHub, tramite il tuo server" }) {
+                    CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true) } })
+                }
+            }
+        }
+        item {
+            CButton("Rivedi la configurazione iniziale", replayOnboarding, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
         }
     }
 }

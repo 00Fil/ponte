@@ -48,12 +48,21 @@ private val Neutral900 = Color(0xFF1A1A1B)
 private val Neutral925 = Color(0xFF121212)
 private val Neutral950 = Color(0xFF0E0E0F)
 private val Neutral1000 = Color(0xFFF2F2F0)
-private val Blue50 = Color(0xFFE8EEFC)
-private val Blue300 = Color(0xFFA3B8FF)
-private val Blue400 = Color(0xFF7A9BFF)
-private val Blue500 = Color(0xFF2453D6)
-private val Blue600 = Color(0xFF1B3FA8)
-private val Blue900 = Color(0xFF1C2647)
+// Accento di Ponte: gli stessi blu del gradiente ASCII (#1e3fd8, #38bdf8, #a5d8ff, #f6f8ff).
+private val Blue50 = Color(0xFFEAF0FF)
+private val Blue300 = Color(0xFFA5D8FF)
+private val Blue400 = Color(0xFF38BDF8)
+private val Blue500 = Color(0xFF1E3FD8)
+private val Blue600 = Color(0xFF1730A8)
+private val Blue900 = Color(0xFF0E1D4F)
+
+/** Il gradiente di Ponte, per i pochi punti di colore: pulsante principale, indicatori, spunte. */
+object Brand {
+    val royal = Color(0xFF1E3FD8)
+    val sky = Color(0xFF38BDF8)
+    val ice = Color(0xFFA5D8FF)
+    val gradient = androidx.compose.ui.graphics.Brush.linearGradient(listOf(royal, sky))
+}
 private val Green50 = Color(0xFFE5F2EA)
 private val Green300 = Color(0xFF4CC38A)
 private val Green600 = Color(0xFF1F7A4D)

@@ -13,6 +13,7 @@ public sealed class Router
     public AudioSource Audio { get; }
     public Notifier Notify { get; }
     public Headphones Hp { get; }
+    public Updater Update { get; }
 
     private readonly HubLink _hub;
     private readonly LanMesh _lan;
@@ -39,6 +40,7 @@ public sealed class Router
         Audio = new AudioSource(this);
         Notify = new Notifier();
         Hp = new Headphones(this);
+        Update = new Updater(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
         _bt = new BtMesh(this);
@@ -50,6 +52,7 @@ public sealed class Router
         Clip.Start();
         Hp.Start();
         _ = _bt.StartAsync();
+        Update.Start();
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
         _ = Task.Run(async () =>
         {
