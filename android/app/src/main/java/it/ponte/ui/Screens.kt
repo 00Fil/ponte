@@ -71,6 +71,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.ComponentActivity
 import it.ponte.FileEntry
+import it.ponte.Root
 import it.ponte.Router
 import it.ponte.Updater
 import it.ponte.R
@@ -407,9 +408,16 @@ fun AudioScreen(r: Router) {
                 if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
                     CButton("Collega qui", { r.headphones.connectHere(preferred) })
                 }
-                if (rooted == false) {
-                    CText("Su Android collegare e scollegare le cuffie richiede il root. Senza, Relay avvisa gli altri dispositivi ma qui non può spostarle.", tertiary = true)
+                if (rooted != true) {
+                    CText(
+                        if (rooted == null) "Controllo del root in corso…"
+                        else "Su Android collegare e scollegare le cuffie richiede il root. Senza, Relay avvisa gli altri dispositivi ma qui non può spostarle.",
+                        tertiary = true,
+                    )
+                    CButton("Riprova root", { r.headphones.retryRoot() })
                 }
+                val rootError by Root.lastError.collectAsState()
+                if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
                 if (!android.provider.Settings.canDrawOverlays(ctx)) {
                     CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
                 }
@@ -443,7 +451,7 @@ fun AudioScreen(r: Router) {
                 }
                 if (cannot) {
                     CText(
-                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito: serve il root, e Relay deve averlo ottenuto.",
+                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto \"Cuffie preferite qui\".",
                         tertiary = true,
                     )
                 }

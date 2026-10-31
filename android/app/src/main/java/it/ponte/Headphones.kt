@@ -360,6 +360,9 @@ class Headphones(private val ctx: Context, private val r: Router) {
         refresh()
     }
 
+    /** Ricontrolla il root subito (dopo aver confermato la richiesta di Magisk/KernelSU). */
+    fun retryRoot() { r.scope.launch { rooted.value = Root.available(force = true) } }
+
     fun connectHere(address: String) {
         claim(address)
         r.scope.launch { connect(address) }

@@ -13,17 +13,34 @@ import kotlin.system.exitProcess
 /** Accesso root: serve solo per collegare e scollegare le cuffie, cosa che Android non permette alle app normali. */
 object Root {
     @Volatile private var known: Boolean? = null
+    @Volatile private var failedAt = 0L
 
-    suspend fun available(): Boolean = known ?: withContext(Dispatchers.IO) {
-        val ok = try {
-            val p = ProcessBuilder("su", "-c", "id").redirectErrorStream(true).start()
-            val out = p.inputStream.bufferedReader().readText()
-            p.waitFor(10, TimeUnit.SECONDS) && p.exitValue() == 0 && out.contains("uid=0")
-        } catch (_: Exception) {
-            false
+    /** Ultimo messaggio di errore del root o del Bluetooth, da mostrare in Audio per capire cosa non va. */
+    val lastError = kotlinx.coroutines.flow.MutableStateFlow("")
+
+    /**
+     * Si ricorda solo il sì: un no può essere temporaneo (la richiesta di Magisk non ancora confermata, root che parte tardi),
+     * quindi si ricontrolla dopo 15 secondi o subito se [force].
+     */
+    suspend fun available(force: Boolean = false): Boolean {
+        if (known == true) return true
+        if (!force && System.currentTimeMillis() - failedAt < 15_000) return false
+        return withContext(Dispatchers.IO) {
+            var why = ""
+            val ok = try {
+                val p = ProcessBuilder("su", "-c", "id").redirectErrorStream(true).start()
+                val out = p.inputStream.bufferedReader().readText()
+                val done = p.waitFor(20, TimeUnit.SECONDS)
+                if (!done) { p.destroy(); why = "su non ha risposto in 20 s: conferma la richiesta di root (Magisk/KernelSU) quando compare" }
+                else if (p.exitValue() != 0 || !out.contains("uid=0")) why = "su ha risposto: " + out.trim().take(160)
+                done && p.exitValue() == 0 && out.contains("uid=0")
+            } catch (e: Exception) {
+                why = "su non trovato: " + (e.message ?: e.javaClass.simpleName)
+                false
+            }
+            if (ok) { known = true; lastError.value = "" } else { known = null; failedAt = System.currentTimeMillis(); lastError.value = why }
+            ok
         }
-        known = ok
-        ok
     }
 
     /** Esegue RootBt con i privilegi di sistema. Restituisce true se Android ha accettato la richiesta. */
@@ -35,8 +52,13 @@ object Root {
             val p = ProcessBuilder("su", "-c", "CLASSPATH=$apk /system/bin/app_process /system/bin it.ponte.RootBt $action $address")
                 .redirectErrorStream(true).start()
             val out = p.inputStream.bufferedReader().readText()
-            p.waitFor(15, TimeUnit.SECONDS) && p.exitValue() == 0 && out.contains("ok")
-        } catch (_: Exception) {
+            val done = p.waitFor(20, TimeUnit.SECONDS)
+            if (!done) p.destroy()
+            val good = done && p.exitValue() == 0 && out.contains("ok")
+            lastError.value = if (good) "" else (out.trim().takeLast(300).ifEmpty { "nessuna risposta dal comando (uscita ${if (done) p.exitValue() else "timeout"})" })
+            good
+        } catch (e: Exception) {
+            lastError.value = "avvio del comando: " + (e.message ?: e.javaClass.simpleName)
             false
         }
     }
