@@ -110,6 +110,11 @@ public sealed partial class MainWindow
     private void MoveIndicator(int index, bool animate)
     {
         if (index >= _nav.Count || _nav[index].ActualHeight < 1) return;
+        try { MoveIndicatorCore(index, animate); } catch (Exception e) { Crash.Log(e, "Indicatore"); }
+    }
+
+    private void MoveIndicatorCore(int index, bool animate)
+    {
         var y = (float)_nav[index].TransformToVisual(NavLayer).TransformPoint(new Windows.Foundation.Point(0, 0)).Y + 2f;
         var v = ElementCompositionPreview.GetElementVisual(NavIndicator);
         var c = v.Compositor;

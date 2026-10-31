@@ -58,7 +58,8 @@ public sealed partial class MainWindow : Window
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
-        Select(_r.S.Token.Length == 0 ? 4 : 0);
+        try { Select(_r.S.Token.Length == 0 ? 4 : 0); }
+        catch (Exception e) { Crash.Log(e, "Barra laterale"); }
         if (!_r.S.Onboarded) ShowOnboarding();
     }
 
@@ -230,6 +231,11 @@ public sealed partial class MainWindow : Window
 
     /// <summary>Contatori delle voci e identità di questo dispositivo, in fondo alla barra laterale.</summary>
     private void UpdateSideStatus()
+    {
+        try { UpdateSide(); } catch (Exception e) { Crash.Log(e, "Contatori"); }
+    }
+
+    private void UpdateSide()
     {
         SideDevice.Text = _r.S.Name.Length > 0 ? _r.S.Name : Environment.MachineName;
         SideVersion.Text = "Questo PC · " + _r.Update.Current.ToString("'1.0.'0");

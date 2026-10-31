@@ -10,11 +10,16 @@ public static class Canone
 
     public static Brush Get(string key, bool? dark = null)
     {
-        var theme = (dark ?? IsDark) ? "Dark" : "Light";
-        return (Brush)Find(Application.Current.Resources, theme, key)!;
+        try
+        {
+            var theme = (dark ?? IsDark) ? "Dark" : "Light";
+            if (Find(Application.Current.Resources, theme, key) is Brush b) return b;
+        }
+        catch (Exception) { }
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
-    public static Windows.UI.Color Color(string key, bool? dark = null) => ((SolidColorBrush)Get(key, dark)).Color;
+    public static Windows.UI.Color Color(string key, bool? dark = null) => (Get(key, dark) as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Transparent;
 
     private static object? Find(ResourceDictionary d, string theme, string key)
     {

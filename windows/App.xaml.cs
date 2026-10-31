@@ -8,7 +8,14 @@ public partial class App : Application
     private MainWindow? _window;
     private Window? _setup;
 
-    public App() => InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
+        // Un errore nell'interfaccia non deve chiudere Ponte: si scrive nel registro e si va avanti.
+        UnhandledException += (_, e) => { Crash.Log(e.Exception, "UnhandledException"); e.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception ex) Crash.Log(ex, "AppDomain"); };
+        TaskScheduler.UnobservedTaskException += (_, e) => { Crash.Log(e.Exception, "Task"); e.SetObserved(); };
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -32,7 +39,8 @@ public partial class App : Application
             _setup.Activate();
             return;
         }
-        Run(argv);
+        try { Run(argv); }
+        catch (Exception e) { Crash.Show(e, "Avvio di Ponte"); }
     }
 
     private void Run(string[] argv)
@@ -40,10 +48,18 @@ public partial class App : Application
         // Una sola copia alla volta: Ponte vive nell'area di notifica.
         _single = new Mutex(true, @"Local\Ponte-single-instance", out var first);
         var show = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Ponte-show");
+        var shown = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Ponte-shown");
         if (!first)
         {
+            if (argv.Contains("--background")) Environment.Exit(0);
             // Già in esecuzione (magari solo nell'area di notifica): la finestra esistente torna in primo piano.
-            if (!argv.Contains("--background")) show.Set();
+            // Se non risponde (copia bloccata o di una versione vecchia) la si chiude e si riparte da capo.
+            show.Set();
+            if (!shown.WaitOne(3000))
+            {
+                Installer.StopOthers();
+                try { Installer.Launch(Environment.ProcessPath!, string.Join(' ', argv.Skip(1))); } catch (Exception) { }
+            }
             Environment.Exit(0);
             return;
         }
@@ -61,7 +77,7 @@ public partial class App : Application
         var w = _window;
         new Thread(() =>
         {
-            while (true) { show.WaitOne(); w.DispatcherQueue.TryEnqueue(w.Present); }
+            while (true) { show.WaitOne(); w.DispatcherQueue.TryEnqueue(() => { w.Present(); shown.Set(); }); }
         }) { IsBackground = true }.Start();
     }
 }
