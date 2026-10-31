@@ -21,14 +21,14 @@ import kotlin.math.pow
  * Lamelle arrotondate che si accendono come onde di luce, nei blu di Ponte. Sfondo trasparente: sotto c'è la scheda.
  */
 @Composable
-fun SlatField(modifier: Modifier) {
+fun SlatField(modifier: Modifier, onBrand: Boolean = false) {
     val dark = isSystemInDarkTheme()
     val view = remember { mutableStateOf<GlView?>(null) }
     @Suppress("DEPRECATION")
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     AndroidView(
         modifier = modifier,
-        factory = { ctx -> GlView(ctx, SlatRenderer(!dark), maxRatio = 2f).also { view.value = it } },
+        factory = { ctx -> GlView(ctx, SlatRenderer(!dark, onBrand), maxRatio = 2f).also { view.value = it } },
         onRelease = { it.release() },
     )
     LaunchedEffect(dark) { view.value?.setLight(!dark) }
@@ -45,7 +45,7 @@ fun SlatField(modifier: Modifier) {
     }
 }
 
-internal class SlatRenderer(@Volatile override var light: Boolean) : GlScene {
+internal class SlatRenderer(@Volatile override var light: Boolean, private val onBrand: Boolean = false) : GlScene {
     // preset swell
     private val scale = 1.5f
     private val speed = 0.6f
@@ -180,8 +180,8 @@ internal class SlatRenderer(@Volatile override var light: Boolean) : GlScene {
         GLES30.glUniform2f(us.getValue("uSlat"), slatW, slatH)
         GLES30.glUniform1f(us.getValue("uRound"), roundness)
         GLES30.glUniform1f(us.getValue("uTilt"), 0f)
-        val col = if (light) rgb(0x2E4BFF) else rgb(0x4D8DFF)
-        val gl = if (light) rgb(0x1233C4) else rgb(0xCFE2FF)
+        val col = if (onBrand) rgb(0xA9CFFF) else if (light) rgb(0x2F5FFF) else rgb(0x5C9DFF)
+        val gl = if (onBrand) rgb(0xFFFFFF) else if (light) rgb(0x1233C4) else rgb(0xCFE2FF)
         GLES30.glUniform3f(us.getValue("uColor"), col[0], col[1], col[2])
         GLES30.glUniform3f(us.getValue("uGlintColor"), gl[0], gl[1], gl[2])
         GLES30.glUniform4f(us.getValue("uBackground"), 0f, 0f, 0f, 0f)

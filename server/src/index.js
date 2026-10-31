@@ -17,7 +17,7 @@ const s = await start({
     api: 'https://api.github.com',
   },
 });
-console.log(`Ponte in ascolto sulla porta ${s.port}`);
+console.log(`Relay in ascolto sulla porta ${s.port}`);
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, async () => {

@@ -99,12 +99,13 @@ private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
 internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.unit.Dp = 176.dp) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
-    Box(Modifier.fillMaxWidth().height(height).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        SlatField(Modifier.matchParentSize())
-        Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
+    val white = androidx.compose.ui.graphics.Color.White
+    Box(Modifier.fillMaxWidth().height(height).clip(shape).background(Brand.gradient)) {
+        SlatField(Modifier.matchParentSize(), onBrand = true)
+        Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.4f to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color(0x990E28AA))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = CanoneType.title2, color = c.labelPrimary)
-            Text(sub, style = CanoneType.footnote, color = c.labelSecondary)
+            Text(title, style = CanoneType.title2, color = white)
+            Text(sub, style = CanoneType.footnote, color = white.copy(alpha = 0.85f))
         }
     }
 }
@@ -170,7 +171,7 @@ fun DevicesScreen(r: Router) {
             CCard {
                 SectionTitle("Altri dispositivi")
                 if (devices.isEmpty()) {
-                    CText("Nessun altro dispositivo. Apri Ponte su un altro dispositivo, con lo stesso server e lo stesso token.")
+                    CText("Nessun altro dispositivo. Apri Relay su un altro dispositivo, con lo stesso server e lo stesso token.")
                 } else devices.forEachIndexed { i, d ->
                     if (i > 0) CDivider()
                     val what = buildList {
@@ -407,7 +408,7 @@ fun AudioScreen(r: Router) {
                     CButton("Collega qui", { r.headphones.connectHere(preferred) })
                 }
                 if (rooted == false) {
-                    CText("Su Android collegare e scollegare le cuffie richiede il root. Senza, Ponte avvisa gli altri dispositivi ma qui non può spostarle.", tertiary = true)
+                    CText("Su Android collegare e scollegare le cuffie richiede il root. Senza, Relay avvisa gli altri dispositivi ma qui non può spostarle.", tertiary = true)
                 }
                 if (!android.provider.Settings.canDrawOverlays(ctx)) {
                     CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
@@ -418,7 +419,7 @@ fun AudioScreen(r: Router) {
             CCard {
                 SectionTitle("Cuffie")
                 CText(
-                    "Segna le cuffie associate. Ponte tiene collegato un solo dispositivo alla volta: quando l'audio parte qui, " +
+                    "Segna le cuffie associate. Relay tiene collegato un solo dispositivo alla volta: quando l'audio parte qui, " +
                         "gli altri le lasciano, e dopo un po' di inattività le lascia anche questo, così non occupi i due slot.",
                 )
                 if (!perm) {
@@ -442,7 +443,7 @@ fun AudioScreen(r: Router) {
                 }
                 if (cannot) {
                     CText(
-                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito: serve il root, e Ponte deve averlo ottenuto.",
+                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito: serve il root, e Relay deve averlo ottenuto.",
                         tertiary = true,
                     )
                 }
@@ -459,7 +460,7 @@ fun AudioScreen(r: Router) {
             }
         }
         if (sources.isEmpty()) {
-            item { CCard { CText("Nessuna sorgente. Apri Ponte su un PC Windows e il suo audio comparirà qui.") } }
+            item { CCard { CText("Nessuna sorgente. Apri Relay su un PC Windows e il suo audio comparirà qui.") } }
         } else {
             items(sources, key = { it.id }) { d ->
                 CCard {
@@ -523,7 +524,7 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
             CCard {
                 SectionTitle("Permessi")
                 if (Build.VERSION.SDK_INT >= 33) {
-                    PermRow("Notifiche di Ponte", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
+                    PermRow("Notifiche di Relay", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
                         askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                     CDivider()
@@ -537,7 +538,7 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
                     val ok = try {
                         Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
                     } catch (_: Exception) { false }
-                    toast(ctx, if (ok) "Concesso: riapri Ponte" else "Serve il comando adb, vedi sotto")
+                    toast(ctx, if (ok) "Concesso: riapri Relay" else "Serve il comando adb, vedi sotto")
                 }
                 CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
                 CDivider()
@@ -558,7 +559,7 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
                 }
                 CDivider()
                 val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-                PermRow("Nessun risparmio batteria", "Evita che Android fermi Ponte", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+                PermRow("Nessun risparmio batteria", "Evita che Android fermi Relay", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
                     ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                 }
             }

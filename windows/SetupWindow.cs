@@ -30,7 +30,7 @@ public sealed class SetupWindow : Window
         _uninstall = uninstall;
         _fromInstaller = fromInstaller;
         _runPortable = runPortable;
-        Title = uninstall ? "Disinstalla Ponte" : "Installa Ponte";
+        Title = uninstall ? "Disinstalla Relay" : "Installa Relay";
 
         _root.Background = Res("BgCanvas");
         _root.Children.Add(_web);
@@ -41,7 +41,7 @@ public sealed class SetupWindow : Window
         _root.ActualThemeChanged += (_, _) => { UpdateFade(); SetWebTheme(); };
         _root.Loaded += (_, _) => { UpdateFade(); _ = InitWebAsync(); };
 
-        try { AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "ponte.ico")); } catch (Exception) { }
+        try { AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "relay.ico")); } catch (Exception) { }
         ExtendsContentIntoTitleBar = true;
         if (AppWindow.Presenter is OverlappedPresenter p)
         {
@@ -78,7 +78,7 @@ public sealed class SetupWindow : Window
 
         Show(
             Brand(),
-            Text(update ? "Aggiorna Ponte" : "Installa Ponte", "Title1"),
+            Text(update ? "Aggiorna Relay" : "Installa Relay", "Title1"),
             Text("Appunti, file, notifiche e cuffie passano tra i tuoi dispositivi. Si installa solo per il tuo utente, senza permessi di amministratore, e poi si aggiorna da solo.", "Footnote"),
             Card(
                 Row("Avvia con Windows", "Parte in background all'accesso", autostart),
@@ -105,7 +105,7 @@ public sealed class SetupWindow : Window
             return;
         }
         var check = Check();
-        Show(Brand(), check, Text("Ponte è installato", "Title1"), Text("Lo trovi nel menu Start. Si apre adesso.", "Footnote"));
+        Show(Brand(), check, Text("Relay è installato", "Title1"), Text("Lo trovi nel menu Start. Si apre adesso.", "Footnote"));
         await Task.Delay(1100);
         Installer.Launch(Installer.InstalledExe);
         Environment.Exit(0);
@@ -125,7 +125,7 @@ public sealed class SetupWindow : Window
             Show(Brand(), Text("Disinstallo", "Title1"), new ProgressBar { IsIndeterminate = true, Height = 4, Foreground = Res("AccentDefault"), Background = Res("BgSunken") });
             try { await Task.Run(() => Installer.Uninstall(removeData)); }
             catch (Exception e) { ShowError("Disinstallazione non riuscita", e.Message); return; }
-            Show(Brand(), Check(), Text("Ponte è stato rimosso", "Title1"), Text(removeData ? "Anche i dati di questo PC sono stati eliminati." : "I tuoi dati restano qui, se lo reinstalli li ritrovi.", "Footnote"));
+            Show(Brand(), Check(), Text("Relay è stato rimosso", "Title1"), Text(removeData ? "Anche i dati di questo PC sono stati eliminati." : "I tuoi dati restano qui, se lo reinstalli li ritrovi.", "Footnote"));
             await Task.Delay(1400);
             Environment.Exit(0);
         };
@@ -134,8 +134,8 @@ public sealed class SetupWindow : Window
         actions.Children.Add(cancel);
         Show(
             Brand(),
-            Text("Disinstallare Ponte?", "Title1"),
-            Text("Ponte si chiude e smette di sincronizzare questo PC. Sugli altri dispositivi non cambia niente.", "Footnote"),
+            Text("Disinstallare Relay?", "Title1"),
+            Text("Relay si chiude e smette di sincronizzare questo PC. Sugli altri dispositivi non cambia niente.", "Footnote"),
             data,
             actions);
     }
@@ -219,7 +219,7 @@ public sealed class SetupWindow : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         row.Children.Add(Logo(28));
-        row.Children.Add(new TextBlock { Text = "Ponte", Style = St("SectionTitle"), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = "Relay", Style = St("SectionTitle"), VerticalAlignment = VerticalAlignment.Center });
         return row;
     }
 

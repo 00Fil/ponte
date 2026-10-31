@@ -21,9 +21,16 @@ public static class Installer
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Ponte";
 
     private static string StartMenuLink => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Ponte.lnk");
+        Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Relay.lnk");
     private static string DesktopLink => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Ponte.lnk");
+        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Relay.lnk");
+
+    /// <summary>I collegamenti col vecchio nome (Ponte): si tolgono a ogni installazione.</summary>
+    private static void RemoveOldLinks()
+    {
+        TryDelete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Ponte.lnk"));
+        TryDelete(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Ponte.lnk"));
+    }
 
     public static string Version
     {
@@ -54,7 +61,7 @@ public static class Installer
     /// <summary>Copia i file, crea collegamenti e voce di disinstallazione. progress va da 0 a 1.</summary>
     public static void Install(bool autostart, bool desktop, Action<double, string> progress)
     {
-        progress(0, "Chiudo Ponte se è aperto");
+        progress(0, "Chiudo Relay se è aperto");
         StopOthers();
 
         var src = Path.GetFullPath(AppContext.BaseDirectory).TrimEnd('\\');
@@ -76,6 +83,7 @@ public static class Installer
         }
 
         progress(0.92, "Creo i collegamenti");
+        RemoveOldLinks();
         CreateLink(StartMenuLink, InstalledExe);
         if (desktop) CreateLink(DesktopLink, InstalledExe);
         else TryDelete(DesktopLink);
@@ -99,9 +107,9 @@ public static class Installer
     private static void Register(long bytes)
     {
         using var k = Registry.CurrentUser.CreateSubKey(UninstallKey);
-        k.SetValue("DisplayName", "Ponte");
+        k.SetValue("DisplayName", "Relay");
         k.SetValue("DisplayVersion", Version);
-        k.SetValue("Publisher", "Ponte");
+        k.SetValue("Publisher", "Relay");
         k.SetValue("DisplayIcon", InstalledExe + ",0");
         k.SetValue("InstallLocation", InstallDir);
         k.SetValue("UninstallString", $"\"{InstalledExe}\" --uninstall");
@@ -127,6 +135,7 @@ public static class Installer
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch (Exception) { }
         TryDelete(StartMenuLink);
         TryDelete(DesktopLink);
+        RemoveOldLinks();
         var targets = new List<string> { InstallDir };
         if (removeData) targets.Add(Settings.Dir);
         var cmd = "ping 127.0.0.1 -n 3 > nul & " + string.Join(" & ", targets.Select(t => $"rmdir /s /q \"{t}\""));

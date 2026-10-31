@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:tb="using:H.NotifyIcon"
-    Title="Ponte">
+    Title="Relay">
 
     <Grid x:Name="Root" Background="Transparent">
         <Grid.ColumnDefinitions>
@@ -28,7 +28,7 @@
                 <Border Width="28" Height="28" CornerRadius="6">
                     <Image Source="ms-appx:///Assets/logo.png" Stretch="UniformToFill" />
                 </Border>
-                <TextBlock Text="Ponte" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                <TextBlock Text="Relay" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
             </StackPanel>
             <!-- Voci in tre gruppi: spazio di lavoro, strumenti, impostazioni in fondo. L'indicatore scivola sotto la voce attiva. -->
             <Grid x:Name="NavLayer" Grid.Row="1" Margin="0,0,0,12">
@@ -91,12 +91,12 @@
                 <ScrollViewer x:Name="Page5">
                     <StackPanel MaxWidth="840" Margin="32,4,32,40" Spacing="12">
                         <!-- Scheda grande della Home: MicroSlats dietro il saluto. -->
-                        <Grid x:Name="HomeHero" Height="208" CornerRadius="20" BorderThickness="1" BorderBrush="{ThemeResource LineSeparator}" Background="{ThemeResource BgSurface}">
+                        <Grid x:Name="HomeHero" Height="208" CornerRadius="24" Background="{StaticResource BrandGradient}">
                             <WebView2 x:Name="HomeWeb" />
                             <Border x:Name="HomeFade" IsHitTestVisible="False" />
                             <StackPanel VerticalAlignment="Bottom" Margin="24,0,24,20" Spacing="2" IsHitTestVisible="False">
-                                <TextBlock x:Name="HomeHello" Style="{StaticResource Title1}" />
-                                <TextBlock x:Name="HomeSub" Style="{StaticResource Footnote}" />
+                                <TextBlock x:Name="HomeHello" Style="{StaticResource Title1}" Foreground="White" />
+                                <TextBlock x:Name="HomeSub" Style="{StaticResource Footnote}" Foreground="#E6F0FF" />
                             </StackPanel>
                         </Grid>
                         <StackPanel x:Name="Host5" Spacing="12" />
@@ -199,10 +199,10 @@
             <Border x:Name="DragArea" Grid.Column="1" Background="Transparent" />
         </Grid>
 
-        <tb:TaskbarIcon x:Name="Tray" ToolTipText="Ponte" IconSource="ms-appx:///Assets/ponte.ico" NoLeftClickDelay="True">
+        <tb:TaskbarIcon x:Name="Tray" ToolTipText="Relay" IconSource="ms-appx:///Assets/relay.ico" NoLeftClickDelay="True">
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem Text="Apri Ponte" Click="OnTrayOpen" />
+                    <MenuFlyoutItem Text="Apri Relay" Click="OnTrayOpen" />
                     <MenuFlyoutItem Text="Blocca o sblocca l'audio qui" Click="OnTrayLock" />
                     <MenuFlyoutItem Text="Esci" Click="OnTrayExit" />
                 </MenuFlyout>

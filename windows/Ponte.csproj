@@ -7,7 +7,7 @@
     <RootNamespace>Ponte</RootNamespace>
     <AssemblyName>Ponte</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\ponte.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\relay.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>

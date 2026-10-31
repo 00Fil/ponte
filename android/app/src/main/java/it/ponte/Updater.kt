@@ -129,8 +129,8 @@ class Updater(private val ctx: Context, private val r: Router) {
             if (Root.available() && rootInstall(apk)) return
             if (!ctx.packageManager.canRequestPackageInstalls()) {
                 tell(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${ctx.packageName}")),
-                    "Serve un permesso per aggiornare", "Tocca per consentire a Ponte di installare i suoi aggiornamenti")
-                outcome("Consenti a Ponte di installare app, poi riprova")
+                    "Serve un permesso per aggiornare", "Tocca per consentire a Relay di installare i suoi aggiornamenti")
+                outcome("Consenti a Relay di installare app, poi riprova")
                 return
             }
             sessionInstall(apk)
@@ -151,7 +151,7 @@ class Updater(private val ctx: Context, private val r: Router) {
         val ok = p.waitFor(120, TimeUnit.SECONDS) && p.exitValue() == 0
         if (!ok && out.contains("UPDATE_INCOMPATIBLE")) {
             status.value = DIFFERENT_KEY
-            tell(null, "Reinstalla Ponte una volta", DIFFERENT_KEY)
+            tell(null, "Reinstalla Relay una volta", DIFFERENT_KEY)
         }
         ok
     } catch (_: Exception) {
@@ -177,7 +177,7 @@ class Updater(private val ctx: Context, private val r: Router) {
     }
 }
 
-const val DIFFERENT_KEY = "Questa copia ha una firma diversa dalle nuove: disinstalla Ponte e installa l'ultima versione una volta sola, poi si aggiorna da sola"
+const val DIFFERENT_KEY = "Questa copia ha una firma diversa dalle nuove: disinstalla Relay e installa l'ultima versione una volta sola, poi si aggiorna da sola"
 
 fun notifyUser(c: Context, intent: Intent?, title: String, text: String) {
     val nm = c.getSystemService(NotificationManager::class.java)
@@ -205,18 +205,18 @@ class InstallReceiver : BroadcastReceiver() {
                 val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 try { c.startActivity(confirm) } catch (_: Exception) {}
-                notifyUser(c, confirm, "Aggiornamento di Ponte pronto", "Tocca per installarlo")
+                notifyUser(c, confirm, "Aggiornamento di Relay pronto", "Tocca per installarlo")
                 r?.updater?.status?.value = "In attesa della tua conferma"
             }
             PackageInstaller.STATUS_SUCCESS -> r?.updater?.status?.value = "Aggiornato"
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, PackageInstaller.STATUS_FAILURE_CONFLICT -> {
                 r?.updater?.status?.value = DIFFERENT_KEY
-                notifyUser(c, null, "Reinstalla Ponte una volta", DIFFERENT_KEY)
+                notifyUser(c, null, "Reinstalla Relay una volta", DIFFERENT_KEY)
             }
             PackageInstaller.STATUS_FAILURE_BLOCKED -> {
-                r?.updater?.status?.value = "Android ha bloccato l'installazione: consenti a Ponte di installare app"
+                r?.updater?.status?.value = "Android ha bloccato l'installazione: consenti a Relay di installare app"
                 notifyUser(c, Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${c.packageName}")),
-                    "Serve un permesso per aggiornare", "Tocca per consentire a Ponte di installare i suoi aggiornamenti")
+                    "Serve un permesso per aggiornare", "Tocca per consentire a Relay di installare i suoi aggiornamenti")
             }
             else -> r?.updater?.status?.value = "Installazione non riuscita: " + (i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "")
         }

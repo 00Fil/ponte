@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+<linearGradient id="bg" x1="0.3" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#6FB4FF"/><stop offset=".5" stop-color="#3C7BFF"/><stop offset="1" stop-color="#2547F0"/></linearGradient>
+<radialGradient id="top" cx=".3" cy="0" r=".9"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<radialGradient id="body" cx=".38" cy=".28" r=".8"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#F3F7FF"/><stop offset="1" stop-color="#CFE0FF"/></radialGradient>
+<filter id="b30" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="30"/></filter>
+<filter id="b14" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="14"/></filter>
+<filter id="b40" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="40"/></filter>
+<mask id="cp" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="#fff" stroke="#fff" stroke-width="22" stroke-linejoin="round"/></mask>
+</defs><rect width="1024" height="1024" rx="230" fill="url(#bg)"/><rect width="1024" height="1024" rx="230" fill="url(#top)"/><rect x="3" y="3" width="1018" height="1018" rx="227" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="6"/><g transform="translate(0.0 0.0) scale(1.0)">
+<path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="#1230C8" opacity=".35" filter="url(#b40)" transform="translate(0 30)"/>
+<path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="none" stroke="#BFD6FF" stroke-width="70" stroke-linejoin="round" filter="url(#b14)" opacity=".9"/>
+<path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="none" stroke="#9DBBFF" stroke-width="34" stroke-linejoin="round" opacity=".95"/>
+<path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="url(#body)" stroke="url(#body)" stroke-width="22" stroke-linejoin="round"/>
+<g mask="url(#cp)">
+<path d="M512 196Q556 468 828 512Q556 556 512 828Q468 556 196 512Q468 468 512 196Z" fill="none" stroke="#6F93FF" stroke-width="70" stroke-linejoin="round" filter="url(#b30)" opacity=".6" transform="translate(16 24)"/>
+<ellipse cx="420" cy="360" rx="190" ry="120" fill="#fff" opacity=".9" filter="url(#b40)"/>
+</g></g></svg>

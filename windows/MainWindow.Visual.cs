@@ -204,7 +204,7 @@ public sealed partial class MainWindow
 
     private List<UIElement> StepWelcome()
     {
-        var title = Text("Ponte", "Display");
+        var title = Text("Relay", "Display");
         title.FontSize = 48;
         title.LineHeight = 52;
         return new List<UIElement>
@@ -251,12 +251,12 @@ public sealed partial class MainWindow
         {
             title,
             Card(
-                Toggle("Avvia con Windows", "Ponte parte in background all'accesso", GetAutostart(), SetAutostart),
+                Toggle("Avvia con Windows", "Relay parte in background all'accesso", GetAutostart(), SetAutostart),
                 Divider(),
                 Toggle("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", s.Screenshots, on => { s.Screenshots = on; Apply(); }),
                 Divider(),
                 Toggle("Notifiche del telefono", "Le vedi qui come notifiche di Windows", s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); })),
-            Text("Quando Windows chiede del firewall, consenti Ponte anche sulle reti pubbliche: serve ai collegamenti diretti. " +
+            Text("Quando Windows chiede del firewall, consenti Relay anche sulle reti pubbliche: serve ai collegamenti diretti. " +
                  "Nello Strumento di cattura attiva il salvataggio automatico degli screenshot.", "FootnoteTertiary"),
             Btn("Continua", () => Go(3), "PrimaryButton"),
             Btn("Indietro", () => Go(1)),
@@ -277,7 +277,7 @@ public sealed partial class MainWindow
             check,
             Text("Tutto pronto", "Display"),
             Text("Copia qualcosa qui e incollalo sul telefono. Il resto lo fa Ponte.", "BodyText"),
-            Btn("Apri Ponte", FinishOnboarding, "PrimaryButton"),
+            Btn("Apri Relay", FinishOnboarding, "PrimaryButton"),
         };
     }
 

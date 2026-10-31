@@ -24,16 +24,15 @@ public sealed partial class MainWindow
         if (!_homeWebReady)
         {
             _homeWebReady = true;
-            _ = InitWebAsync(HomeWeb, "x=1", "slats.html", SurfaceHex());
+            _ = InitWebAsync(HomeWeb, "ink=1", "slats.html", SurfaceHex());
         }
-        var surface = Canone.Color("BgSurface", Dark);
         HomeFade.Background = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(0, 1),
             GradientStops =
             {
-                new GradientStop { Color = Windows.UI.Color.FromArgb(0, surface.R, surface.G, surface.B), Offset = 0.35 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(235, surface.R, surface.G, surface.B), Offset = 1 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(0, 14, 40, 170), Offset = 0.4 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(150, 14, 40, 170), Offset = 1 },
             },
         };
 
@@ -54,10 +53,10 @@ public sealed partial class MainWindow
         for (var c = 0; c < colsN; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var tiles = new[]
         {
-            HomeTile(1, "Dispositivi", (devices.Count + 1).ToString(), "con questo PC", "#2E4BFF", "#4D9BFF"),
+            HomeTile(1, "Dispositivi", (devices.Count + 1).ToString(), "con questo PC", "#2F5FFF", "#6FB4FF"),
             HomeTile(2, "Appunti", _r.Clip.History.Count.ToString(), "in cronologia", "#1B34D6", "#3F86FF"),
             HomeTile(3, "Archivio", _r.Files.Items.Count.ToString(), shots > 0 ? $"{shots} screenshot" : "file condivisi", "#3F86FF", "#7DB4FF"),
-            HomeTile(4, "Cuffie", audio, "dove suonano ora", "#4250FF", "#2E4BFF"),
+            HomeTile(4, "Cuffie", audio, "dove suonano ora", "#5B7BFF", "#2F5FFF"),
         };
         for (var i = 0; i < tiles.Length; i++)
         {

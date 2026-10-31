@@ -37,10 +37,10 @@ public static class Crash
                 Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
             };
             var panel = new StackPanel { Padding = new Thickness(24) };
-            panel.Children.Add(new TextBlock { Text = "Ponte non è riuscito ad aprirsi", FontSize = 20, Margin = new Thickness(0, 0, 0, 12) });
+            panel.Children.Add(new TextBlock { Text = "Relay non è riuscito ad aprirsi", FontSize = 20, Margin = new Thickness(0, 0, 0, 12) });
             panel.Children.Add(new ScrollViewer { Height = 380, Content = box });
             panel.Children.Add(copy);
-            new Window { Title = "Ponte", Content = panel }.Activate();
+            new Window { Title = "Relay", Content = panel }.Activate();
         }
         catch (Exception) { }
     }

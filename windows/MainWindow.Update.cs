@@ -75,7 +75,7 @@ public sealed partial class MainWindow
                  (p.BytesPerSec > 1 ? $" · {Mb((long)p.BytesPerSec)}/s" : "") +
                  (p.BytesPerSec > 1 && p.Total > p.Done ? $" · {Eta((p.Total - p.Done) / p.BytesPerSec)}" : ""),
             2 => "Preparo i file nuovi",
-            3 => "Ponte si chiude e riparte da solo",
+            3 => "Relay si chiude e riparte da solo",
             -1 => $"Versione installata: 1.0.{_r.Update.Current}",
             _ => p.Message,
         };

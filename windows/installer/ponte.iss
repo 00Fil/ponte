@@ -16,7 +16,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 OutputDir=..\..
 OutputBaseFilename=Ponte-Setup
-SetupIconFile=..\Assets\ponte.ico
+SetupIconFile=..\Assets\relay.ico
 WizardStyle=modern
 DisableWelcomePage=yes
 DisableReadyPage=yes
@@ -29,7 +29,7 @@ Compression=lzma2/fast
 SolidCompression=yes
 
 [Messages]
-SetupWindowTitle=Ponte
+SetupWindowTitle=Relay
 WizardInstalling=Preparo Ponte
 InstallingLabel=Un attimo, apro l'installazione di Ponte.
 

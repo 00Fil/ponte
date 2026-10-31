@@ -41,9 +41,9 @@ public sealed partial class MainWindow : Window
         _pages = new[] { Page5, Page0, Page1, Page2, Page3, Page4 };
         _hosts = new[] { Host5, Host0, Host1, Host2, Host3, Host4 };
 
-        Title = "Ponte";
+        Title = "Relay";
         SetupFrame();
-        try { AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "ponte.ico")); } catch (Exception) { }
+        try { AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "relay.ico")); } catch (Exception) { }
         // Chiudere la finestra non chiude Ponte: resta nell'area di notifica e continua a sincronizzare.
         AppWindow.Closing += (_, e) =>
         {
@@ -286,7 +286,7 @@ public sealed partial class MainWindow : Window
 
         var others = new List<UIElement> { Text("Altri dispositivi", "SectionTitle") };
         if (devices.Count == 0)
-            others.Add(Text("Nessun altro dispositivo. Apri Ponte su un altro dispositivo, con lo stesso server e lo stesso token.", "Footnote"));
+            others.Add(Text("Nessun altro dispositivo. Apri Relay su un altro dispositivo, con lo stesso server e lo stesso token.", "Footnote"));
         for (var i = 0; i < devices.Count; i++)
         {
             var d = devices[i];
@@ -470,7 +470,7 @@ public sealed partial class MainWindow : Window
         var hp = new List<UIElement>
         {
             Text("Cuffie", "SectionTitle"),
-            Text("Segna le cuffie associate. Ponte tiene collegato un solo dispositivo alla volta: quando l'audio parte qui gli altri le lasciano, e dopo un po' di inattività le lascia anche il PC, così non occupi i due slot.", "Footnote"),
+            Text("Segna le cuffie associate. Relay tiene collegato un solo dispositivo alla volta: quando l'audio parte qui gli altri le lasciano, e dopo un po' di inattività le lascia anche il PC, così non occupi i due slot.", "Footnote"),
         };
         if (hps.Count == 0) hp.Add(Text("Nessuna cuffia associata a questo PC.", "FootnoteTertiary"));
         foreach (var x in hps)
@@ -506,7 +506,7 @@ public sealed partial class MainWindow : Window
 
         if (sinks.Count == 0 && playingTo == null)
         {
-            h.Children.Add(Card(Text("Nessun dispositivo in grado di riceverlo. Apri Ponte su un telefono o un tablet Android.", "Footnote")));
+            h.Children.Add(Card(Text("Nessun dispositivo in grado di riceverlo. Apri Relay su un telefono o un tablet Android.", "Footnote")));
             return;
         }
         foreach (var d in sinks)
@@ -552,7 +552,7 @@ public sealed partial class MainWindow : Window
             Divider(),
             Toggle("Notifiche del telefono", "Le notifiche inoltrate dal telefono compaiono come notifiche di Windows", s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); }),
             Divider(),
-            Toggle("Avvia con Windows", "Ponte parte in background all'accesso", GetAutostart(), SetAutostart)));
+            Toggle("Avvia con Windows", "Relay parte in background all'accesso", GetAutostart(), SetAutostart)));
 
         h.Children.Add(Card(
             Text("Aggiornamenti", "SectionTitle"),

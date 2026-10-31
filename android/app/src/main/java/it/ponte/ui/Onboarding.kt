@@ -160,7 +160,9 @@ private fun Welcome(onNext: () -> Unit) {
         verticalArrangement = Arrangement.Bottom,
         horizontalAlignment = Alignment.Start,
     ) {
-        Stagger(0) { Text("Ponte", style = CanoneType.title1.copy(fontSize = 64.sp, lineHeight = 68.sp), color = c.labelPrimary) }
+        Stagger(0) { RelayMark(84.dp) }
+        Spacer(Modifier.height(Space.s5))
+        Stagger(0) { Text("Relay", style = CanoneType.title1.copy(fontSize = 64.sp, lineHeight = 68.sp), color = c.labelPrimary) }
         Spacer(Modifier.height(Space.s3))
         Stagger(1) { Text("I tuoi dispositivi, un solo spazio.", style = CanoneType.callout, color = c.labelPrimary) }
         Spacer(Modifier.height(Space.s2))
@@ -237,13 +239,13 @@ private fun Permissions(r: Router, onNext: () -> Unit, onBack: () -> Unit) {
     val nearby = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
 
     val perms = buildList {
-        if (Build.VERSION.SDK_INT >= 33) add(Perm("Notifiche", "Per tenere Ponte attivo e avvisarti", { has(it, Manifest.permission.POST_NOTIFICATIONS) }) { ask.launch(Manifest.permission.POST_NOTIFICATIONS) })
+        if (Build.VERSION.SDK_INT >= 33) add(Perm("Notifiche", "Per tenere Relay attivo e avvisarti", { has(it, Manifest.permission.POST_NOTIFICATIONS) }) { ask.launch(Manifest.permission.POST_NOTIFICATIONS) })
         add(Perm("Mostra sopra altre app", "Appunti in tempo reale e capire quando usi il telefono", { Settings.canDrawOverlays(it) }) { open(Settings.ACTION_MANAGE_OVERLAY_PERMISSION) })
         if (Build.VERSION.SDK_INT >= 31) add(Perm("Bluetooth", "Cuffie e collegamento senza Wi-Fi", { has(it, Manifest.permission.BLUETOOTH_CONNECT) }) { ask.launch(Manifest.permission.BLUETOOTH_CONNECT) })
         add(Perm("Dispositivi Wi-Fi vicini", "Wi-Fi Direct con il tablet quando non c'è rete", { has(it, nearby) }) { ask.launch(nearby) })
         add(Perm("Foto e screenshot", "Per condividere gli screenshot appena li fai", { has(it, imagesPermission()) }) { ask.launch(imagesPermission()) })
-        add(Perm("Installare aggiornamenti", "Ponte si aggiorna da solo dalle release", { it.packageManager.canRequestPackageInstalls() }) { open(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES) })
-        add(Perm("Nessun risparmio batteria", "Evita che Android fermi Ponte", {
+        add(Perm("Installare aggiornamenti", "Relay si aggiorna da solo dalle release", { it.packageManager.canRequestPackageInstalls() }) { open(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES) })
+        add(Perm("Nessun risparmio batteria", "Evita che Android fermi Relay", {
             (it.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(it.packageName)
         }) { open(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS, pkg = false) })
         add(Perm("Notifiche sul PC (facoltativo)", "Inoltra le notifiche del telefono al computer", { listenerEnabled(it) }) {
@@ -255,7 +257,7 @@ private fun Permissions(r: Router, onNext: () -> Unit, onBack: () -> Unit) {
                 val ok = Root.available() && try {
                     Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
                 } catch (_: Exception) { false }
-                toast(ctx, if (ok) "Concesso: Ponte si riavvia" else "Dal PC: adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS")
+                toast(ctx, if (ok) "Concesso: Relay si riavvia" else "Dal PC: adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS")
                 tick++
             }
         })
@@ -318,7 +320,7 @@ private fun Ready(onDone: () -> Unit) {
             )
         }
         Spacer(Modifier.height(Space.s6))
-        Stagger(3) { CButton("Apri Ponte", onDone, Modifier.fillMaxWidth(), kind = ButtonKind.Primary) }
+        Stagger(3) { CButton("Apri Relay", onDone, Modifier.fillMaxWidth(), kind = ButtonKind.Primary) }
     }
 }
 

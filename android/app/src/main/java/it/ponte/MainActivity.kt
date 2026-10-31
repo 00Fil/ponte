@@ -175,7 +175,10 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 Column(Modifier.width(240.dp).fillMaxHeight().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-                    Text("Ponte", style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s3, Space.s4, Space.s3, Space.s5))
+                    Row(Modifier.padding(Space.s3, Space.s4, Space.s3, Space.s5), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                        it.ponte.ui.RelayMark(32.dp)
+                        Text("Relay", style = CanoneType.title3, color = c.labelPrimary)
+                    }
                     TABS.forEachIndexed { i, t -> SideItem(t, i, pager.currentPage == i) { select(i) } }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {

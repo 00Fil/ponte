@@ -1,13 +1,15 @@
 <!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ponte</title>
+<title>Relay</title>
 <style>html,body{margin:0;height:100%;background:var(--bg,transparent);overflow:hidden}canvas{position:absolute;inset:0;width:100%;height:100%;display:block}</style>
 </head><body><canvas id="c" aria-hidden="true"></canvas>
 <script>
 // MicroSlats (preset "swell") di Ponte: stessi shader del componente, senza fluido. Parametri: ?light=1 &bg=RRGGBB
 const params = new URLSearchParams(location.search);
 let light = params.get('light') === '1';
-if (params.get('bg')) document.documentElement.style.setProperty('--bg', '#' + params.get('bg'));
+const ink = params.get('ink') === '1';
+if (ink) document.documentElement.style.setProperty('--bg', 'linear-gradient(180deg,#6FB4FF 0%,#3C7BFF 50%,#2547F0 100%)');
+else if (params.get('bg')) document.documentElement.style.setProperty('--bg', '#' + params.get('bg'));
 const S = { scale: 1.5, speed: 0.6, direction: 250, chop: 0.55, stretch: 0, glint: 0.7, contrast: 1.25, perspective: 0.55, fog: 0.55,
   slatW: 10, slatH: 25, gap: 3, round: 0.75, introDuration: 1.5 };
 const VERT = `#version 300 es
@@ -146,7 +148,7 @@ void main() {
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false });
 const hex = h => [parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255];
-window.ponteSet = p => { if (p.lightMode !== undefined) light = !!p.lightMode; if (p.bg) document.documentElement.style.setProperty('--bg', '#' + String(p.bg).replace('#','')); };
+window.ponteSet = p => { if (p.lightMode !== undefined) light = !!p.lightMode; if (p.bg && !ink) document.documentElement.style.setProperty('--bg', '#' + String(p.bg).replace('#','')); };
 if (gl) {
   const link = (vs, fs) => { const mk = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); return x; };
     const p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
@@ -183,7 +185,7 @@ if (gl) {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(s.tField, 0); gl.uniform2f(s.uSize, W, H); gl.uniform1f(s.uDpr, dpr); gl.uniform4f(s.uGrid, cols, rows, px, py); gl.uniform2f(s.uOrigin, ox, oy);
     gl.uniform2f(s.uSlat, S.slatW, S.slatH); gl.uniform1f(s.uRound, S.round); gl.uniform1f(s.uTilt, 0);
-    const col = hex(light ? '2E4BFF' : '4D8DFF'), gli = hex(light ? '1233C4' : 'CFE2FF');
+    const col = hex(ink ? 'A9CFFF' : light ? '2F5FFF' : '5C9DFF'), gli = hex(ink ? 'FFFFFF' : light ? '1233C4' : 'CFE2FF');
     gl.uniform3f(s.uColor, col[0], col[1], col[2]); gl.uniform3f(s.uGlintColor, gli[0], gli[1], gli[2]); gl.uniform4f(s.uBackground, 0, 0, 0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (!document.hidden) requestAnimationFrame(frame); else last = 0;

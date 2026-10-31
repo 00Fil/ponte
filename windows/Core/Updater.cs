@@ -73,7 +73,7 @@ public sealed class Updater
             if (!install) { Outcome($"Disponibile la versione 1.0.{build}", -1); return; }
 
             var appDir = AppContext.BaseDirectory.TrimEnd('\\');
-            if (!Writable(appDir)) { Outcome("La cartella di Ponte non è scrivibile: spostala ad esempio in Documenti"); return; }
+            if (!Writable(appDir)) { Outcome("La cartella di Relay non è scrivibile: spostala ad esempio in Documenti"); return; }
 
             var ver = $"1.0.{build}";
             Set($"Scarico la versione {ver}");

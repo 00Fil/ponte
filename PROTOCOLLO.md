@@ -1,4 +1,4 @@
-# Protocollo Ponte, versione 1
+# Protocollo Relay, versione 1
 
 Un solo protocollo, tre implementazioni: server Node (`server/`), app Android (`android/`), app Windows (`windows/`). Se cambi qualcosa qui, cambialo in tutte e tre.
 
@@ -43,7 +43,7 @@ Sulla LAN il primo frame è `hello` con il campo `proof = hex(HMAC-SHA256(chiave
 | `bt.claim` | `hp` (indirizzo Bluetooth, maiuscolo, `AA:BB:CC:DD:EE:FF`), `prio` | Il mittente chiede un posto sulle cuffie (hanno 2 posti). Con un posto libero nessuno scollega niente. Se i posti sono pieni lascia le cuffie chi vale meno tra i dispositivi collegati: non bloccato, poi non in riproduzione, poi usato meno di recente, poi id; tutti applicano la stessa regola sugli stessi dati, quindi se ne va uno solo. |
 | `bt.state` | `hp`, `on` (collegate a questo dispositivo), `play` (sta suonando), `ago` (ms dall'ultimo uso) | Annuncia chi occupa i posti. Inviato a ogni cambio e ogni 45 s; una voce senza aggiornamenti per 150 s decade. |
 | `focus` | `ago` (ms dall'ultimo input) | Il mittente è il dispositivo in uso. Chi riceve calcola l'ora dell'input come arrivo meno `ago` (senza orologi da sincronizzare): in uso è chi ha l'input più recente, e nessuno se sono passati più di 10 minuti. Inviato al passaggio di mano o dopo 30 s di inattività, al più ogni 15 s. |
-| `media.take` | — | Su questo dispositivo è appena partito un contenuto multimediale: gli altri che stanno suonando si mettono in pausa (salvo blocco, audio ricevuto da Ponte o partenza simultanea, dove vince l'id minore). Un dispositivo non annuncia nulla per 5 s dopo una pausa ricevuta. |
+| `media.take` | — | Su questo dispositivo è appena partito un contenuto multimediale: gli altri che stanno suonando si mettono in pausa (salvo blocco, audio ricevuto da Relay o partenza simultanea, dove vince l'id minore). Un dispositivo non annuncia nulla per 5 s dopo una pausa ricevuta. |
 | `audio.lock` | `by` (id o stringa vuota) | Blocco del passaggio automatico: le cuffie restano a `by` finché non si sblocca. |
 
 ## Audio

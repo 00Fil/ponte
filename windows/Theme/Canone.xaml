@@ -18,10 +18,10 @@
             <SolidColorBrush x:Key="LineStrong" Color="#CACAC5" />
             <SolidColorBrush x:Key="FillControl" Color="#CACAC5" />
             <SolidColorBrush x:Key="FillSelected" Color="#121212" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#2F5FFF" />
             <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#EAF0FF" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1D3BD1" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#EAF1FF" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1F44CC" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#E5F2EA" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#17603C" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#FBF0E0" />
@@ -31,15 +31,15 @@
             <SolidColorBrush x:Key="CriticalOnSubtle" Color="#A11F24" />
             <SolidColorBrush x:Key="CriticalOnCritical" Color="#FFFFFF" />
             <!-- Interruttori: acceso = fill-selected, spento = fill-control, pomello = bg-surface. -->
-            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#2E4BFF" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#2E4BFF" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#2F5FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#2F5FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2F5FFF" />
             <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#CACAC5" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#2E4BFF" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#2E4BFF" />
-            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#2E4BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#2F5FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="#2F5FFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="#2F5FFF" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#CACAC5" />
             <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#CACAC5" />
@@ -67,10 +67,10 @@
             <SolidColorBrush x:Key="LineStrong" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillControl" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillSelected" Color="#F2F2F0" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#4D8DFF" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#5C9DFF" />
             <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#12204A" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#A9C8FF" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#11244F" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#B4D2FF" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#12301F" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#4CC38A" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#3A2508" />
@@ -104,9 +104,10 @@
     </ResourceDictionary.ThemeDictionaries>
 
     <!-- Il gradiente di Ponte, oltremare e ciano come le fibre: solo nel marchio. -->
-    <LinearGradientBrush x:Key="BrandGradient" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#2E4BFF" Offset="0" />
-        <GradientStop Color="#4D9BFF" Offset="1" />
+    <LinearGradientBrush x:Key="BrandGradient" StartPoint="0.3,0" EndPoint="0.7,1">
+        <GradientStop Color="#6FB4FF" Offset="0" />
+        <GradientStop Color="#3C7BFF" Offset="0.5" />
+        <GradientStop Color="#2547F0" Offset="1" />
     </LinearGradientBrush>
 
     <!-- Geist e Geist Mono, con ripiego sul font di sistema. -->

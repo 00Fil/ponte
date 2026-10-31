@@ -505,7 +505,7 @@ internal class FiberRenderer(private val band: Boolean, @Volatile override var l
         private fun rgb(hex: Int) = floatArrayOf(((hex shr 16) and 255) / 255f, ((hex shr 8) and 255) / 255f, (hex and 255) / 255f)
         // glow, secondary, line: la palette di Ponte (come su Windows)
         val DARK = arrayOf(rgb(0x1E44FF), rgb(0x3F8CFF), rgb(0x9CC6FF))
-        val LIGHT = arrayOf(rgb(0x1F46FF), rgb(0x3F86FF), rgb(0x1233C4))
+        val LIGHT = arrayOf(rgb(0x2F63FF), rgb(0x6FB4FF), rgb(0x1F44CC))
 
         val SHAPE_U = listOf("uTime", "uTwist", "uRoll", "uWaves", "uWidth", "uRibbon", "uOrient", "uScale", "uPlace", "uVolume")
         val DOT_U = SHAPE_U + listOf(

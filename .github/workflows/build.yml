@@ -79,4 +79,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete latest --cleanup-tag -y || true
-          gh release create latest dist/* --title "Ponte 1.0.${{ github.run_number }}" --notes "Build automatica ${{ github.run_number }}. Le app installate si aggiornano da sole. Prima installazione: Android, installa l'APK; Windows, esegui Ponte-Setup.exe (poi si aggiorna da sola)."
+          gh release create latest dist/* --title "Relay 1.0.${{ github.run_number }}" --notes "Build automatica ${{ github.run_number }}. Le app installate si aggiornano da sole. Prima installazione: Android, installa l'APK; Windows, esegui Ponte-Setup.exe (poi si aggiorna da sola)."

@@ -73,7 +73,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     Tile(1, "Dispositivi", "${devices.size + 1}", if (hub == "Connesso") "server attivo" else hub.lowercase(),
-                        listOf(Color(0xFF2E4BFF), Color(0xFF4D9BFF)), Modifier.weight(1f)) { go(1) }
+                        listOf(Color(0xFF2F5FFF), Color(0xFF6FB4FF)), Modifier.weight(1f)) { go(1) }
                     Tile(2, "Appunti", "${clips.size}", "in cronologia",
                         listOf(Color(0xFF1B34D6), Color(0xFF3F86FF)), Modifier.weight(1f)) { go(2) }
                 }
@@ -83,7 +83,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
                     Tile(3, "Archivio", "${files.size}", if (shots > 0) "$shots screenshot" else "file condivisi",
                         listOf(Color(0xFF3F86FF), Color(0xFF7DB4FF)), Modifier.weight(1f)) { go(3) }
                     Tile(4, "Cuffie", audio, "dove suonano ora",
-                        listOf(Color(0xFF4250FF), Color(0xFF2E4BFF)), Modifier.weight(1f)) { go(4) }
+                        listOf(Color(0xFF5B7BFF), Color(0xFF2F5FFF)), Modifier.weight(1f)) { go(4) }
                 }
             }
             item {

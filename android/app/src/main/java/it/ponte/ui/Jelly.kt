@@ -147,7 +147,7 @@ fun UpdateSheet(u: Updater.Ui, modifier: Modifier = Modifier) {
                             if (left >= 0) append(" · ").append(if (left >= 60) "${left / 60} min" else "$left s")
                         }
                     }
-                    Updater.Phase.Installing -> "Ponte si riapre da solo tra poco"
+                    Updater.Phase.Installing -> "Relay si riapre da solo tra poco"
                     Updater.Phase.UpToDate -> "Versione installata: 1.0.${BuildConfig.VERSION_CODE}"
                     Updater.Phase.Failed -> u.message
                 }
