@@ -49,12 +49,12 @@ private val Neutral925 = Color(0xFF121212)
 private val Neutral950 = Color(0xFF0E0E0F)
 private val Neutral1000 = Color(0xFFF2F2F0)
 // Accento di Ponte: gli stessi blu del gradiente ASCII (#1e3fd8, #38bdf8, #a5d8ff, #f6f8ff).
-private val Blue50 = Color(0xFFECEFFF)
-private val Blue300 = Color(0xFFB8C2FF)
-private val Blue400 = Color(0xFF7D8FFF)
+private val Blue50 = Color(0xFFEAF0FF)
+private val Blue300 = Color(0xFFA9C8FF)
+private val Blue400 = Color(0xFF4D8DFF)
 private val Blue500 = Color(0xFF2E4BFF)
-private val Blue600 = Color(0xFF1F33C7)
-private val Blue900 = Color(0xFF161C45)
+private val Blue600 = Color(0xFF1D3BD1)
+private val Blue900 = Color(0xFF12204A)
 
 /** Il gradiente di Ponte, per i pochi punti di colore: pulsante principale, indicatori, spunte. */
 object Brand {
@@ -93,7 +93,7 @@ val DarkColors = CanoneColors(
     bgCanvas = Neutral950, bgSurface = Neutral900, bgSunken = Neutral850, bgInverse = Neutral1000, bgScrim = Color(0x99000000),
     labelPrimary = Neutral1000, labelSecondary = Neutral400, labelTertiary = Neutral500, labelDisabled = Neutral600, labelInverse = Neutral925,
     lineSeparator = Neutral800, lineStrong = Neutral750, fillControl = Neutral750, fillSelected = Neutral1000,
-    accent = Blue400, accentPressed = Blue300, accentSubtle = Blue900, accentOnSubtle = Blue300, accentOnAccent = Neutral950,
+    accent = Blue400, accentPressed = Blue300, accentSubtle = Blue900, accentOnSubtle = Blue300, accentOnAccent = Neutral0,
     positive = Green300, positiveSubtle = Green900, positiveOnSubtle = Green300,
     caution = Amber300, cautionSubtle = Amber900, cautionOnSubtle = Amber300,
     critical = Red300, criticalSubtle = Red900, criticalOnSubtle = Red300, criticalOnCritical = Neutral950,

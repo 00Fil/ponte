@@ -32,7 +32,7 @@ fun AnimatedCheck(size: Dp, modifier: Modifier = Modifier, delayMs: Long = 0L) {
     val ring = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(delayMs)
-        disc.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
+        disc.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
     }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(delayMs + 140)

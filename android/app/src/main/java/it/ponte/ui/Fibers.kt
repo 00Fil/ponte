@@ -39,12 +39,12 @@ import kotlin.math.tan
 @Composable
 fun FiberField(modifier: Modifier, band: Boolean = false, @Suppress("UNUSED_PARAMETER") centerY: Float = 0.5f, @Suppress("UNUSED_PARAMETER") spread: Float = 1f) {
     val dark = isSystemInDarkTheme()
-    val view = remember { mutableStateOf<FiberView?>(null) }
+    val view = remember { mutableStateOf<GlView?>(null) }
     @Suppress("DEPRECATION")
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     AndroidView(
         modifier = modifier,
-        factory = { ctx -> FiberView(ctx, band, !dark).also { view.value = it } },
+        factory = { ctx -> GlView(ctx, FiberRenderer(band, !dark)).also { view.value = it } },
         onRelease = { it.release() },
     )
     LaunchedEffect(dark) { view.value?.setLight(!dark) }
@@ -61,10 +61,20 @@ fun FiberField(modifier: Modifier, band: Boolean = false, @Suppress("UNUSED_PARA
     }
 }
 
-class FiberView(ctx: Context, band: Boolean, light: Boolean) : TextureView(ctx), TextureView.SurfaceTextureListener {
+/** Scena OpenGL ES 3 disegnata da [GlView]. */
+interface GlScene {
+    var light: Boolean
+    fun init(): Boolean
+    fun resize(w: Int, h: Int)
+    fun step(dt: Float, elapsed: Float)
+    fun render(cssW: Float, cssH: Float)
+    fun dispose()
+}
+
+/** TextureView con un thread OpenGL suo, sincronizzato con lo schermo, che disegna una [GlScene]. */
+class GlView(ctx: Context, private val renderer: GlScene, private val maxRatio: Float = 1.5f) : TextureView(ctx), TextureView.SurfaceTextureListener {
     private val thread = HandlerThread("ponte-fibre").apply { start() }
     private val handler = Handler(thread.looper)
-    private val renderer = FiberRenderer(band, light)
     private var egl: Egl? = null
     @Volatile private var running = true
     private var scheduled = false
@@ -119,7 +129,7 @@ class FiberView(ctx: Context, band: Boolean, light: Boolean) : TextureView(ctx),
         // Risoluzione di disegno: al massimo 1,5 pixel per dp, come il componente con dpr limitato (meno lavoro, stesso aspetto).
         cssW = w / density
         cssH = h / density
-        val ratio = min(density, 1.5f)
+        val ratio = min(density, maxRatio)
         val pw = max(1, (cssW * ratio).roundToInt())
         val ph = max(1, (cssH * ratio).roundToInt())
         st.setDefaultBufferSize(pw, ph)
@@ -198,7 +208,7 @@ private class Egl(st: SurfaceTexture) {
  * Traduzione diretta della parte JavaScript di GhostFibers (render e frame), con i parametri di Ponte
  * (gli stessi di Windows): `band` per la fascia dietro i titoli, altrimenti la forma grande.
  */
-private class FiberRenderer(private val band: Boolean, @Volatile var light: Boolean) {
+internal class FiberRenderer(private val band: Boolean, @Volatile override var light: Boolean) : GlScene {
     private class Prog(val id: Int, val u: Map<String, Int>)
     private class Target { var tex = 0; var fb = 0; var w = 0; var h = 0 }
 
@@ -244,7 +254,7 @@ private class FiberRenderer(private val band: Boolean, @Volatile var light: Bool
     private var vao = 0
     private var format = GLES30.GL_RGBA8
 
-    fun init(): Boolean {
+    override fun init(): Boolean {
         val ext = GLES30.glGetString(GLES30.GL_EXTENSIONS) ?: ""
         format = if (ext.contains("GL_EXT_color_buffer_float") || ext.contains("GL_EXT_color_buffer_half_float")) GLES30.GL_RGBA16F else GLES30.GL_RGBA8
         dots = link(FiberShaders.DOT_VERTEX, FiberShaders.DOT_FRAGMENT, DOT_U)
@@ -263,7 +273,7 @@ private class FiberRenderer(private val band: Boolean, @Volatile var light: Bool
         return true
     }
 
-    fun dispose() {
+    override fun dispose() {
         listOf(dots, dust, bright, down, up, composite).forEach { it?.let { p -> GLES30.glDeleteProgram(p.id) } }
         dots = null
         (listOf(scene) + chain).forEach { t ->
@@ -275,9 +285,9 @@ private class FiberRenderer(private val band: Boolean, @Volatile var light: Bool
         vao = 0
     }
 
-    fun resize(w: Int, h: Int) { pw = w; ph = h }
+    override fun resize(w: Int, h: Int) { pw = w; ph = h }
 
-    fun step(dt: Float, elapsed: Float) {
+    override fun step(dt: Float, elapsed: Float) {
         frame += 1
         time += dt * speed
         roll += dt * speed * rollSpeed
@@ -285,7 +295,7 @@ private class FiberRenderer(private val band: Boolean, @Volatile var light: Bool
         intro += elapsed
     }
 
-    fun render(cssW: Float, cssH: Float) {
+    override fun render(cssW: Float, cssH: Float) {
         val dp = dots ?: return
         val fit = (cssW / cssH / 1.5f).coerceIn(0.6f, 1f)
         val ratio = ph / max(cssH, 1f)

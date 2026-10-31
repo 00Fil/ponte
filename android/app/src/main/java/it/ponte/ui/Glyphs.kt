@@ -28,13 +28,13 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
     val gesture = remember { Animatable(0f) }
     LaunchedEffect(selected) {
         if (selected) {
-            pop.snapTo(0.78f)
-            pop.animateTo(1f, spring(dampingRatio = 0.3f, stiffness = 380f))
+            pop.snapTo(0.88f)
+            pop.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 420f))
         }
     }
     LaunchedEffect(selected) {
         gesture.snapTo(0f)
-        if (selected) gesture.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 120f))
+        if (selected) gesture.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 200f))
     }
     Canvas(modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }) {
         val u = size.minDimension / 24f

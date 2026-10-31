@@ -100,7 +100,7 @@ internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.un
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Box(Modifier.fillMaxWidth().height(height).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        FiberField(Modifier.matchParentSize())
+        SlatField(Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = CanoneType.title2, color = c.labelPrimary)

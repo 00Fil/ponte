@@ -20,8 +20,8 @@
             <SolidColorBrush x:Key="FillSelected" Color="#121212" />
             <SolidColorBrush x:Key="AccentDefault" Color="#2E4BFF" />
             <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#ECEFFF" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1F33C7" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#EAF0FF" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#1D3BD1" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#E5F2EA" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#17603C" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#FBF0E0" />
@@ -67,10 +67,10 @@
             <SolidColorBrush x:Key="LineStrong" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillControl" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillSelected" Color="#F2F2F0" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#7D8FFF" />
-            <SolidColorBrush x:Key="AccentOnAccent" Color="#0E0E0F" />
-            <SolidColorBrush x:Key="AccentSubtle" Color="#161C45" />
-            <SolidColorBrush x:Key="AccentOnSubtle" Color="#B8C2FF" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#4D8DFF" />
+            <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="#12204A" />
+            <SolidColorBrush x:Key="AccentOnSubtle" Color="#A9C8FF" />
             <SolidColorBrush x:Key="PositiveSubtle" Color="#12301F" />
             <SolidColorBrush x:Key="PositiveOnSubtle" Color="#4CC38A" />
             <SolidColorBrush x:Key="CautionSubtle" Color="#3A2508" />

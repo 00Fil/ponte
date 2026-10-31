@@ -80,20 +80,6 @@ public sealed partial class MainWindow
             _ => p.Message,
         };
 
-        // Rimbalzo "gelatina" dell'anello a ogni 10 % scaricato.
-        var tenth = (int)(frac * 10);
-        if (p.Step == 1 && tenth != _lastTenth && tenth > 0)
-        {
-            _lastTenth = tenth;
-            var v = ElementCompositionPreview.GetElementVisual(UpdateRingBox);
-            v.CenterPoint = new Vector3(28, 28, 0);
-            var sp = v.Compositor.CreateSpringVector3Animation();
-            sp.InitialValue = new Vector3(1.07f, 0.94f, 1f);
-            sp.FinalValue = Vector3.One;
-            sp.DampingRatio = 0.3f;
-            sp.Period = TimeSpan.FromMilliseconds(46);
-            v.StartAnimation("Scale", sp);
-        }
         if (p.Step != 1) _lastTenth = -1;
 
         // Passi: tre colonne uguali, barretta sopra e nome sotto.

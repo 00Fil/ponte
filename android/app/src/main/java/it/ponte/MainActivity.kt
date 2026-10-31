@@ -162,7 +162,7 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
     val sheet: @Composable BoxScope.() -> Unit = {
         androidx.compose.animation.AnimatedVisibility(
             upd != null, Modifier.align(Alignment.BottomCenter),
-            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.82f, 380f)) { it } + fadeIn(tween(180)),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(1f, 300f)) { it / 2 } + fadeIn(tween(220)),
             exit = androidx.compose.animation.slideOutVertically(tween(260)) { it } + fadeOut(tween(200)),
         ) {
             var last by remember { mutableStateOf(upd) }

@@ -88,7 +88,21 @@
                 </Grid>
             </Grid>
             <Grid Grid.Row="1">
-                <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page5">
+                    <StackPanel MaxWidth="840" Margin="32,4,32,40" Spacing="12">
+                        <!-- Scheda grande della Home: MicroSlats dietro il saluto. -->
+                        <Grid x:Name="HomeHero" Height="208" CornerRadius="20" BorderThickness="1" BorderBrush="{ThemeResource LineSeparator}" Background="{ThemeResource BgSurface}">
+                            <WebView2 x:Name="HomeWeb" />
+                            <Border x:Name="HomeFade" IsHitTestVisible="False" />
+                            <StackPanel VerticalAlignment="Bottom" Margin="24,0,24,20" Spacing="2" IsHitTestVisible="False">
+                                <TextBlock x:Name="HomeHello" Style="{StaticResource Title1}" />
+                                <TextBlock x:Name="HomeSub" Style="{StaticResource Footnote}" />
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel x:Name="Host5" Spacing="12" />
+                    </StackPanel>
+                </ScrollViewer>
+                <ScrollViewer x:Name="Page0" Visibility="Collapsed"><StackPanel x:Name="Host0" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>

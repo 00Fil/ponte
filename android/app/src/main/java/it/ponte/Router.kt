@@ -193,6 +193,11 @@ class Router(val ctx: Context, val prefs: Prefs) {
         if (seen.put(id, true) != null) return
         val to = m.optString("to")
         if (to.isNotEmpty() && to != deviceId) return
+        // Un messaggio che manda in errore un modulo non deve far cadere il collegamento.
+        try { dispatch(m, t, link) } catch (e: Exception) { android.util.Log.w("Ponte", "messaggio $t", e) }
+    }
+
+    private fun dispatch(m: JSONObject, t: String, link: Link) {
         when (t) {
             "devices" -> if (link.kind == "hub") {
                 val a = m.optJSONArray("list") ?: return

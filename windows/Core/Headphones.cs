@@ -35,7 +35,7 @@ public sealed class Headphones
     private const int Slots = 2;
     private readonly Dictionary<string, DateTime> _lastInputAt = new();
     private sealed record HpState(bool On, bool Play, DateTime Use, DateTime Seen);
-    private readonly Dictionary<string, Dictionary<string, HpState>> _holders = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<string, HpState>> _holders = new();
     private uint _lastInputTick;
     private bool _playing;
     private bool _mutedByUs;
@@ -250,18 +250,14 @@ public sealed class Headphones
     {
         var now = DateTime.UtcNow;
         if (!_holders.TryGetValue(hp, out var m)) return new();
-        foreach (var k in m.Where(kv => !kv.Value.On || now - kv.Value.Seen > TimeSpan.FromSeconds(150)).Select(kv => kv.Key).ToList()) m.Remove(k);
+        foreach (var k in m.Where(kv => !kv.Value.On || now - kv.Value.Seen > TimeSpan.FromSeconds(150)).Select(kv => kv.Key).ToList()) m.TryRemove(k, out _);
         return new Dictionary<string, HpState>(m);
     }
 
     /// <summary>C'è un posto libero sulle cuffie, senza contare questo PC?</summary>
     private bool FreeSlot(string hp) => Live(hp).Count(kv => kv.Key != Me) < Slots;
 
-    private Dictionary<string, HpState> Map(string hp)
-    {
-        if (!_holders.TryGetValue(hp, out var m)) _holders[hp] = m = new();
-        return m;
-    }
+    private System.Collections.Concurrent.ConcurrentDictionary<string, HpState> Map(string hp) => _holders.GetOrAdd(hp, _ => new());
 
     private void Announce(string hp, bool on)
     {

@@ -23,7 +23,7 @@ internal sealed class Cmd : ICommand
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly string[] Tabs = { "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni" };
+    private static readonly string[] Tabs = { "Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni" };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -38,8 +38,8 @@ public sealed partial class MainWindow : Window
         InitViewerKeys();
         _r = r;
         InitUpdateCard();
-        _pages = new[] { Page0, Page1, Page2, Page3, Page4 };
-        _hosts = new[] { Host0, Host1, Host2, Host3, Host4 };
+        _pages = new[] { Page5, Page0, Page1, Page2, Page3, Page4 };
+        _hosts = new[] { Host5, Host0, Host1, Host2, Host3, Host4 };
 
         Title = "Ponte";
         SetupFrame();
@@ -60,7 +60,7 @@ public sealed partial class MainWindow : Window
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
-        try { Select(_r.S.Token.Length == 0 ? 4 : 0); }
+        try { Select(_r.S.Token.Length == 0 ? 5 : 0); }
         catch (Exception e) { Crash.Log(e, "Barra laterale"); }
         if (!_r.S.Onboarded) ShowOnboarding();
     }
@@ -178,7 +178,7 @@ public sealed partial class MainWindow : Window
                 var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
                 nb.Click += (_, _) => Select(idx);
                 _nav.Add(nb);
-                (t < 3 ? NavMain : t == 3 ? NavTools : NavFoot).Children.Add(nb);
+                (t < 4 ? NavMain : t == 4 ? NavTools : NavFoot).Children.Add(nb);
             }
         }
         for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
@@ -197,12 +197,12 @@ public sealed partial class MainWindow : Window
         }
         ApplyLayout();
         UpdateSideStatus();
-        if (i == 4) RenderSettings(); else Refresh();
+        if (i == 5) RenderSettings(); else Refresh();
     }
 
-    private static readonly string[] Glyphs = { "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE713" };
-    private readonly TextBlock[] _badge = new TextBlock[5];
-    private readonly Border[] _badgeBox = new Border[5];
+    private static readonly string[] Glyphs = { "\uE80F", "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE713" };
+    private readonly TextBlock[] _badge = new TextBlock[6];
+    private readonly Border[] _badgeBox = new Border[6];
 
     private Grid NavContent(int t)
     {
@@ -241,9 +241,9 @@ public sealed partial class MainWindow : Window
     {
         SideDevice.Text = _r.S.Name.Length > 0 ? _r.S.Name : Environment.MachineName;
         SideVersion.Text = "Questo PC · " + _r.Update.Current.ToString("'1.0.'0");
-        SetBadge(0, _r.Devices.Count);
-        SetBadge(1, _r.Clip.History.Count);
-        SetBadge(2, _r.Files.Items.Count);
+        SetBadge(1, _r.Devices.Count);
+        SetBadge(2, _r.Clip.History.Count);
+        SetBadge(3, _r.Files.Items.Count);
     }
 
     private void Refresh()
@@ -251,10 +251,11 @@ public sealed partial class MainWindow : Window
         UpdateSideStatus();
         switch (_tab)
         {
-            case 0: RenderDevices(); break;
-            case 1: RenderClips(); break;
-            case 2: RenderArchive(); break;
-            case 3: RenderAudio(); break;
+            case 0: RenderHome(); break;
+            case 1: RenderDevices(); break;
+            case 2: RenderClips(); break;
+            case 3: RenderArchive(); break;
+            case 4: RenderAudio(); break;
         }
     }
 

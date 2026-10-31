@@ -66,7 +66,7 @@ class Headphones(private val ctx: Context, private val r: Router) {
     private val lastInputAt = HashMap<String, Long>()
     private data class HpState(val on: Boolean, val play: Boolean, val use: Long, val seen: Long)
     /** Cuffie -> dispositivo -> stato, così ognuno sa chi occupa i 2 posti. */
-    private val holders = HashMap<String, HashMap<String, HpState>>()
+    private val holders = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, HpState>>()
     private var mutedByUs = false
     private var watcher: View? = null
 
@@ -298,7 +298,7 @@ class Headphones(private val ctx: Context, private val r: Router) {
     private fun announce(hp: String, on: Boolean) {
         val now = System.currentTimeMillis()
         val use = maxOf(lastActive, lastInput)
-        holders.getOrPut(hp) { HashMap() }[me] = HpState(on, playing, use, now)
+        holders.getOrPut(hp) { java.util.concurrent.ConcurrentHashMap() }[me] = HpState(on, playing, use, now)
         r.send(newMsg("bt.state", "hp" to hp, "on" to on, "play" to playing, "ago" to if (use == 0L) 3_600_000L else now - use))
     }
 
@@ -307,12 +307,12 @@ class Headphones(private val ctx: Context, private val r: Router) {
         val from = m.optString("from")
         if (hp.isEmpty() || from.isEmpty()) return
         val now = System.currentTimeMillis()
-        holders.getOrPut(hp) { HashMap() }[from] = HpState(m.optBoolean("on"), m.optBoolean("play"), now - m.optLong("ago"), now)
+        holders.getOrPut(hp) { java.util.concurrent.ConcurrentHashMap() }[from] = HpState(m.optBoolean("on"), m.optBoolean("play"), now - m.optLong("ago"), now)
     }
 
     fun claim(address: String) {
         val now = System.currentTimeMillis()
-        holders.getOrPut(address) { HashMap() }[me] = HpState(true, playing, now, now)
+        holders.getOrPut(address) { java.util.concurrent.ConcurrentHashMap() }[me] = HpState(true, playing, now, now)
         holder.value = me
         r.send(newMsg("bt.claim", "hp" to address, "prio" to prio()))
     }
@@ -328,9 +328,9 @@ class Headphones(private val ctx: Context, private val r: Router) {
         if (addr.isEmpty()) return
         holder.value = from
         val now = System.currentTimeMillis()
-        holders.getOrPut(addr) { HashMap() }[from] = HpState(true, false, now, now)
+        holders.getOrPut(addr) { java.util.concurrent.ConcurrentHashMap() }[from] = HpState(true, false, now, now)
         if (!isConnected(addr)) return
-        holders.getOrPut(addr) { HashMap() }[me] = HpState(true, playing, maxOf(lastActive, lastInput), now)
+        holders.getOrPut(addr) { java.util.concurrent.ConcurrentHashMap() }[me] = HpState(true, playing, maxOf(lastActive, lastInput), now)
         val others = live(addr).filter { it.key != from }
         val count = others.size - (SLOTS - 1)
         if (count <= 0) return

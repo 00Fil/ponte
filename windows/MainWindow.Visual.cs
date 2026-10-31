@@ -18,7 +18,7 @@ public sealed partial class MainWindow
     // ---------------------------------------------------------------- gradiente ASCII
 
     /// <summary>Carica Assets/Web/gradient.html (lo stesso dell'app Android) in un WebView2 trasparente.</summary>
-    private async Task InitWebAsync(WebView2 web, string query)
+    private async Task InitWebAsync(WebView2 web, string query, string page = "gradient.html", string? bg = null)
     {
         try
         {
@@ -30,7 +30,7 @@ public sealed partial class MainWindow
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
-            web.Source = new Uri($"https://ponte.app/gradient.html?{query}&light={(Dark ? 0 : 1)}&bg={BgHex()}");
+            web.Source = new Uri($"https://ponte.app/{page}?{query}&light={(Dark ? 0 : 1)}&bg={bg ?? BgHex()}");
         }
         catch (Exception)
         {
@@ -52,6 +52,9 @@ public sealed partial class MainWindow
         var js = $"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{BgHex()}' }})";
         foreach (var w in new[] { HeaderWeb, OnboardWeb })
             if (w.CoreWebView2 != null) _ = w.CoreWebView2.ExecuteScriptAsync(js);
+        if (HomeWeb.CoreWebView2 != null)
+            _ = HomeWeb.CoreWebView2.ExecuteScriptAsync($"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{SurfaceHex()}' }})");
+        if (_tab == 0) RenderHome();
     }
 
     /// <summary>Sfumature dal gradiente al colore di fondo, così testata e pagina si fondono.</summary>
@@ -131,7 +134,7 @@ public sealed partial class MainWindow
         }
         var spring = c.CreateSpringVector3Animation();
         spring.FinalValue = target;
-        spring.DampingRatio = 0.78f;
+        spring.DampingRatio = 0.9f;
         spring.Period = TimeSpan.FromMilliseconds(48);
         v.StartAnimation("Translation", spring);
     }

@@ -55,8 +55,8 @@ import it.ponte.BuildConfig
 
 /**
  * Anello dell'aggiornamento.
- * - Ricerca: un arco sfumato gira e respira (si allunga e si accorcia).
- * - Download: l'arco insegue l'avanzamento con una molla morbida; a ogni 10 % l'anello fa un piccolo rimbalzo "gelatina".
+ * - Ricerca: un arco sfumato di lunghezza fissa gira a velocità costante.
+ * - Download: l'arco avanza in modo continuo, senza rimbalzi.
  * - Installazione: anello pieno con un riflesso che gira.
  */
 @Composable
@@ -64,25 +64,16 @@ fun UpdateRing(phase: Updater.Phase, fraction: Float, size: Dp, modifier: Modifi
     val c = Canone.colors
     val spin = rememberInfiniteTransition(label = "giro")
     val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "angolo")
-    val breath by spin.animateFloat(0.18f, 0.62f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "respiro")
 
+    // Avanzamento continuo, senza rimbalzi: l'arco scorre sempre in avanti con una curva morbida (come i download su iOS).
     val shown = remember { Animatable(0f) }
-    val jelly = remember { Animatable(0f) }
-    val tenth = (fraction * 10).toInt()
-    LaunchedEffect(fraction) { shown.animateTo(fraction.coerceIn(0f, 1f), spring(dampingRatio = 0.8f, stiffness = 90f)) }
-    LaunchedEffect(tenth) {
-        if (phase != Updater.Phase.Downloading || tenth == 0) return@LaunchedEffect
-        jelly.snapTo(1f)
-        jelly.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 260f))
+    LaunchedEffect(fraction) {
+        val target = fraction.coerceIn(0f, 1f)
+        if (target >= shown.value) shown.animateTo(target, tween(420, easing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)))
+        else shown.snapTo(target)
     }
 
-    Canvas(
-        modifier.size(size).graphicsLayer {
-            // gelatina: si allarga in un verso e si stringe nell'altro, poi torna
-            scaleX = 1f + 0.06f * jelly.value
-            scaleY = 1f - 0.06f * jelly.value
-        },
-    ) {
+    Canvas(modifier.size(size)) {
         val w = this.size.minDimension * 0.12f
         val inset = w / 2f
         val arc = Size(this.size.width - w, this.size.height - w)
@@ -90,7 +81,7 @@ fun UpdateRing(phase: Updater.Phase, fraction: Float, size: Dp, modifier: Modifi
         drawArc(c.fillControl, 0f, 360f, false, tl, arc, style = Stroke(w))
         val brush = Brush.sweepGradient(listOf(Brand.royal, Brand.sky, Brand.royal), center)
         when (phase) {
-            Updater.Phase.Checking -> rotate(angle) { drawArc(brush, -90f, 360f * breath, false, tl, arc, style = Stroke(w, cap = StrokeCap.Round)) }
+            Updater.Phase.Checking -> rotate(angle) { drawArc(brush, -90f, 100f, false, tl, arc, style = Stroke(w, cap = StrokeCap.Round)) }
             Updater.Phase.Downloading -> {
                 val sweep = 360f * shown.value
                 if (sweep > 1f) drawArc(brush, -90f, sweep, false, tl, arc, style = Stroke(w, cap = StrokeCap.Round))
@@ -124,7 +115,7 @@ fun UpdateSheet(u: Updater.Ui, modifier: Modifier = Modifier) {
             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 AnimatedContent(
                     u.phase == Updater.Phase.UpToDate || u.phase == Updater.Phase.Failed,
-                    transitionSpec = { (scaleIn(spring(0.6f, 300f), 0.6f) + fadeIn(tween(200))).togetherWith(fadeOut(tween(150))) },
+                    transitionSpec = { (scaleIn(tween(260, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)), 0.85f) + fadeIn(tween(200))).togetherWith(fadeOut(tween(150))) },
                     label = "esito",
                 ) { done ->
                     when {

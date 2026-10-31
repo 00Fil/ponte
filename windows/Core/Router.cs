@@ -236,6 +236,13 @@ public sealed class Router
         var to = m.S("to");
         if (to.Length > 0 && to != DeviceId) return;
 
+        // Un messaggio che manda in errore un modulo non deve far cadere il collegamento.
+        try { Dispatch(m, t, link); }
+        catch (Exception e) { Crash.Log(e, "Messaggio " + t); }
+    }
+
+    private void Dispatch(JsonObject m, string t, ILink link)
+    {
         switch (t)
         {
             case "devices" when link.Kind == "hub":
