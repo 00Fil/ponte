@@ -28,7 +28,7 @@ export async function start({
 }) {
   // Aggiornamenti: il server legge la release "latest" su GitHub (anche da repo privato, con un token)
   // e la gira ai dispositivi, che così si aggiornano da soli senza credenziali GitHub.
-  const UPDATE_ASSETS = { android: 'Ponte-Android.apk', windows: 'Ponte-Windows-x64.zip' };
+  const UPDATE_ASSETS = { android: 'Ponte-Android.apk', windows: 'Ponte-Windows-x64.zip', setup: 'Ponte-Setup.exe' };
   let releaseCache = { at: 0, data: null };
   const ghHeaders = (accept) => ({
     accept, 'user-agent': 'ponte-server', 'x-github-api-version': '2022-11-28',
