@@ -218,13 +218,21 @@ public sealed class SetupWindow : Window
     private static UIElement Brand()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var mark = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(8), Background = (Brush)Application.Current.Resources["BrandGradient"] };
-        mark.Child = new TextBlock { Text = "P", Foreground = new SolidColorBrush(Microsoft.UI.Colors.White), FontSize = 15,
-            FontFamily = (FontFamily)Application.Current.Resources["FontSansMedium"], HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(mark);
+        row.Children.Add(Logo(28));
         row.Children.Add(new TextBlock { Text = "Ponte", Style = St("SectionTitle"), VerticalAlignment = VerticalAlignment.Center });
         return row;
     }
+
+    /// <summary>Il logo vero di Ponte (Assets/logo.png, lo stesso dell'icona dell'app).</summary>
+    public static UIElement Logo(double size) => new Border
+    {
+        Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.22),
+        Child = new Microsoft.UI.Xaml.Controls.Image
+        {
+            Stretch = Stretch.UniformToFill,
+            Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png"))),
+        },
+    };
 
     private static UIElement Check()
     {
@@ -236,7 +244,7 @@ public sealed class SetupWindow : Window
     }
 
     private static Style St(string key) => (Style)Application.Current.Resources[key];
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    private static Brush Res(string key) => Canone.Get(key);
 
     private static TextBlock Text(string text, string style) => new() { Text = text, Style = St(style), TextWrapping = TextWrapping.Wrap };
 
@@ -268,6 +276,12 @@ public sealed class SetupWindow : Window
 
     // ---------------------------------------------------------------- sfondo
 
+    private string BgHex()
+    {
+        var c = (_root.Background as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Black;
+        return $"{c.R:X2}{c.G:X2}{c.B:X2}";
+    }
+
     private bool Dark => _root.ActualTheme == ElementTheme.Dark;
 
     private async Task InitWebAsync()
@@ -282,7 +296,7 @@ public sealed class SetupWindow : Window
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
-            _web.Source = new Uri($"https://ponte.app/gradient.html?shape=hero&light={(Dark ? 0 : 1)}");
+            _web.Source = new Uri($"https://ponte.app/gradient.html?shape=hero&light={(Dark ? 0 : 1)}&bg={BgHex()}");
         }
         catch (Exception) { _web.Visibility = Visibility.Collapsed; }
     }
@@ -290,7 +304,7 @@ public sealed class SetupWindow : Window
     private void SetWebTheme()
     {
         if (_web.CoreWebView2 != null)
-            _ = _web.CoreWebView2.ExecuteScriptAsync($"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")} }})");
+            _ = _web.CoreWebView2.ExecuteScriptAsync($"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{BgHex()}' }})");
     }
 
     /// <summary>A sinistra il fondo pieno sotto il testo, a destra le fibre libere.</summary>

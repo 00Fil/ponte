@@ -6,7 +6,7 @@
 <title>Ponte</title>
 <style>
   @font-face { font-family: "Geist Mono"; src: url("GeistMono-Regular.ttf"); font-weight: 100 900; }
-  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--bg, transparent); overflow: hidden; -webkit-user-select: none; user-select: none; }
   #box { position: absolute; inset: 0; overflow: hidden; }
   #c { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   body.nogl #box { background: radial-gradient(90% 70% at 50% 60%, rgba(46,75,255,.28), transparent 70%); }
@@ -618,10 +618,12 @@ const params = new URLSearchParams(location.search);
 const shapeName = params.get('shape') || 'hero';
 const band = shapeName === 'band' || shapeName === 'rise';
 const light = params.get('light') === '1';
-// Palette di Ponte: oltremare elettrico che sfuma nel ciano.
+// Sfondo pieno dello stesso colore della finestra (passato dall'app): il WebView non deve contare sulla trasparenza.
+if (params.get('bg')) document.documentElement.style.setProperty('--bg', '#' + params.get('bg').replace('#', ''));
+// Palette di Ponte: un solo colore, l'oltremare dell'accento, dal più profondo al più chiaro.
 const PALETTE = {
-  dark: { glowColor: '#3D5BFF', secondaryColor: '#22C3EE', lineColor: '#E6EEFF' },
-  light: { glowColor: '#2E4BFF', secondaryColor: '#0EA5C6', lineColor: '#1F33C7' },
+  dark: { glowColor: '#3A52FF', secondaryColor: '#6F85FF', lineColor: '#9FADFF' },
+  light: { glowColor: '#2E4BFF', secondaryColor: '#5C74FF', lineColor: '#1F33C7' },
 };
 const S = {
   gradient: GRADIENTS.along,
@@ -664,6 +666,7 @@ const S = {
   ...(light ? PALETTE.light : PALETTE.dark),
 };
 window.ponteSet = patch => {
+  if (patch.bg) document.documentElement.style.setProperty('--bg', '#' + String(patch.bg).replace('#', ''));
   if ('lightMode' in patch) Object.assign(S, patch.lightMode ? PALETTE.light : PALETTE.dark);
   Object.assign(S, patch);
   window.ponteWake && window.ponteWake();

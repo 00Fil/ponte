@@ -30,7 +30,7 @@ public sealed partial class MainWindow
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsZoomControlEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
-            web.Source = new Uri($"https://ponte.app/gradient.html?{query}&light={(Dark ? 0 : 1)}");
+            web.Source = new Uri($"https://ponte.app/gradient.html?{query}&light={(Dark ? 0 : 1)}&bg={BgHex()}");
         }
         catch (Exception)
         {
@@ -39,10 +39,17 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>Colore di fondo della pagina in esadecimale: lo sfondo animato lo usa pieno, senza contare sulla trasparenza del WebView.</summary>
+    private string BgHex()
+    {
+        var c = (ContentArea.Background as SolidColorBrush)?.Color ?? (Dark ? Windows.UI.Color.FromArgb(255, 14, 14, 15) : Windows.UI.Color.FromArgb(255, 244, 244, 242));
+        return $"{c.R:X2}{c.G:X2}{c.B:X2}";
+    }
+
     private void OnThemeChanged()
     {
         UpdateFades();
-        var js = $"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")} }})";
+        var js = $"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{BgHex()}' }})";
         foreach (var w in new[] { HeaderWeb, OnboardWeb })
             if (w.CoreWebView2 != null) _ = w.CoreWebView2.ExecuteScriptAsync(js);
     }
@@ -180,7 +187,7 @@ public sealed partial class MainWindow
             OnboardDots.Children.Add(new Border
             {
                 Height = 3, Width = 28, CornerRadius = new CornerRadius(1.5),
-                Background = i <= _step ? (Brush)Application.Current.Resources["AccentDefault"] : (Brush)Application.Current.Resources["LineStrong"],
+                Background = i <= _step ? Canone.Get("AccentDefault", Dark) : Canone.Get("LineStrong", Dark),
             });
         }
     }
@@ -249,10 +256,10 @@ public sealed partial class MainWindow
     private List<UIElement> StepReady()
     {
         var check = new Grid { Width = 48, Height = 48, HorizontalAlignment = HorizontalAlignment.Left };
-        check.Children.Add(new Ellipse { Fill = (Brush)Application.Current.Resources["AccentDefault"] });
+        check.Children.Add(new Ellipse { Fill = Canone.Get("AccentDefault", Dark) });
         check.Children.Add(new FontIcon
         {
-            Glyph = "\uE73E", FontSize = 20, Foreground = (Brush)Application.Current.Resources["AccentOnAccent"],
+            Glyph = "\uE73E", FontSize = 20, Foreground = Canone.Get("AccentOnAccent", Dark),
             FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
         });
         return new List<UIElement>

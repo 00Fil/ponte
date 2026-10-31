@@ -25,8 +25,8 @@
             </Grid.RowDefinitions>
             <Border x:Name="SideFallback" Grid.RowSpan="3" Margin="-12,0,-12,-16" Background="{ThemeResource BgSunken}" Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,52,8,20">
-                <Border Width="28" Height="28" CornerRadius="9" Background="{StaticResource BrandGradient}">
-                    <TextBlock Text="P" Foreground="White" FontFamily="{StaticResource FontSansMedium}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border Width="28" Height="28" CornerRadius="6">
+                    <Image Source="ms-appx:///Assets/logo.png" Stretch="UniformToFill" />
                 </Border>
                 <TextBlock Text="Ponte" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
             </StackPanel>

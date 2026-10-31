@@ -106,7 +106,7 @@
     <!-- Il gradiente di Ponte, oltremare e ciano come le fibre: solo nel marchio. -->
     <LinearGradientBrush x:Key="BrandGradient" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="#2E4BFF" Offset="0" />
-        <GradientStop Color="#22C3EE" Offset="1" />
+        <GradientStop Color="#6B80FF" Offset="1" />
     </LinearGradientBrush>
 
     <!-- Geist e Geist Mono, con ripiego sul font di sistema. -->
