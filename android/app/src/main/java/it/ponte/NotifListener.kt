@@ -8,6 +8,7 @@ import android.service.notification.StatusBarNotification
 /** Inoltra le notifiche di questo telefono ai dispositivi che le mostrano (il PC). Solo se l'utente l'ha attivato. */
 class NotifListener : NotificationListenerService() {
     private val sent = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val recent = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         sent.remove(sbn.key)
@@ -30,6 +31,13 @@ class NotifListener : NotificationListenerService() {
         val sig = "$title\u0000$text"
         val prev = sent[sbn.key]
         if (prev == sig || (prev != null && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)) return
+        // Stesso contenuto da due chiavi diverse (messaggio e riepilogo, o canali doppi): una sola volta ogni 10 secondi.
+        val content = "${sbn.packageName}\u0000$sig"
+        val now = System.currentTimeMillis()
+        val last = recent[content]
+        if (last != null && now - last < 10_000) return
+        recent[content] = now
+        if (recent.size > 200) recent.entries.removeAll { now - it.value > 10_000 }
         sent[sbn.key] = sig
         if (sent.size > 500) sent.keys.take(250).forEach { sent.remove(it) }
         val app = try {

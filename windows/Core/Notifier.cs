@@ -7,6 +7,7 @@ namespace Ponte;
 public sealed class Notifier
 {
     private bool _registered;
+    private readonly Dictionary<string, long> _recent = new();
 
     public void Register()
     {
@@ -26,6 +27,16 @@ public sealed class Notifier
     public void Show(string app, string title, string text, string key = "")
     {
         if (!_registered || (title.Length == 0 && text.Length == 0)) return;
+        // Stesso contenuto già mostrato da pochi secondi (arrivato da due strade o da due notifiche del telefono): si ignora.
+        var content = $"{app}\u0000{title}\u0000{text}";
+        var now = Environment.TickCount64;
+        lock (_recent)
+        {
+            if (_recent.TryGetValue(content, out var last) && now - last < 10_000) return;
+            _recent[content] = now;
+            if (_recent.Count > 200)
+                foreach (var k in _recent.Where(x => now - x.Value > 10_000).Select(x => x.Key).ToList()) _recent.Remove(k);
+        }
         try
         {
             var b = new AppNotificationBuilder();
