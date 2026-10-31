@@ -47,6 +47,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val files = FileStore(ctx, this)
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
+    val media = MediaSwitch(ctx, this)
     val clipLog = ClipLogWatcher(ctx, this)
     val updater = Updater(ctx, this)
     private val hub = HubLink(this)
@@ -76,6 +77,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     fun start() {
         clipboard.start()
         headphones.start()
+        media.start()
         clipLog.start()
         bt.start()
         updater.start()
@@ -223,6 +225,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "bt.state" -> headphones.onState(m)
             "focus" -> headphones.onFocus(m)
             "audio.lock" -> headphones.onLock(m)
+            "media.take" -> media.onTake(m)
         }
     }
 

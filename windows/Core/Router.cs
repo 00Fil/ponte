@@ -13,6 +13,7 @@ public sealed class Router
     public AudioSource Audio { get; }
     public Notifier Notify { get; }
     public Headphones Hp { get; }
+    public MediaSwitch Media { get; }
     public Updater Update { get; }
 
     private readonly HubLink _hub;
@@ -40,6 +41,7 @@ public sealed class Router
         Audio = new AudioSource(this);
         Notify = new Notifier();
         Hp = new Headphones(this);
+        Media = new MediaSwitch(this);
         Update = new Updater(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
@@ -51,6 +53,7 @@ public sealed class Router
         Clip = new ClipboardSync(this, ui);
         Clip.Start();
         Hp.Start();
+        Media.Start();
         _ = _bt.StartAsync();
         Update.Start();
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
@@ -279,6 +282,9 @@ public sealed class Router
                 break;
             case "audio.lock":
                 Hp.OnLock(m);
+                break;
+            case "media.take":
+                Media.OnTake(m);
                 break;
             case "audio.route":
                 Audio.Route(m["sink"] is JsonValue v && v.TryGetValue<string>(out var sink) ? sink : null);

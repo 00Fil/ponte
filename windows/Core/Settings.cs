@@ -24,6 +24,8 @@ public sealed class Settings
     public string PreferredHp { get; set; } = "";
     /// <summary>Se le cuffie preferite non ci sono: true = muto, false = casse.</summary>
     public bool FallbackMute { get; set; }
+    /// <summary>Quando la musica parte qui gli altri dispositivi vanno in pausa (e viceversa).</summary>
+    public bool AutoPause { get; set; } = true;
     /// <summary>Configurazione iniziale completata.</summary>
     public bool Onboarded { get; set; }
     /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>

@@ -376,6 +376,7 @@ fun AudioScreen(r: Router) {
     val rooted by r.headphones.rooted.collectAsState()
     var preferred by remember { mutableStateOf(r.prefs.preferredHp) }
     var mute by remember { mutableStateOf(r.prefs.fallbackMute) }
+    var autoPause by remember { mutableStateOf(r.prefs.autoPause) }
     fun who(id: String?) = when (id) { null -> "nessuno"; r.deviceId -> "questo dispositivo"; else -> r.deviceName(id) }
     ScreenList("Audio") {
         item {
@@ -395,6 +396,9 @@ fun AudioScreen(r: Router) {
                         preferred = choices[(choices.indexOf(preferred) + 1) % choices.size]
                         r.prefs.preferredHp = preferred
                     })
+                }
+                CSwitchRow("Un dispositivo alla volta", "Quando la musica parte qui, gli altri si mettono in pausa", autoPause) { on ->
+                    autoPause = on; r.prefs.autoPause = on
                 }
                 CRow("Se non ci sono", if (mute) "Muto" else "Altoparlante") {
                     CButton("Cambia", { mute = !mute; r.prefs.fallbackMute = mute })

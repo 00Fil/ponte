@@ -452,6 +452,12 @@ public sealed partial class MainWindow : Window
                 _r.S.Save();
                 RenderAudio();
             })),
+            Row("Un dispositivo alla volta", _r.S.AutoPause ? "Gli altri vanno in pausa quando la musica parte qui" : "Spento", Btn("Cambia", () =>
+            {
+                _r.S.AutoPause = !_r.S.AutoPause;
+                _r.S.Save();
+                RenderAudio();
+            })),
             Row("Se non ci sono", _r.S.FallbackMute ? "Muto" : "Casse", Btn("Cambia", () =>
             {
                 _r.S.FallbackMute = !_r.S.FallbackMute;

@@ -66,6 +66,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("preferredHp", "") ?: ""
         set(v) = sp.edit().putString("preferredHp", v).apply()
 
+    /** Quando qui parte la musica, ferma gli altri dispositivi (e viceversa). */
+    var autoPause: Boolean
+        get() = sp.getBoolean("autoPause", true)
+        set(v) = sp.edit().putBoolean("autoPause", v).apply()
+
     /** Se le cuffie preferite non ci sono: true = muto, false = casse. */
     var fallbackMute: Boolean
         get() = sp.getBoolean("fallbackMute", false)
