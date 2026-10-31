@@ -16,6 +16,8 @@ import java.io.RandomAccessFile
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+const val CLIP_MAX = 50L * 1024 * 1024
+
 data class FileEntry(
     val fid: String,
     val name: String,
@@ -51,6 +53,16 @@ class FileStore(private val ctx: Context, private val r: Router) {
 
     // ---- invio ----
 
+    private val clipFids: MutableSet<String> = java.util.Collections.newSetFromMap(ConcurrentHashMap())
+
+    /** File o immagine copiati negli appunti: vanno nell'archivio e agli altri dispositivi, che li mettono nei loro appunti. */
+    suspend fun sendClipUri(uri: Uri, name: String, mime: String): Boolean {
+        val e = importUri(uri, name, mime, "file") ?: return false
+        if (e.size > CLIP_MAX) return false
+        transmit(e, clip = true)
+        return true
+    }
+
     suspend fun sendUri(uri: Uri, name: String, mime: String, kind: String): Boolean {
         val e = importUri(uri, name, mime, kind) ?: return false
         transmit(e)
@@ -70,9 +82,9 @@ class FileStore(private val ctx: Context, private val r: Router) {
     }
 
     /** Invia a tutti i collegamenti un file già nell'archivio, a blocchi. */
-    suspend fun transmit(e: FileEntry) {
+    suspend fun transmit(e: FileEntry, clip: Boolean = false) {
         val fid = e.fid
-        r.send(newMsg("file.begin", "fid" to fid, "name" to e.name, "kind" to e.kind, "mime" to e.mime, "size" to e.size))
+        r.send(newMsg("file.begin", "fid" to fid, "name" to e.name, "kind" to e.kind, "mime" to e.mime, "size" to e.size, "clip" to clip))
         val buf = ByteArray(CHUNK_BYTES)
         var seq = 0
         File(e.path).inputStream().use { f ->
@@ -117,6 +129,7 @@ class FileStore(private val ctx: Context, private val r: Router) {
         )
         val inc = Incoming(RandomAccessFile(part, "rw").apply { setLength(size) }, part, meta)
         incoming[fid] = inc
+        if (m.optBoolean("clip", false)) clipFids.add(fid)
         orphans.remove(fid)?.forEach { apply(fid, inc, it) }
     }
 
@@ -144,6 +157,7 @@ class FileStore(private val ctx: Context, private val r: Router) {
 
     private fun drop(fid: String, inc: Incoming) {
         incoming.remove(fid)
+        clipFids.remove(fid)
         runCatching { inc.raf.close() }
         inc.part.delete()
     }
@@ -152,7 +166,12 @@ class FileStore(private val ctx: Context, private val r: Router) {
         incoming.remove(fid)
         inc.raf.close()
         val final = File(dir, "${fid}_${inc.meta.name}")
-        if (inc.part.renameTo(final)) add(inc.meta.copy(path = final.absolutePath))
+        if (inc.part.renameTo(final)) {
+            val e = inc.meta.copy(path = final.absolutePath)
+            add(e)
+            // Copiato su un altro dispositivo: ora è anche negli appunti di questo.
+            if (clipFids.remove(fid)) r.clipboard.applyFile(e)
+        }
     }
 
     // ---- recupero da offline ----

@@ -83,3 +83,8 @@ Con Headscale/Tailscale il collegamento è diretto e cifrato anche senza Wi-Fi i
 Quando non c'è né server né rete locale:
 - **Bluetooth RFCOMM**, UUID `7f2a0c1e-6b1d-4b8e-9a51-50e7e0a1c0de`, stesse trame del TCP. Il PC espone il servizio, Android chiama i dispositivi associati (computer e telefoni). Tra due Android resta il collegamento aperto da chi ha l'id minore. Solo JSON: l'audio non passa.
 - **Wi-Fi Direct** tra Android: nome del gruppo `DIRECT-Pn-` + i primi 8 caratteri esadecimali di SHA-256(`p2p-name|` + token), password i primi 20 di SHA-256(`p2p-pass|` + token). Chi entra si collega in TCP al capo gruppo (porta 47800).
+
+## File negli appunti
+
+`file.begin` può portare `clip: true`: il file è stato copiato negli appunti del mittente (file da Esplora risorse o dalla galleria, immagini, ritagli). Chi lo riceve per intero, in diretta, lo mette anche negli appunti
+(Windows: file e, se è un'immagine, anche bitmap; Android: URI del FileProvider). Il recupero da offline non tocca gli appunti. Limite 50 MB. Si ignora il cambio di appunti che il dispositivo stesso ha appena provocato.

@@ -28,6 +28,10 @@ Android non avvisa le app in background quando copi. Ponte se ne accorge leggend
 1. Impostazioni di Ponte, "Mostra sopra altre app".
 2. Dal PC con il debug USB attivo: `adb shell pm grant it.ponte.app android.permission.READ_LOGS` (con il root basta il pulsante nelle impostazioni di Ponte).
 
+## File e immagini negli appunti
+Copia un file (Esplora risorse, galleria), un'immagine o un ritaglio su un dispositivo e incollalo sull'altro: Ponte lo trasferisce e lo mette negli appunti dell'altro dispositivo, e resta anche nell'archivio. Fino a 50 MB.
+Un ritaglio fatto con Win+Maiusc+S viene mandato una sola volta anche se lo Strumento di cattura lo salva su disco.
+
 ## Rete privata (Headscale)
 Collegamento diretto e cifrato tra i tuoi dispositivi anche senza Wi-Fi in comune.
 1. Dokploy: nuovo Compose da questo repo, percorso `./headscale/docker-compose.yml`. Variabile `HEADSCALE_URL=https://rete.tuodominio.it`. Dominio sul servizio `headscale`, porta 8080, HTTPS.

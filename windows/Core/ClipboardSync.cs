@@ -1,5 +1,9 @@
 using Microsoft.UI.Dispatching;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace Ponte;
 
@@ -24,10 +28,17 @@ public sealed class ClipboardSync
 
     public void Start() => _ui.TryEnqueue(() => Clipboard.ContentChanged += OnChanged);
 
-    private async void OnChanged(object? sender, object e) => await SendCurrentAsync();
+    private DateTime _ignoreUntil = DateTime.MinValue;
+    private readonly HashSet<string> _appliedPaths = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Legge gli appunti e li invia. Va chiamato sul thread dell'interfaccia.</summary>
-    public async Task<bool> SendCurrentAsync()
+    private async void OnChanged(object? sender, object e)
+    {
+        if (DateTime.UtcNow < _ignoreUntil) return;
+        await SendCurrentAsync(fromEvent: true);
+    }
+
+    /// <summary>Legge gli appunti (file, testo o immagine) e li invia. Va chiamato sul thread dell'interfaccia.</summary>
+    public async Task<bool> SendCurrentAsync(bool fromEvent = false)
     {
         // Un'altra app può tenere gli appunti bloccati per un istante: si riprova qualche volta.
         for (var i = 0; i < 5; i++)
@@ -37,16 +48,88 @@ public sealed class ClipboardSync
                 var c = Clipboard.GetContent();
                 // I gestori di password segnano ciò che copiano come da non elaborare: lo rispettiamo.
                 if (c.AvailableFormats.Contains("ExcludeClipboardContentFromMonitorProcessing")) return false;
-                if (!c.Contains(StandardDataFormats.Text)) return false;
-                var text = await c.GetTextAsync();
-                if (string.IsNullOrEmpty(text) || text == _lastApplied || text.Length > 1_000_000) return false;
-                Push(new ClipItem(text, _r.DeviceId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), true));
-                _r.Send(Proto.NewMsg("clip", ("text", text)));
-                return true;
+
+                // 1) File copiati in Esplora risorse.
+                if (c.Contains(StandardDataFormats.StorageItems))
+                {
+                    var files = (await c.GetStorageItemsAsync()).OfType<StorageFile>().Take(5).ToList();
+                    if (files.Count > 0)
+                    {
+                        if (files.All(f => _appliedPaths.Contains(f.Path))) return false;
+                        foreach (var f in files) _ = _r.Files.SendClipFileAsync(f.Path);
+                        return true;
+                    }
+                }
+
+                // 2) Testo.
+                if (c.Contains(StandardDataFormats.Text))
+                {
+                    var text = await c.GetTextAsync();
+                    if (string.IsNullOrEmpty(text) || text == _lastApplied || text.Length > 1_000_000) return false;
+                    Push(new ClipItem(text, _r.DeviceId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), true));
+                    _r.Send(Proto.NewMsg("clip", ("text", text)));
+                    return true;
+                }
+
+                // 3) Immagine (ritaglio con Win+Maiusc+S, "Copia immagine" del browser...).
+                if (c.Contains(StandardDataFormats.Bitmap))
+                {
+                    var bmp = await c.GetBitmapAsync();
+                    // Lo Strumento di cattura salva anche il file: se tra poco compare, quello è già lo screenshot condiviso.
+                    if (fromEvent)
+                    {
+                        await Task.Delay(4000);
+                        if (DateTime.UtcNow - _r.Files.LastScreenshot < TimeSpan.FromSeconds(10)) return false;
+                    }
+                    var path = await SaveBitmapAsync(bmp);
+                    if (path == null) return false;
+                    _appliedPaths.Add(path);
+                    _ = _r.Files.SendClipFileAsync(path);
+                    return true;
+                }
+                return false;
             }
             catch (Exception) { await Task.Delay(60); }
         }
         return false;
+    }
+
+    private static async Task<string?> SaveBitmapAsync(RandomAccessStreamReference bmp)
+    {
+        using var src = await bmp.OpenReadAsync();
+        var decoder = await BitmapDecoder.CreateAsync(src);
+        using var soft = await decoder.GetSoftwareBitmapAsync();
+        using var mem = new InMemoryRandomAccessStream();
+        var enc = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, mem);
+        enc.SetSoftwareBitmap(soft);
+        await enc.FlushAsync();
+        var bytes = new byte[mem.Size];
+        mem.Seek(0);
+        await mem.ReadAsync(bytes.AsBuffer(), (uint)mem.Size, InputStreamOptions.None);
+        var dir = FileStore.FileDir;
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"Appunti-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        await File.WriteAllBytesAsync(path, bytes);
+        return path;
+    }
+
+    /// <summary>Un file copiato su un altro dispositivo arriva anche negli appunti di questo PC (e le immagini come immagine).</summary>
+    public void ApplyFile(string path, string mime)
+    {
+        _ignoreUntil = DateTime.UtcNow.AddSeconds(3);
+        _appliedPaths.Add(path);
+        _ui.TryEnqueue(async () =>
+        {
+            try
+            {
+                var f = await StorageFile.GetFileFromPathAsync(path);
+                var dp = new DataPackage();
+                dp.SetStorageItems(new IStorageItem[] { f });
+                if (mime.StartsWith("image/")) dp.SetBitmap(RandomAccessStreamReference.CreateFromFile(f));
+                Clipboard.SetContent(dp);
+            }
+            catch (Exception) { /* appunti occupati: il file resta comunque nell'archivio */ }
+        });
     }
 
     public void SendText(string text)

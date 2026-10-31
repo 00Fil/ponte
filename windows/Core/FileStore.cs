@@ -65,8 +65,22 @@ public sealed partial class FileStore
         return e;
     }
 
+    /// <summary>Ultimo screenshot visto sul disco: serve a non mandare due volte lo stesso screenshot (file e appunti).</summary>
+    public DateTime LastScreenshot { get; private set; } = DateTime.MinValue;
+
+    private readonly ConcurrentDictionary<string, byte> _clipFids = new();
+    public const long ClipMax = 50L * 1024 * 1024;
+
+    /// <summary>File copiato negli appunti: va nell'archivio e agli altri dispositivi, che lo mettono nei loro appunti.</summary>
+    public async Task SendClipFileAsync(string path)
+    {
+        var e = await ImportAsync(path, "file");
+        if (e != null && e.Size <= ClipMax) await TransmitAsync(e, clip: true);
+    }
+
     public async Task SendFileAsync(string path, string kind)
     {
+        if (kind == "screenshot") LastScreenshot = DateTime.UtcNow;
         var e = await ImportAsync(path, kind);
         if (e != null) await TransmitAsync(e);
     }
@@ -89,9 +103,9 @@ public sealed partial class FileStore
         return false;
     }
 
-    public async Task TransmitAsync(FileEntry e)
+    public async Task TransmitAsync(FileEntry e, bool clip = false)
     {
-        _r.Send(Proto.NewMsg("file.begin", ("fid", e.Fid), ("name", e.Name), ("kind", e.Kind), ("mime", e.Mime), ("size", e.Size)));
+        _r.Send(Proto.NewMsg("file.begin", ("fid", e.Fid), ("name", e.Name), ("kind", e.Kind), ("mime", e.Mime), ("size", e.Size), ("clip", clip)));
         var buf = new byte[Proto.ChunkBytes];
         var seq = 0;
         await using (var fs = new FileStream(e.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -145,6 +159,7 @@ public sealed partial class FileStore
             m.L("ts", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), m.S("from"), "");
         var inc = new Incoming { Fs = fs, Part = part, Meta = meta };
         _incoming[fid] = inc;
+        if (m["clip"] is JsonValue cv && cv.TryGetValue<bool>(out var isClip) && isClip) _clipFids[fid] = 0;
         if (_orphans.TryRemove(fid, out var pending)) foreach (var p in pending) Apply(fid, inc, p);
     }
 
@@ -179,6 +194,7 @@ public sealed partial class FileStore
     private void Drop(string fid, Incoming inc)
     {
         _incoming.TryRemove(fid, out _);
+        _clipFids.TryRemove(fid, out _);
         try { inc.Fs.Dispose(); File.Delete(inc.Part); } catch (IOException) { }
     }
 
@@ -193,6 +209,8 @@ public sealed partial class FileStore
             var final = UniquePath(dir, inc.Meta.Name);
             File.Move(inc.Part, final);
             Add(inc.Meta with { Path = final });
+            // Copiato su un altro dispositivo: ora è anche negli appunti di questo.
+            if (_clipFids.TryRemove(fid, out _)) _r.Clip.ApplyFile(final, inc.Meta.Mime);
         }
         catch (IOException) { try { File.Delete(inc.Part); } catch (IOException) { } }
     }
