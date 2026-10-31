@@ -40,7 +40,7 @@ public sealed partial class MainWindow : Window
         _hosts = new[] { Host0, Host1, Host2, Host3, Host4 };
 
         Title = "Ponte";
-        AppWindow.Resize(new SizeInt32(1100, 760));
+        SetupFrame();
         try { AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "ponte.ico")); } catch (Exception) { }
         // Chiudere la finestra non chiude Ponte: resta nell'area di notifica e continua a sincronizzare.
         AppWindow.Closing += (_, e) =>
@@ -59,6 +59,52 @@ public sealed partial class MainWindow : Window
 
         Select(_r.S.Token.Length == 0 ? 4 : 0);
         if (!_r.S.Onboarded) ShowOnboarding();
+    }
+
+    // ---------------------------------------------------------------- cornice
+
+    /// <summary>Finestra senza barra di sistema: bordo e ridimensionamento restano, i tre pallini sono nostri. Dimensione e posizione seguono lo schermo.</summary>
+    private void SetupFrame()
+    {
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(DragArea);
+        if (AppWindow.Presenter is OverlappedPresenter p) p.SetBorderAndTitleBar(true, false);
+
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var w = Math.Min(1100, (int)(area.Width * 0.9));
+        var h = Math.Min(760, (int)(area.Height * 0.9));
+        AppWindow.MoveAndResize(new RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
+
+        // Finestra in secondo piano: i pallini diventano grigi, come su macOS.
+        Activated += (_, a) =>
+        {
+            var on = a.WindowActivationState != WindowActivationState.Deactivated;
+            var grey = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x9A, 0x9A, 0x95));
+            LRed.Fill = on ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xFF, 0x5F, 0x57)) : grey;
+            LYellow.Fill = on ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xFE, 0xBC, 0x2E)) : grey;
+            LGreen.Fill = on ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x28, 0xC8, 0x40)) : grey;
+        };
+    }
+
+    private void OnLightsEnter(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) => FadeLights(1);
+    private void OnLightsExit(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) => FadeLights(0);
+
+    private void FadeLights(double to)
+    {
+        foreach (var g in new UIElement[] { GRed, GYellow, GGreen }) FadeTo(g, to, 120);
+    }
+
+    private void OnLightClose(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => Close();
+
+    private void OnLightMin(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (AppWindow.Presenter is OverlappedPresenter p) p.Minimize();
+    }
+
+    private void OnLightMax(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (AppWindow.Presenter is not OverlappedPresenter p) return;
+        if (p.State == OverlappedPresenterState.Maximized) p.Restore(); else p.Maximize();
     }
 
     public void InitTray()

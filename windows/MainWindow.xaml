@@ -17,7 +17,7 @@
 
         <!-- Barra laterale, dalle finestre estese (1024) in su. -->
         <StackPanel x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Padding="16" Spacing="4">
-            <TextBlock Text="Ponte" Style="{StaticResource Title3}" Margin="12,16,12,24" />
+            <TextBlock Text="Ponte" Style="{StaticResource Title3}" Margin="12,40,12,24" />
             <StackPanel x:Name="SideTabs" Spacing="4" />
         </StackPanel>
 
@@ -56,6 +56,30 @@
                 </Grid>
             </ScrollViewer>
             <StackPanel x:Name="OnboardDots" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,32" />
+        </Grid>
+
+        <!-- Barra del titolo personalizzata, in stile macOS: tre pallini a sinistra, il resto trascina la finestra. -->
+        <Grid x:Name="TitleBar" Grid.RowSpan="2" Grid.ColumnSpan="2" Height="44" VerticalAlignment="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="86" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel x:Name="Lights" Orientation="Horizontal" Spacing="2" Margin="14,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left"
+                        PointerEntered="OnLightsEnter" PointerExited="OnLightsExit">
+                <Grid Width="18" Height="24" Background="Transparent" Tapped="OnLightClose">
+                    <Ellipse x:Name="LRed" Width="12" Height="12" Fill="#FF5F57" />
+                    <TextBlock x:Name="GRed" Text="×" FontSize="11" FontWeight="Bold" Foreground="#4D0000" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" IsHitTestVisible="False" />
+                </Grid>
+                <Grid Width="18" Height="24" Background="Transparent" Tapped="OnLightMin">
+                    <Ellipse x:Name="LYellow" Width="12" Height="12" Fill="#FEBC2E" />
+                    <TextBlock x:Name="GYellow" Text="–" FontSize="11" FontWeight="Bold" Foreground="#5C3A00" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" IsHitTestVisible="False" />
+                </Grid>
+                <Grid Width="18" Height="24" Background="Transparent" Tapped="OnLightMax">
+                    <Ellipse x:Name="LGreen" Width="12" Height="12" Fill="#28C840" />
+                    <TextBlock x:Name="GGreen" Text="+" FontSize="11" FontWeight="Bold" Foreground="#004D12" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" IsHitTestVisible="False" />
+                </Grid>
+            </StackPanel>
+            <Border x:Name="DragArea" Grid.Column="1" Background="Transparent" />
         </Grid>
 
         <tb:TaskbarIcon x:Name="Tray" ToolTipText="Ponte" IconSource="ms-appx:///Assets/ponte.ico" NoLeftClickDelay="True">
