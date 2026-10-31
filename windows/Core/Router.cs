@@ -256,7 +256,7 @@ public sealed class Router
                 Files.OnMessage(m);
                 break;
             case "notif" when S.ShowPhoneNotifications:
-                Notify.Show(m.S("app"), m.S("title"), m.S("text"));
+                Notify.Show(m.S("app"), m.S("title"), m.S("text"), m.S("key"));
                 break;
             case "bt.claim":
                 Hp.OnClaim(m);

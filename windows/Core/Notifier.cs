@@ -23,7 +23,7 @@ public sealed class Notifier
         try { if (_registered) AppNotificationManager.Default.Unregister(); } catch (Exception) { }
     }
 
-    public void Show(string app, string title, string text)
+    public void Show(string app, string title, string text, string key = "")
     {
         if (!_registered || (title.Length == 0 && text.Length == 0)) return;
         try
@@ -32,7 +32,14 @@ public sealed class Notifier
             if (app.Length > 0) b.AddText(app, new AppNotificationTextProperties().SetMaxLines(1));
             if (title.Length > 0) b.AddText(title);
             if (text.Length > 0) b.AddText(text);
-            AppNotificationManager.Default.Show(b.BuildNotification());
+            var n = b.BuildNotification();
+            // Stessa notifica del telefono aggiornata: sostituisce quella già mostrata invece di aggiungerne un'altra.
+            if (key.Length > 0)
+            {
+                n.Tag = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..32];
+                n.Group = "telefono";
+            }
+            AppNotificationManager.Default.Show(n);
         }
         catch (Exception) { /* le notifiche non devono mai far cadere l'app */ }
     }
