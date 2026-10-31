@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
  * è il segnale. Appena arriva, una finestra invisibile da 1 pixel prende il focus per un istante e permette
  * di leggere gli appunti. Servono due permessi, entrambi concessi una volta sola:
  *  - "Mostra sopra altre app" (dalle impostazioni di Ponte)
- *  - READ_LOGS (con `adb shell pm grant it.ponte android.permission.READ_LOGS`, oppure root dalle impostazioni di Ponte)
+ *  - READ_LOGS (con `adb shell pm grant it.ponte.app android.permission.READ_LOGS`, oppure root dalle impostazioni di Ponte)
  */
 class ClipLogWatcher(private val ctx: Context, private val r: Router) {
     private val main = Handler(Looper.getMainLooper())

@@ -26,7 +26,7 @@ Concedi notifiche, accesso alle immagini e l'accesso alle notifiche (per inoltra
 ### Appunti in tempo reale su Android
 Android non avvisa le app in background quando copi. Ponte se ne accorge leggendo i log di sistema e legge gli appunti con una finestra invisibile da 1 pixel. Servono, una volta sola:
 1. Impostazioni di Ponte, "Mostra sopra altre app".
-2. Dal PC con il debug USB attivo: `adb shell pm grant it.ponte android.permission.READ_LOGS` (con il root basta il pulsante nelle impostazioni di Ponte).
+2. Dal PC con il debug USB attivo: `adb shell pm grant it.ponte.app android.permission.READ_LOGS` (con il root basta il pulsante nelle impostazioni di Ponte).
 
 ## In tutti i dispositivi
 Stesso indirizzo del server e **stesso token** in Impostazioni.
