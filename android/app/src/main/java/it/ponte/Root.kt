@@ -22,24 +22,38 @@ object Root {
      * Si ricorda solo il sì: un no può essere temporaneo (la richiesta di Magisk non ancora confermata, root che parte tardi),
      * quindi si ricontrolla dopo 15 secondi o subito se [force].
      */
+    /** Percorsi dove i gestori del root mettono il comando su: Magisk, KernelSU, APatch e le ROM con root integrato. */
+    private val SU_PATHS = listOf(
+        "su", "/system/bin/su", "/system/xbin/su", "/sbin/su", "/product/bin/su", "/vendor/bin/su",
+        "/debug_ramdisk/su", "/data/adb/ksu/bin/su", "/data/adb/ap/bin/su", "/data/adb/magisk/su", "/data/local/bin/su",
+    )
+    @Volatile private var suBin = "su"
+
     suspend fun available(force: Boolean = false): Boolean {
         if (known == true) return true
         if (!force && System.currentTimeMillis() - failedAt < 15_000) return false
         return withContext(Dispatchers.IO) {
             var why = ""
-            val ok = try {
-                val p = ProcessBuilder("su", "-c", "id").redirectErrorStream(true).start()
-                val out = p.inputStream.bufferedReader().readText()
-                val done = p.waitFor(20, TimeUnit.SECONDS)
-                if (!done) { p.destroy(); why = "su non ha risposto in 20 s: conferma la richiesta di root (Magisk/KernelSU) quando compare" }
-                else if (p.exitValue() != 0 || !out.contains("uid=0")) why = "su ha risposto: " + out.trim().take(160)
-                done && p.exitValue() == 0 && out.contains("uid=0")
-            } catch (e: Exception) {
-                why = "su non trovato: " + (e.message ?: e.javaClass.simpleName)
-                false
+            var found = false
+            val notes = mutableListOf<String>()
+            for (path in SU_PATHS) {
+                try {
+                    val p = ProcessBuilder(path, "-c", "id").redirectErrorStream(true).start()
+                    val out = p.inputStream.bufferedReader().readText()
+                    val done = p.waitFor(20, TimeUnit.SECONDS)
+                    if (!done) { p.destroy(); notes += "$path: nessuna risposta in 20 s (conferma la richiesta di root)"; continue }
+                    if (p.exitValue() == 0 && out.contains("uid=0")) { suBin = path; found = true; break }
+                    notes += "$path: " + out.trim().take(80).ifEmpty { "uscita ${p.exitValue()}" }
+                } catch (e: Exception) {
+                    // Percorso inesistente: è il caso normale per quasi tutti i percorsi, non si segnala.
+                }
             }
-            if (ok) { known = true; lastError.value = "" } else { known = null; failedAt = System.currentTimeMillis(); lastError.value = why }
-            ok
+            if (!found) {
+                why = if (notes.isEmpty()) "nessun comando su trovato: Relay non ha il root. In KernelSU/APatch dai il permesso a Relay nell'elenco Superuser; in Magisk controlla che Relay non sia nella DenyList"
+                else notes.joinToString("; ")
+            }
+            if (found) { known = true; lastError.value = "" } else { known = null; failedAt = System.currentTimeMillis(); lastError.value = why }
+            found
         }
     }
 
@@ -49,7 +63,7 @@ object Root {
         if (!Regex("^[0-9A-F:]{17}$").matches(address) || action !in setOf("connect", "disconnect")) return@withContext false
         val apk = ctx.applicationInfo.sourceDir
         try {
-            val p = ProcessBuilder("su", "-c", "CLASSPATH=$apk /system/bin/app_process /system/bin it.ponte.RootBt $action $address")
+            val p = ProcessBuilder(suBin, "-c", "CLASSPATH=$apk /system/bin/app_process /system/bin it.ponte.RootBt $action $address")
                 .redirectErrorStream(true).start()
             val out = p.inputStream.bufferedReader().readText()
             val done = p.waitFor(20, TimeUnit.SECONDS)
