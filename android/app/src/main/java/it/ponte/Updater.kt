@@ -26,10 +26,22 @@ import java.util.concurrent.TimeUnit
 class Updater(private val ctx: Context, private val r: Router) {
     val status = MutableStateFlow("")
     val available = MutableStateFlow<Int?>(null)
-    /** Avanzamento del download in corso (null quando non si sta scaricando). */
-    val progress = MutableStateFlow<Download?>(null)
+    /** Cosa mostrare nella scheda dell'aggiornamento (null = niente). */
+    val ui = MutableStateFlow<Ui?>(null)
 
-    data class Download(val version: String, val done: Long, val total: Long, val bytesPerSec: Double, val phase: String)
+    enum class Phase { Checking, Downloading, Installing, UpToDate, Failed }
+    data class Ui(val phase: Phase, val version: String = "", val done: Long = 0, val total: Long = 0, val bytesPerSec: Double = 0.0, val message: String = "")
+
+    private var manual = false
+    private fun show(u: Ui?) { ui.value = u }
+    /** Esito di un controllo: visibile solo se l'ha chiesto l'utente, poi sparisce da solo. */
+    private fun outcome(text: String, phase: Phase = Phase.Failed) {
+        status.value = text
+        if (!manual) return
+        val u = Ui(phase, message = text)
+        show(u)
+        r.scope.launch { delay(if (phase == Phase.UpToDate) 2400 else 4200); if (ui.value === u) show(null) }
+    }
     private val http = OkHttpClient.Builder().readTimeout(5, TimeUnit.MINUTES).build()
     @Volatile private var busy = false
 
@@ -45,34 +57,52 @@ class Updater(private val ctx: Context, private val r: Router) {
         }
     }
 
-    suspend fun check(install: Boolean) {
+    suspend fun check(install: Boolean, manual: Boolean = false) {
         if (busy) return
-        val base = r.prefs.httpBase() ?: run { status.value = "Serve il server per gli aggiornamenti"; return }
+        this.manual = manual
+        val base = r.prefs.httpBase() ?: run { outcome("Serve il server per gli aggiornamenti"); return }
         busy = true
         try {
             status.value = "Controllo in corso"
+            if (manual) show(Ui(Phase.Checking))
+            val started = System.currentTimeMillis()
             val info = http.newCall(get("$base/api/update?fresh=1")).execute().use {
-                if (!it.isSuccessful) { status.value = if (it.code == 404) "Server da aggiornare: rifai il deploy" else if (it.code == 502) "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN" else "Server senza aggiornamenti (${it.code})"; return }
+                if (!it.isSuccessful) {
+                    outcome(
+                        when (it.code) {
+                            404 -> "Il server va aggiornato: rifai il deploy"
+                            502 -> "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN"
+                            401 -> "Token non valido"
+                            else -> "Server non disponibile (${it.code})"
+                        },
+                    )
+                    return
+                }
                 JSONObject(it.body!!.string())
             }
+            // L'animazione di ricerca dura almeno un attimo, così non lampeggia.
+            val wait = 900 - (System.currentTimeMillis() - started)
+            if (manual && wait > 0) delay(wait)
             val build = info.optInt("build")
             if (build <= current || !info.optBoolean("android")) {
                 available.value = null
-                status.value = "Hai l'ultima versione"
+                outcome("Hai l'ultima versione", Phase.UpToDate)
                 return
             }
             available.value = build
-            if (!install) { status.value = "Disponibile la versione 1.0.$build"; return }
-            status.value = "Scarico la versione 1.0.$build"
+            val ver = "1.0.$build"
+            if (!install) { outcome("Disponibile la versione $ver", Phase.UpToDate); return }
+            status.value = "Scarico la versione $ver"
+            show(Ui(Phase.Downloading, ver))
             val apk = File(ctx.cacheDir, "ponte-update.apk")
             http.newCall(get("$base/api/update/android")).execute().use { resp ->
-                if (!resp.isSuccessful) { status.value = "Download non riuscito"; return }
-                val total = resp.body!!.contentLength().let { if (it > 0) it else resp.header("content-length")?.toLongOrNull() ?: 0L }
+                if (!resp.isSuccessful) { outcome("Download non riuscito"); return }
+                val body = resp.body!!
+                val total = body.contentLength().let { if (it > 0) it else resp.header("content-length")?.toLongOrNull() ?: 0L }
                 val t0 = System.nanoTime()
                 var done = 0L
                 var lastPush = 0L
-                progress.value = Download("1.0.$build", 0, total, 0.0, "Scarico")
-                resp.body!!.byteStream().use { i ->
+                body.byteStream().use { i ->
                     apk.outputStream().use { out ->
                         val buf = ByteArray(64 * 1024)
                         while (true) {
@@ -81,29 +111,34 @@ class Updater(private val ctx: Context, private val r: Router) {
                             out.write(buf, 0, n)
                             done += n
                             val now = System.nanoTime()
-                            if (now - lastPush > 80_000_000L) {
+                            if (now - lastPush > 120_000_000L) {
                                 lastPush = now
                                 val secs = (now - t0) / 1e9
-                                progress.value = Download("1.0.$build", done, total, if (secs > 0.2) done / secs else 0.0, "Scarico")
+                                show(Ui(Phase.Downloading, ver, done, total, if (secs > 0.3) done / secs else 0.0))
                             }
                         }
                     }
                 }
-                progress.value = Download("1.0.$build", done, maxOf(total, done), 0.0, "Installo")
+                show(Ui(Phase.Downloading, ver, done, maxOf(total, done)))
             }
-            status.value = "Installo la versione 1.0.$build"
+            delay(350)
+            status.value = "Installo la versione $ver"
+            val inst = Ui(Phase.Installing, ver)
+            show(inst)
+            r.scope.launch { delay(90_000); if (ui.value === inst) show(null) }
             if (Root.available() && rootInstall(apk)) return
             if (!ctx.packageManager.canRequestPackageInstalls()) {
-                status.value = "Consenti a Ponte di installare app, poi riprova"
                 tell(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${ctx.packageName}")),
                     "Serve un permesso per aggiornare", "Tocca per consentire a Ponte di installare i suoi aggiornamenti")
+                outcome("Consenti a Ponte di installare app, poi riprova")
                 return
             }
             sessionInstall(apk)
         } catch (_: Exception) {
-            status.value = "Aggiornamento non riuscito, riprovo più tardi"
+            outcome("Aggiornamento non riuscito, riprovo più tardi")
         } finally {
-            progress.value = null
+            val p = ui.value?.phase
+            if (p == Phase.Checking || p == Phase.Downloading) show(null)
             busy = false
         }
     }

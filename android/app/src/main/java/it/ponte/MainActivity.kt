@@ -42,9 +42,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import it.ponte.ui.GradientView
 import it.ponte.ui.Brand
-import it.ponte.ui.DownloadCard
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxScope
+import it.ponte.ui.UpdateSheet
+import it.ponte.ui.FiberField
 import it.ponte.ui.HomeScreen
 import kotlinx.coroutines.launch
 import it.ponte.ui.TabGlyph
@@ -114,8 +118,9 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val tab = pager.currentPage
-    fun select(i: Int) { scope.launch { pager.animateScrollToPage(i) } }
+    fun select(i: Int) { scope.launch { pager.animateScrollToPage(i, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 320f)) } }
+    // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
+    val pos = { pager.currentPage + pager.currentPageOffsetFraction }
 
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
@@ -128,97 +133,120 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
         }
     }
 
-    // Testata con il gradiente ASCII e il titolo della pagina, che scorre al cambio di scheda.
+    // Testata: fibra ottica dietro e titoli che scorrono con le pagine, in parallasse.
     val header: @Composable () -> Unit = {
-        Box(Modifier.fillMaxWidth().height(168.dp)) {
-            GradientView(Modifier.matchParentSize(), shape = "band", cell = 12, intro = true, ascii = 1, bg = c.bgCanvas)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.62f to Color.Transparent, 1f to c.bgCanvas)))
-            AnimatedContent(
-                tab,
-                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = Space.s5, vertical = Space.s3),
-                transitionSpec = {
-                    val dir = if (targetState > initialState) 1 else -1
-                    (slideInVertically(tween(380)) { it / 2 * dir } + fadeIn(tween(320)))
-                        .togetherWith(slideOutVertically(tween(260)) { -it / 2 * dir } + fadeOut(tween(200)))
-                },
-                label = "titolo",
-            ) { t -> Text(TABS[t], style = CanoneType.title1, color = c.labelPrimary) }
+        Box(Modifier.fillMaxWidth().height(132.dp)) {
+            FiberField(Modifier.matchParentSize(), band = true, centerY = 0.42f, spread = 0.9f)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.bgCanvas)))
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
+                TABS.forEachIndexed { i, t ->
+                    Text(
+                        t, style = CanoneType.title1, color = c.labelPrimary,
+                        modifier = Modifier.graphicsLayer {
+                            val d = i - pos()
+                            alpha = (1f - kotlin.math.abs(d) * 1.6f).coerceIn(0f, 1f)
+                            translationX = -d * 72.dp.toPx()
+                        },
+                    )
+                }
+            }
         }
     }
 
-    val dl by r.updater.progress.collectAsState()
-    val banner: @Composable () -> Unit = {
-        androidx.compose.animation.AnimatedVisibility(
-            dl != null,
-            enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(0.7f, 300f)) + fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
-        ) { dl?.let { Box(Modifier.padding(horizontal = Space.s4, vertical = Space.s2)) { DownloadCard(it) } } }
-    }
-
-    // Le pagine si scorrono anche con il dito, di lato; il titolo e la barra seguono.
     val pages: @Composable (Modifier) -> Unit = { m ->
-        androidx.compose.foundation.pager.HorizontalPager(pager, m, beyondViewportPageCount = 0) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
+        androidx.compose.foundation.pager.HorizontalPager(pager, m, beyondViewportPageCount = 1) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
     }
 
-    // Il layout segue la finestra, non il dispositivo: barra laterale da 1024, barra in basso sotto.
+    // Scheda dell'aggiornamento: galleggia in basso, non sposta il contenuto.
+    val upd by r.updater.ui.collectAsState()
+    val sheet: @Composable BoxScope.() -> Unit = {
+        androidx.compose.animation.AnimatedVisibility(
+            upd != null, Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.82f, 380f)) { it } + fadeIn(tween(180)),
+            exit = androidx.compose.animation.slideOutVertically(tween(260)) { it } + fadeOut(tween(200)),
+        ) {
+            var last by remember { mutableStateOf(upd) }
+            upd?.let { last = it }
+            last?.let { Box(Modifier.widthIn(max = 560.dp).padding(Space.s4)) { UpdateSheet(it) } }
+        }
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
-                Column(
-                    Modifier.width(240.dp).fillMaxHeight().padding(Space.s4),
-                    verticalArrangement = Arrangement.spacedBy(Space.s1),
-                ) {
+                Column(Modifier.width(240.dp).fillMaxHeight().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
                     Text("Ponte", style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s3, Space.s4, Space.s3, Space.s5))
-                    TABS.forEachIndexed { i, t -> TabItem(t, i, tab == i, Modifier.fillMaxWidth(), start = true) { select(i) } }
+                    TABS.forEachIndexed { i, t -> SideItem(t, i, pager.currentPage == i) { select(i) } }
                 }
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    header()
-                    banner()
-                    pages(Modifier.weight(1f).fillMaxWidth())
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxSize()) {
+                        header()
+                        pages(Modifier.weight(1f).fillMaxWidth())
+                    }
+                    sheet()
                 }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.statusBarsPadding()) { header() }
-                banner()
-                pages(Modifier.weight(1f).fillMaxWidth())
-                Row(
-                    Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding().padding(horizontal = Space.s2, vertical = Space.s2),
-                    horizontalArrangement = Arrangement.spacedBy(Space.s1),
-                ) {
-                    TABS.forEachIndexed { i, t -> TabItem(t, i, tab == i, Modifier.weight(1f)) { select(i) } }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    pages(Modifier.fillMaxSize())
+                    sheet()
+                }
+                TabBar(pos, pager.currentPage) { select(it) }
+            }
+        }
+    }
+}
+
+/**
+ * Barra in basso: solo icone. Una pillola sfumata scivola sotto l'icona attiva seguendo il dito durante lo swipe,
+ * e le icone passano dal grigio al bianco man mano che la pillola ci arriva sopra.
+ */
+@Composable
+private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
+    val c = Canone.colors
+    Column(Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSeparator))
+        BoxWithConstraints(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.s2)) {
+            val itemW = maxWidth / TABS.size
+            val pillW = 56.dp
+            Box(
+                Modifier.align(Alignment.CenterStart).size(pillW, 36.dp)
+                    .graphicsLayer { translationX = (pos() * itemW.toPx()) + (itemW - pillW).toPx() / 2f }
+                    .clip(CircleShape).background(Brand.gradient),
+            )
+            Row(Modifier.fillMaxSize()) {
+                TABS.forEachIndexed { i, label ->
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight()
+                            .semantics { contentDescription = label }
+                            .clickable(
+                                role = Role.Tab, onClick = { onSelect(i) }, indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
+                        TabGlyph(i, androidx.compose.ui.graphics.lerp(c.labelSecondary, Color.White, near), current == i, Modifier.size(24.dp))
+                    }
                 }
             }
         }
     }
 }
 
-/** Voce della TabBar: sul telefono è solo un'icona che rimbalza e si accende nella pillola sfumata; nella barra laterale resta il testo. */
+/** Voce della barra laterale (finestre larghe): icona e testo, sfondo tenue quando è attiva. */
 @Composable
-private fun TabItem(label: String, index: Int, selected: Boolean, modifier: Modifier, start: Boolean = false, onClick: () -> Unit) {
+private fun SideItem(label: String, index: Int, selected: Boolean, onClick: () -> Unit) {
     val c = Canone.colors
-    val fg by animateColorAsState(if (selected) Color.White else c.labelSecondary, tween(240), label = "testo")
-    val pill by androidx.compose.animation.core.animateFloatAsState(if (selected) 1f else 0f, androidx.compose.animation.core.spring(0.6f, 380f), label = "pillola")
-    if (start) {
-        val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(240), label = "fondo")
-        val fg2 by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(240), label = "testo2")
-        Row(
-            modifier.height(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Tab, onClick = onClick).padding(horizontal = Space.s4),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
-        ) {
-            TabGlyph(index, fg2, selected, Modifier.size(22.dp))
-            Text(label, maxLines = 1, style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote, color = fg2)
-        }
-        return
-    }
-    Box(
-        modifier.height(52.dp).clickable(role = Role.Tab, onClick = onClick, indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }),
-        contentAlignment = Alignment.Center,
+    val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(220), label = "fondo")
+    val fg by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(220), label = "testo")
+    Row(
+        Modifier.fillMaxWidth().height(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Tab, onClick = onClick).padding(horizontal = Space.s4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
-        Box(
-            Modifier.size(width = 60.dp, height = 36.dp).graphicsLayer { scaleX = 0.5f + 0.5f * pill; scaleY = 0.7f + 0.3f * pill; alpha = pill.coerceIn(0f, 1f) }
-                .clip(CircleShape).background(Brand.gradient),
-        )
-        TabGlyph(index, fg, selected, Modifier.size(24.dp))
+        TabGlyph(index, fg, selected, Modifier.size(22.dp))
+        Text(label, maxLines = 1, style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote, color = fg)
     }
 }

@@ -85,7 +85,7 @@ fun Onboarding(r: Router, onDone: () -> Unit) {
     Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
         // Il gradiente resta sullo sfondo per tutto l'onboarding; nei passi con tanto testo si attenua.
         val dim by animateFloatAsState(if (step == 0 || step == 3) 1f else 0.35f, tween(700), label = "sfondo")
-        GradientView(Modifier.fillMaxSize().graphicsLayer { alpha = dim }, shape = "hero", cell = 14, ascii = 1)
+        FiberField(Modifier.fillMaxSize().graphicsLayer { alpha = dim })
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(0.35f to Color.Transparent, 1f to c.bgCanvas.copy(alpha = 0.92f)),
@@ -329,7 +329,7 @@ private fun Ready(onDone: () -> Unit) {
 fun UpdateDone(version: String, onContinue: () -> Unit) {
     val c = Canone.colors
     Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
-        GradientView(Modifier.fillMaxSize(), shape = "hero", cell = 14, ascii = 1)
+        FiberField(Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to c.bgCanvas.copy(alpha = 0.92f))))
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(Space.s5),

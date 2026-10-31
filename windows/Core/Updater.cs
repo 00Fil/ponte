@@ -19,7 +19,8 @@ public sealed class Updater
     public string Status { get; private set; } = "";
 
     /// <summary>Fase corrente dell'aggiornamento: 1 scarico, 2 estrazione, 3 installazione (poi Ponte si riavvia).</summary>
-    public sealed record Progress(int Step, string Version, long Done, long Total, double BytesPerSec);
+    public sealed record Progress(int Step, string Version, long Done, long Total, double BytesPerSec, string Message = "");
+    // Step: 0 ricerca, 1 scarico, 2 estrazione, 3 installazione, -1 già aggiornato, -2 errore.
     public event Action<Progress?>? Changed;
     private void Report(Progress? p) => Changed?.Invoke(p);
     public int Current { get; } = typeof(Updater).Assembly.GetName().Version?.Build is int b && b > 0 ? b : 0;
@@ -42,26 +43,37 @@ public sealed class Updater
         _r.Raise();
     }
 
-    public async Task CheckAsync(bool install)
+    public async Task CheckAsync(bool install, bool manual = false)
     {
         if (_busy) return;
+        void Outcome(string text, int step = -2)
+        {
+            Set(text);
+            if (!manual) { Report(null); return; }
+            var p = new Progress(step, "", 0, 0, 0, text);
+            Report(p);
+            _ = Task.Delay(step == -1 ? 2400 : 4200).ContinueWith(_ => Report(null));
+        }
         var baseUrl = _r.S.HttpBase();
-        if (baseUrl == null) { Set("Serve il server per gli aggiornamenti"); return; }
+        if (baseUrl == null) { Outcome("Serve il server per gli aggiornamenti"); return; }
         _busy = true;
         try
         {
             Set("Controllo in corso");
+            if (manual) Report(new Progress(0, "", 0, 0, 0));
+            var started = Stopwatch.StartNew();
             using var req = Get($"{baseUrl}/api/update?fresh=1");
             using var resp = await _http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode) { Set((int)resp.StatusCode == 404 ? "Server da aggiornare: rifai il deploy" : (int)resp.StatusCode == 502 ? "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN" : $"Server senza aggiornamenti ({(int)resp.StatusCode})"); return; }
+            if (!resp.IsSuccessStatusCode) { Outcome((int)resp.StatusCode == 404 ? "Server da aggiornare: rifai il deploy" : (int)resp.StatusCode == 502 ? "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN" : $"Server senza aggiornamenti ({(int)resp.StatusCode})"); return; }
             if (JsonNode.Parse(await resp.Content.ReadAsStringAsync()) is not JsonObject info) return;
             var build = (int)info.L("build");
             var hasWin = info["windows"] is JsonValue w && w.TryGetValue<bool>(out var ok) && ok;
-            if (build <= Current || !hasWin) { Set("Hai l'ultima versione"); return; }
-            if (!install) { Set($"Disponibile la versione 1.0.{build}"); return; }
+            if (manual && started.ElapsedMilliseconds < 900) await Task.Delay(900 - (int)started.ElapsedMilliseconds);
+            if (build <= Current || !hasWin) { Outcome("Hai l'ultima versione", -1); return; }
+            if (!install) { Outcome($"Disponibile la versione 1.0.{build}", -1); return; }
 
             var appDir = AppContext.BaseDirectory.TrimEnd('\\');
-            if (!Writable(appDir)) { Set("La cartella di Ponte non è scrivibile: spostala ad esempio in Documenti"); return; }
+            if (!Writable(appDir)) { Outcome("La cartella di Ponte non è scrivibile: spostala ad esempio in Documenti"); return; }
 
             var ver = $"1.0.{build}";
             Set($"Scarico la versione {ver}");
@@ -73,7 +85,7 @@ public sealed class Updater
             using (var dreq = Get($"{baseUrl}/api/update/windows"))
             using (var dresp = await _http.SendAsync(dreq, HttpCompletionOption.ResponseHeadersRead))
             {
-                if (!dresp.IsSuccessStatusCode) { Set("Download non riuscito"); return; }
+                if (!dresp.IsSuccessStatusCode) { Outcome("Download non riuscito"); return; }
                 var total = dresp.Content.Headers.ContentLength ?? 0;
                 await using var o = File.Create(zip);
                 await using var i = await dresp.Content.ReadAsStreamAsync();
@@ -116,8 +128,8 @@ public sealed class Updater
             _r.Notify.Unregister();
             Environment.Exit(0);
         }
-        catch (Exception) { Set("Aggiornamento non riuscito, riprovo più tardi"); }
-        finally { _busy = false; Report(null); }
+        catch (Exception) { Outcome("Aggiornamento non riuscito, riprovo più tardi"); }
+        finally { _busy = false; }
     }
 
     private HttpRequestMessage Get(string url)

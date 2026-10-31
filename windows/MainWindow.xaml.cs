@@ -551,7 +551,7 @@ public sealed partial class MainWindow : Window
             Text("Aggiornamenti", "SectionTitle"),
             Row($"Versione 1.0.{_r.Update.Current}",
                 _r.Update.Status.Length > 0 ? _r.Update.Status : "Si aggiorna da sola dalle release su GitHub, tramite il tuo server",
-                Btn("Cerca ora", () => { _ = Task.Run(() => _r.Update.CheckAsync(install: true)); }))));
+                Btn("Cerca ora", () => { _ = Task.Run(() => _r.Update.CheckAsync(install: true, manual: true)); }))));
 
         h.Children.Add(Btn("Rivedi la configurazione iniziale", ShowOnboarding));
     }

@@ -72,6 +72,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.ComponentActivity
 import it.ponte.FileEntry
 import it.ponte.Router
+import it.ponte.Updater
 import it.ponte.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -99,7 +100,7 @@ internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.un
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Box(Modifier.fillMaxWidth().height(height).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        GradientView(Modifier.matchParentSize(), shape = "hero", cell = 12, ascii = 1, touch = false, bg = c.bgSunken)
+        FiberField(Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = CanoneType.title2, color = c.labelPrimary)
@@ -560,12 +561,13 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
         }
         item {
             val status by r.updater.status.collectAsState()
-            val dl by r.updater.progress.collectAsState()
-            androidx.compose.animation.AnimatedVisibility(dl != null) { dl?.let { DownloadCard(it) } }
+            val upd by r.updater.ui.collectAsState()
             CCard {
                 SectionTitle("Aggiornamenti")
                 CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola dalle release su GitHub, tramite il tuo server" }) {
-                    CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true) } })
+                    val busy = upd?.phase == Updater.Phase.Checking || upd?.phase == Updater.Phase.Downloading || upd?.phase == Updater.Phase.Installing
+                    if (busy) UpdateRing(upd!!.phase, if ((upd?.total ?: 0) > 0) upd!!.done.toFloat() / upd!!.total else 0f, 28.dp)
+                    else CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true, manual = true) } })
                 }
             }
         }
