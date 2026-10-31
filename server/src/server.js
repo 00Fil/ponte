@@ -34,8 +34,8 @@ export async function start({
     accept, 'user-agent': 'ponte-server', 'x-github-api-version': '2022-11-28',
     ...(github.token ? { authorization: `Bearer ${github.token}` } : {}),
   });
-  const latestRelease = async () => {
-    if (releaseCache.data && Date.now() - releaseCache.at < 10 * 60_000) return releaseCache.data;
+  const latestRelease = async (fresh = false) => {
+    if (!fresh && releaseCache.data && Date.now() - releaseCache.at < 60_000) return releaseCache.data;
     const r = await fetch(`${github.api}/repos/${github.repo}/releases/tags/latest`, { headers: ghHeaders('application/vnd.github+json') });
     if (!r.ok) throw new Error(`github ${r.status}`);
     const rel = await r.json();
@@ -50,9 +50,11 @@ export async function start({
   };
   const handleUpdate = async (url, res) => {
     let rel;
-    try { rel = await latestRelease(); } catch {
+    try { rel = await latestRelease(url.searchParams.has('fresh')); } catch (err) {
       res.statusCode = 502;
-      return void res.end();
+      res.setHeader('content-type', 'application/json');
+      const why = String(err?.message ?? err);
+      return void res.end(JSON.stringify({ error: why, hint: why.includes('404') || why.includes('401') ? 'imposta PONTE_GITHUB_TOKEN sul server (repo privato)' : 'GitHub non raggiungibile' }));
     }
     if (url.pathname === '/api/update') {
       res.setHeader('content-type', 'application/json');

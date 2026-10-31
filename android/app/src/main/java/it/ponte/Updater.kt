@@ -47,8 +47,8 @@ class Updater(private val ctx: Context, private val r: Router) {
         busy = true
         try {
             status.value = "Controllo in corso"
-            val info = http.newCall(get("$base/api/update")).execute().use {
-                if (!it.isSuccessful) { status.value = "Server senza aggiornamenti (${it.code})"; return }
+            val info = http.newCall(get("$base/api/update?fresh=1")).execute().use {
+                if (!it.isSuccessful) { status.value = if (it.code == 404) "Server da aggiornare: rifai il deploy" else if (it.code == 502) "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN" else "Server senza aggiornamenti (${it.code})"; return }
                 JSONObject(it.body!!.string())
             }
             val build = info.optInt("build")

@@ -46,9 +46,9 @@ public sealed class Updater
         try
         {
             Set("Controllo in corso");
-            using var req = Get($"{baseUrl}/api/update");
+            using var req = Get($"{baseUrl}/api/update?fresh=1");
             using var resp = await _http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode) { Set($"Server senza aggiornamenti ({(int)resp.StatusCode})"); return; }
+            if (!resp.IsSuccessStatusCode) { Set((int)resp.StatusCode == 404 ? "Server da aggiornare: rifai il deploy" : (int)resp.StatusCode == 502 ? "Il server non legge GitHub: manca PONTE_GITHUB_TOKEN" : $"Server senza aggiornamenti ({(int)resp.StatusCode})"); return; }
             if (JsonNode.Parse(await resp.Content.ReadAsStringAsync()) is not JsonObject info) return;
             var build = (int)info.L("build");
             var hasWin = info["windows"] is JsonValue w && w.TryGetValue<bool>(out var ok) && ok;
