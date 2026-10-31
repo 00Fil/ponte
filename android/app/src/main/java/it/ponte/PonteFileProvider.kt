@@ -4,7 +4,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 
 /**
- * Come FileProvider, ma i file di testo (HTML, JSON, CSS...) si dichiarano "binari". Con un tipo text/* le app, WhatsApp
+ * Come FileProvider, ma i file di testo (HTML, JSON, CSS...) si dichiarano "binari". Con un tipo di testo (text/qualcosa) le app, WhatsApp
  * compreso, incollano il CONTENUTO del file come testo invece di trattarlo come un file da allegare.
  */
 class PonteFileProvider : FileProvider() {
