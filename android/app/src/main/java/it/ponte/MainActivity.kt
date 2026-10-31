@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import it.ponte.ui.GradientView
+import it.ponte.ui.Brand
 import it.ponte.ui.DownloadCard
 import it.ponte.ui.TabGlyph
 import androidx.compose.runtime.collectAsState
