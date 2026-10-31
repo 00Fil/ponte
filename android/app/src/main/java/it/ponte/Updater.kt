@@ -26,6 +26,10 @@ import java.util.concurrent.TimeUnit
 class Updater(private val ctx: Context, private val r: Router) {
     val status = MutableStateFlow("")
     val available = MutableStateFlow<Int?>(null)
+    /** Avanzamento del download in corso (null quando non si sta scaricando). */
+    val progress = MutableStateFlow<Download?>(null)
+
+    data class Download(val version: String, val done: Long, val total: Long, val bytesPerSec: Double, val phase: String)
     private val http = OkHttpClient.Builder().readTimeout(5, TimeUnit.MINUTES).build()
     @Volatile private var busy = false
 
@@ -63,7 +67,29 @@ class Updater(private val ctx: Context, private val r: Router) {
             val apk = File(ctx.cacheDir, "ponte-update.apk")
             http.newCall(get("$base/api/update/android")).execute().use { resp ->
                 if (!resp.isSuccessful) { status.value = "Download non riuscito"; return }
-                resp.body!!.byteStream().use { i -> apk.outputStream().use { i.copyTo(it) } }
+                val total = resp.body!!.contentLength().let { if (it > 0) it else resp.header("content-length")?.toLongOrNull() ?: 0L }
+                val t0 = System.nanoTime()
+                var done = 0L
+                var lastPush = 0L
+                progress.value = Download("1.0.$build", 0, total, 0.0, "Scarico")
+                resp.body!!.byteStream().use { i ->
+                    apk.outputStream().use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = i.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            val now = System.nanoTime()
+                            if (now - lastPush > 80_000_000L) {
+                                lastPush = now
+                                val secs = (now - t0) / 1e9
+                                progress.value = Download("1.0.$build", done, total, if (secs > 0.2) done / secs else 0.0, "Scarico")
+                            }
+                        }
+                    }
+                }
+                progress.value = Download("1.0.$build", done, maxOf(total, done), 0.0, "Installo")
             }
             status.value = "Installo la versione 1.0.$build"
             if (Root.available() && rootInstall(apk)) return
@@ -77,6 +103,7 @@ class Updater(private val ctx: Context, private val r: Router) {
         } catch (_: Exception) {
             status.value = "Aggiornamento non riuscito, riprovo più tardi"
         } finally {
+            progress.value = null
             busy = false
         }
     }

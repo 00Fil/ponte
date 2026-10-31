@@ -106,7 +106,7 @@
     <!-- Il gradiente di Ponte, oltremare e ciano come le fibre: solo nel marchio. -->
     <LinearGradientBrush x:Key="BrandGradient" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="#2E4BFF" Offset="0" />
-        <GradientStop Color="#6B80FF" Offset="1" />
+        <GradientStop Color="#4D9BFF" Offset="1" />
     </LinearGradientBrush>
 
     <!-- Geist e Geist Mono, con ripiego sul font di sistema. -->
@@ -326,8 +326,8 @@
         <Setter Property="Padding" Value="0" />
     </Style>
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
-        <Setter Property="Background" Value="{ThemeResource AccentDefault}" />
-        <Setter Property="Foreground" Value="{ThemeResource AccentOnAccent}" />
+        <Setter Property="Background" Value="{StaticResource BrandGradient}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
     <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PillButton}">
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />

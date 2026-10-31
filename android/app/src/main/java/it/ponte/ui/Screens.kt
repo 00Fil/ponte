@@ -59,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -98,7 +99,7 @@ private fun HeroCard(title: String, sub: String) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Box(Modifier.fillMaxWidth().height(176.dp).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        GradientView(Modifier.matchParentSize(), shape = "hero", cell = 12, ascii = 1, touch = false)
+        GradientView(Modifier.matchParentSize(), shape = "hero", cell = 12, ascii = 1, touch = false, bg = c.bgSunken)
         Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = CanoneType.title2, color = c.labelPrimary)
@@ -131,6 +132,7 @@ internal fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(c
 
 @Composable
 fun DevicesScreen(r: Router) {
+    val c = Canone.colors
     val ctx = LocalContext.current
     val devices by r.devices.collectAsState()
     val hub by r.hubState.collectAsState()
@@ -175,7 +177,7 @@ fun DevicesScreen(r: Router) {
                         if ("audio-src" in d.caps) add("sorgente audio")
                         if ("audio-sink" in d.caps) add("riceve audio")
                     }.joinToString(" · ")
-                    CRow(d.name, what) { CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent) }
+                    CRow(d.name, what, Modifier.clip(RoundedCornerShape(Radius.lg)).background(Brush.horizontalGradient(listOf(c.accentSubtle, androidx.compose.ui.graphics.Color.Transparent))).padding(horizontal = Space.s3)) { CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent) }
                 }
             }
         }
@@ -558,6 +560,8 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
         }
         item {
             val status by r.updater.status.collectAsState()
+            val dl by r.updater.progress.collectAsState()
+            androidx.compose.animation.AnimatedVisibility(dl != null) { dl?.let { DownloadCard(it) } }
             CCard {
                 SectionTitle("Aggiornamenti")
                 CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola dalle release su GitHub, tramite il tuo server" }) {

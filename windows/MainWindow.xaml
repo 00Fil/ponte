@@ -142,6 +142,25 @@
             </StackPanel>
         </Grid>
 
+        <!-- Scheda dell'aggiornamento: anello, dettagli e le tre fasi. -->
+        <Border x:Name="UpdateCard" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0" Style="{StaticResource CardStyle}"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24" Width="344">
+            <StackPanel Spacing="14">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid Width="56" Height="56" x:Name="UpdateRingBox">
+                        <ProgressRing x:Name="UpdateRing" Width="56" Height="56" IsIndeterminate="False" Minimum="0" Maximum="100" Value="0" Foreground="{ThemeResource AccentDefault}" />
+                        <TextBlock x:Name="UpdatePercent" Style="{StaticResource Footnote}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock x:Name="UpdateTitle" Style="{StaticResource SectionTitle}" />
+                        <TextBlock x:Name="UpdateDetail" Style="{StaticResource Footnote}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="UpdateSteps" Spacing="6" />
+            </StackPanel>
+        </Border>
+
         <!-- Barra del titolo personalizzata, in stile macOS: tre pallini a sinistra, il resto trascina la finestra. -->
         <Grid x:Name="TitleBar" Grid.RowSpan="2" Grid.ColumnSpan="2" Height="44" VerticalAlignment="Top">
             <Grid.ColumnDefinitions>

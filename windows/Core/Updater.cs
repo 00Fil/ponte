@@ -17,6 +17,11 @@ public sealed class Updater
     private bool _busy;
 
     public string Status { get; private set; } = "";
+
+    /// <summary>Fase corrente dell'aggiornamento: 1 scarico, 2 estrazione, 3 installazione (poi Ponte si riavvia).</summary>
+    public sealed record Progress(int Step, string Version, long Done, long Total, double BytesPerSec);
+    public event Action<Progress?>? Changed;
+    private void Report(Progress? p) => Changed?.Invoke(p);
     public int Current { get; } = typeof(Updater).Assembly.GetName().Version?.Build is int b && b > 0 ? b : 0;
 
     public Updater(Router r) => _r = r;
@@ -58,7 +63,9 @@ public sealed class Updater
             var appDir = AppContext.BaseDirectory.TrimEnd('\\');
             if (!Writable(appDir)) { Set("La cartella di Ponte non è scrivibile: spostala ad esempio in Documenti"); return; }
 
-            Set($"Scarico la versione 1.0.{build}");
+            var ver = $"1.0.{build}";
+            Set($"Scarico la versione {ver}");
+            Report(new Progress(1, ver, 0, 0, 0));
             var work = Path.Combine(Settings.Dir, "update");
             if (Directory.Exists(work)) Directory.Delete(work, true);
             Directory.CreateDirectory(work);
@@ -67,9 +74,28 @@ public sealed class Updater
             using (var dresp = await _http.SendAsync(dreq, HttpCompletionOption.ResponseHeadersRead))
             {
                 if (!dresp.IsSuccessStatusCode) { Set("Download non riuscito"); return; }
+                var total = dresp.Content.Headers.ContentLength ?? 0;
                 await using var o = File.Create(zip);
-                await dresp.Content.CopyToAsync(o);
+                await using var i = await dresp.Content.ReadAsStreamAsync();
+                var buf = new byte[64 * 1024];
+                long done = 0;
+                var sw = Stopwatch.StartNew();
+                long lastPush = 0;
+                int n;
+                while ((n = await i.ReadAsync(buf)) > 0)
+                {
+                    await o.WriteAsync(buf.AsMemory(0, n));
+                    done += n;
+                    if (sw.ElapsedMilliseconds - lastPush > 80)
+                    {
+                        lastPush = sw.ElapsedMilliseconds;
+                        Report(new Progress(1, ver, done, total, sw.Elapsed.TotalSeconds > 0.2 ? done / sw.Elapsed.TotalSeconds : 0));
+                    }
+                }
+                Report(new Progress(1, ver, done, Math.Max(total, done), 0));
             }
+            Set($"Estraggo la versione {ver}");
+            Report(new Progress(2, ver, 1, 1, 0));
             var unpacked = Path.Combine(work, "nuova");
             ZipFile.ExtractToDirectory(zip, unpacked);
             if (!File.Exists(Path.Combine(unpacked, "Ponte.exe"))) { Set("Pacchetto non valido"); return; }
@@ -77,7 +103,9 @@ public sealed class Updater
             // Con l'audio in viaggio verso un altro dispositivo si aspetta: l'aggiornamento non deve interromperlo.
             while (_r.Audio.SinkId != null) await Task.Delay(TimeSpan.FromMinutes(1));
 
-            Set($"Installo la versione 1.0.{build}");
+            Set($"Installo la versione {ver}");
+            Report(new Progress(3, ver, 1, 1, 0));
+            await Task.Delay(900);
             string Q(string s) => s.Replace("'", "''");
             var script = $"Wait-Process -Id {Environment.ProcessId} -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; " +
                          $"Copy-Item -Path '{Q(unpacked)}\\*' -Destination '{Q(appDir)}' -Recurse -Force; " +
@@ -89,7 +117,7 @@ public sealed class Updater
             Environment.Exit(0);
         }
         catch (Exception) { Set("Aggiornamento non riuscito, riprovo più tardi"); }
-        finally { _busy = false; }
+        finally { _busy = false; Report(null); }
     }
 
     private HttpRequestMessage Get(string url)

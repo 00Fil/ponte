@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -41,6 +43,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import it.ponte.ui.GradientView
+import it.ponte.ui.DownloadCard
+import it.ponte.ui.TabGlyph
+import androidx.compose.runtime.collectAsState
 import it.ponte.ui.Onboarding
 import it.ponte.ui.UpdateDone
 import androidx.compose.runtime.Composable
@@ -121,7 +126,7 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
     // Testata con il gradiente ASCII e il titolo della pagina, che scorre al cambio di scheda.
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(168.dp)) {
-            GradientView(Modifier.matchParentSize(), shape = "band", cell = 12, intro = true, ascii = 1)
+            GradientView(Modifier.matchParentSize(), shape = "band", cell = 12, intro = true, ascii = 1, bg = c.bgCanvas)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.62f to Color.Transparent, 1f to c.bgCanvas)))
             AnimatedContent(
                 tab,
@@ -134,6 +139,15 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
                 label = "titolo",
             ) { t -> Text(TABS[t], style = CanoneType.title1, color = c.labelPrimary) }
         }
+    }
+
+    val dl by r.updater.progress.collectAsState()
+    val banner: @Composable () -> Unit = {
+        androidx.compose.animation.AnimatedVisibility(
+            dl != null,
+            enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(0.7f, 300f)) + fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + fadeOut(),
+        ) { dl?.let { Box(Modifier.padding(horizontal = Space.s4, vertical = Space.s2)) { DownloadCard(it) } } }
     }
 
     val pages: @Composable (Modifier) -> Unit = { m ->
@@ -157,44 +171,56 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(Space.s1),
                 ) {
                     Text("Ponte", style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s3, Space.s4, Space.s3, Space.s5))
-                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.fillMaxWidth(), start = true) { select(i) } }
+                    TABS.forEachIndexed { i, t -> TabItem(t, i, tab == i, Modifier.fillMaxWidth(), start = true) { select(i) } }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     header()
+                    banner()
                     pages(Modifier.weight(1f).fillMaxWidth())
                 }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.statusBarsPadding()) { header() }
+                banner()
                 pages(Modifier.weight(1f).fillMaxWidth())
                 Row(
                     Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding().padding(horizontal = Space.s2, vertical = Space.s2),
                     horizontalArrangement = Arrangement.spacedBy(Space.s1),
                 ) {
-                    TABS.forEachIndexed { i, t -> TabItem(t, tab == i, Modifier.weight(1f)) { select(i) } }
+                    TABS.forEachIndexed { i, t -> TabItem(t, i, tab == i, Modifier.weight(1f)) { select(i) } }
                 }
             }
         }
     }
 }
 
-/** Voce della TabBar: la selezione si accende con il colore dell'accento, con una transizione morbida. */
+/** Voce della TabBar: sul telefono è solo un'icona che rimbalza e si accende nella pillola sfumata; nella barra laterale resta il testo. */
 @Composable
-private fun TabItem(label: String, selected: Boolean, modifier: Modifier, start: Boolean = false, onClick: () -> Unit) {
+private fun TabItem(label: String, index: Int, selected: Boolean, modifier: Modifier, start: Boolean = false, onClick: () -> Unit) {
     val c = Canone.colors
-    val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(240), label = "fondo")
-    val fg by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(240), label = "testo")
+    val fg by animateColorAsState(if (selected) Color.White else c.labelSecondary, tween(240), label = "testo")
+    val pill by androidx.compose.animation.core.animateFloatAsState(if (selected) 1f else 0f, androidx.compose.animation.core.spring(0.6f, 380f), label = "pillola")
+    if (start) {
+        val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(240), label = "fondo")
+        val fg2 by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(240), label = "testo2")
+        Row(
+            modifier.height(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Tab, onClick = onClick).padding(horizontal = Space.s4),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
+        ) {
+            TabGlyph(index, fg2, selected, Modifier.size(22.dp))
+            Text(label, maxLines = 1, style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote, color = fg2)
+        }
+        return
+    }
     Box(
-        modifier.height(44.dp).clip(CircleShape).background(bg)
-            .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = if (start) Space.s4 else 0.dp),
-        contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
+        modifier.height(52.dp).clickable(role = Role.Tab, onClick = onClick, indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label, maxLines = 1,
-            style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote,
-            color = fg,
+        Box(
+            Modifier.size(width = 60.dp, height = 36.dp).graphicsLayer { scaleX = 0.5f + 0.5f * pill; scaleY = 0.7f + 0.3f * pill; alpha = pill.coerceIn(0f, 1f) }
+                .clip(CircleShape).background(Brand.gradient),
         )
+        TabGlyph(index, fg, selected, Modifier.size(24.dp))
     }
 }

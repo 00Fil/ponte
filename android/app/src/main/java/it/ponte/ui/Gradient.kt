@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -20,7 +21,7 @@ import androidx.lifecycle.LifecycleEventObserver
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, intro: Boolean = true, touch: Boolean = true, ascii: Int = -1) {
+fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, intro: Boolean = true, touch: Boolean = true, ascii: Int = -1, bg: androidx.compose.ui.graphics.Color? = null) {
     val dark = isSystemInDarkTheme()
     val web = remember { mutableStateOf<WebView?>(null) }
     @Suppress("DEPRECATION")
@@ -38,7 +39,7 @@ fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, int
                 isHorizontalScrollBarEnabled = false
                 overScrollMode = View.OVER_SCROLL_NEVER
                 if (!touch) setOnTouchListener { _, _ -> false }
-                val q = "shape=$shape&cell=$cell&intro=${if (intro) 1 else 0}&light=${if (dark) 0 else 1}&touch=${if (touch) 1 else 0}${if (ascii >= 0) "&ascii=$ascii" else ""}"
+                val q = "shape=$shape&cell=$cell&intro=${if (intro) 1 else 0}&light=${if (dark) 0 else 1}&touch=${if (touch) 1 else 0}${if (ascii >= 0) "&ascii=$ascii" else ""}${if (bg != null) "&bg=%06X".format(bg.toArgb() and 0xFFFFFF) else ""}"
                 loadUrl("file:///android_asset/gradient.html?$q")
                 web.value = this
             }
@@ -46,8 +47,9 @@ fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, int
         onRelease = { it.destroy() },
     )
 
-    LaunchedEffect(dark) {
-        web.value?.evaluateJavascript("window.ponteSet && ponteSet({ lightMode: ${!dark} })", null)
+    LaunchedEffect(dark, bg) {
+        val b = if (bg != null) ", bg: '%06X'".format(bg.toArgb() and 0xFFFFFF) else ""
+        web.value?.evaluateJavascript("window.ponteSet && ponteSet({ lightMode: ${!dark}$b })", null)
     }
 
     DisposableEffect(lifecycle) {
