@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -91,6 +92,21 @@ private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
     }
 }
 
+/** Prima scheda: le fibre animate dietro lo stato generale. Non reagisce al tocco, così non ruba lo scorrimento. */
+@Composable
+private fun HeroCard(title: String, sub: String) {
+    val c = Canone.colors
+    val shape = RoundedCornerShape(Radius.xl)
+    Box(Modifier.fillMaxWidth().height(176.dp).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
+        GradientView(Modifier.matchParentSize(), shape = "hero", cell = 12, ascii = 1, touch = false)
+        Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
+        Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = CanoneType.title2, color = c.labelPrimary)
+            Text(sub, style = CanoneType.footnote, color = c.labelSecondary)
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, color = Canone.colors.labelPrimary)
 
@@ -109,7 +125,7 @@ internal fun imagesPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.perm
 internal fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
 internal fun listenerEnabled(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 private fun time(ts: Long, ctx: Context) = DateFormat.getTimeFormat(ctx).format(Date(ts))
-private fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(ctx).format(Date(ts)) + " " + time(ts, ctx)
+internal fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(ctx).format(Date(ts)) + " " + time(ts, ctx)
 
 // ---------------------------------------------------------------- Dispositivi
 
@@ -132,6 +148,7 @@ fun DevicesScreen(r: Router) {
     val near = devices.count { it.via == "lan" }
 
     ScreenList("Dispositivi") {
+        item { HeroCard(if (devices.isEmpty()) "Solo questo dispositivo" else if (devices.size == 1) "1 dispositivo collegato" else "${devices.size} dispositivi collegati", "Server: ${hub.lowercase()}") }
         item {
             CCard {
                 SectionTitle("Collegamenti")
@@ -247,7 +264,17 @@ fun ArchiveScreen(r: Router) {
         }
     }
 
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    val images = list.filter { it.mime.startsWith("image/") }
+    fun share(e: FileEntry) {
+        val send = Intent(Intent.ACTION_SEND)
+            .setType(if (e.mime.startsWith("text/")) "application/octet-stream" else e.mime)
+            .putExtra(Intent.EXTRA_STREAM, r.files.uriFor(e))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { ctx.startActivity(Intent.createChooser(send, e.name)) } catch (_: ActivityNotFoundException) { toast(ctx, "Nessuna app può riceverlo") }
+    }
     fun open(e: FileEntry) {
+        if (e.mime.startsWith("image/")) { viewing = images.indexOfFirst { it.fid == e.fid }.coerceAtLeast(0); return }
         try {
             ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(r.files.uriFor(e), e.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         } catch (_: ActivityNotFoundException) {
@@ -298,6 +325,10 @@ fun ArchiveScreen(r: Router) {
                 }
             }
         }
+    }
+
+    viewing?.let { i ->
+        PhotoViewer(images, i, onShare = { share(it) }, onClose = { viewing = null })
     }
 
     toDelete?.let { e ->

@@ -85,7 +85,7 @@ fun Onboarding(r: Router, onDone: () -> Unit) {
     Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
         // Il gradiente resta sullo sfondo per tutto l'onboarding; nei passi con tanto testo si attenua.
         val dim by animateFloatAsState(if (step == 0 || step == 3) 1f else 0.35f, tween(700), label = "sfondo")
-        GradientView(Modifier.fillMaxSize().graphicsLayer { alpha = dim }, shape = "horizon", cell = 16)
+        GradientView(Modifier.fillMaxSize().graphicsLayer { alpha = dim }, shape = "hero", cell = 14, ascii = 1)
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(0.35f to Color.Transparent, 1f to c.bgCanvas.copy(alpha = 0.92f)),
@@ -294,30 +294,20 @@ private fun PermCard(title: String, why: String, granted: Boolean, onAsk: () -> 
             Text(why, style = CanoneType.footnote, color = c.labelSecondary)
         }
         AnimatedContent(granted, transitionSpec = { (scaleIn(spring(dampingRatio = 0.55f)) + fadeIn()).togetherWith(fadeOut()) }, label = "spunta") { ok ->
-            if (ok) Check(28) else CButton("Consenti", onAsk)
+            if (ok) AnimatedCheck(28.dp) else CButton("Consenti", onAsk)
         }
-    }
-}
-
-/** Spunta dentro un cerchio sfumato. */
-@Composable
-private fun Check(sizeDp: Int) {
-    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(Brand.gradient), contentAlignment = Alignment.Center) {
-        Text("✓", color = Color.White, style = CanoneType.bodyMedium.copy(fontSize = (sizeDp * 0.55f).sp))
     }
 }
 
 @Composable
 private fun Ready(onDone: () -> Unit) {
     val c = Canone.colors
-    val pop = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { pop.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 220f)) }
     Column(
         Modifier.widthIn(max = 520.dp).fillMaxSize().padding(Space.s5),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value; alpha = pop.value }) { Check(96) }
+        AnimatedCheck(96.dp, delayMs = 150)
         Spacer(Modifier.height(Space.s6))
         Stagger(1) { Text("Tutto pronto", style = CanoneType.title1, color = c.labelPrimary, textAlign = TextAlign.Center) }
         Spacer(Modifier.height(Space.s3))
@@ -329,5 +319,29 @@ private fun Ready(onDone: () -> Unit) {
         }
         Spacer(Modifier.height(Space.s6))
         Stagger(3) { CButton("Apri Ponte", onDone, Modifier.fillMaxWidth(), kind = ButtonKind.Primary) }
+    }
+}
+
+/**
+ * Dopo un aggiornamento: niente permessi, una sola pagina come la prima della configurazione.
+ */
+@Composable
+fun UpdateDone(version: String, onContinue: () -> Unit) {
+    val c = Canone.colors
+    Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
+        GradientView(Modifier.fillMaxSize(), shape = "hero", cell = 14, ascii = 1)
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to c.bgCanvas.copy(alpha = 0.92f))))
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(Space.s5),
+            verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.Start,
+        ) {
+            AnimatedCheck(64.dp, delayMs = 250)
+            Spacer(Modifier.height(Space.s5))
+            Stagger(0) { Text("Passato con successo alla versione $version", style = CanoneType.title1.copy(fontSize = 40.sp, lineHeight = 44.sp), color = c.labelPrimary) }
+            Spacer(Modifier.height(Space.s2))
+            Stagger(1) { Text("Collegamenti e permessi sono rimasti come prima.", style = CanoneType.body, color = c.labelSecondary) }
+            Spacer(Modifier.height(Space.s6))
+            Stagger(2) { CButton("Continua", onContinue, Modifier.fillMaxWidth(), kind = ButtonKind.Primary) }
+        }
     }
 }

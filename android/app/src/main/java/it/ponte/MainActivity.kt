@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import it.ponte.ui.GradientView
 import it.ponte.ui.Onboarding
+import it.ponte.ui.UpdateDone
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,11 +85,19 @@ private val TABS = listOf("Dispositivi", "Appunti", "Archivio", "Audio", "Impost
 
 @Composable
 private fun PonteApp(r: Router) {
-    var onboarding by remember { mutableStateOf(!r.prefs.onboarded) }
+    val ctx = LocalContext.current
+    val info = remember { ctx.packageManager.getPackageInfo(ctx.packageName, 0) }
+    @Suppress("DEPRECATION") val code = remember { info.longVersionCode.toInt() }
+    val name = remember { info.versionName ?: "" }
+    // 0 = prima installazione, 1 = appena aggiornata, 2 = app. Un aggiornamento salta i permessi: una sola pagina.
+    var mode by remember { mutableIntStateOf(if (!r.prefs.onboarded) 0 else if (r.prefs.seenVersion != code) 1 else 2) }
     // Passaggio tra onboarding e app: dissolvenza lunga e morbida.
-    AnimatedContent(onboarding, transitionSpec = { fadeIn(tween(600)).togetherWith(fadeOut(tween(400))) }, label = "avvio") { show ->
-        if (show) Onboarding(r) { onboarding = false }
-        else MainShell(r) { r.prefs.onboarded = false; onboarding = true }
+    AnimatedContent(mode, transitionSpec = { fadeIn(tween(600)).togetherWith(fadeOut(tween(400))) }, label = "avvio") { m ->
+        when (m) {
+            0 -> Onboarding(r) { r.prefs.seenVersion = code; mode = 2 }
+            1 -> UpdateDone(name) { r.prefs.seenVersion = code; mode = 2 }
+            else -> MainShell(r) { r.prefs.onboarded = false; mode = 0 }
+        }
     }
 }
 
@@ -111,9 +120,9 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
 
     // Testata con il gradiente ASCII e il titolo della pagina, che scorre al cambio di scheda.
     val header: @Composable () -> Unit = {
-        Box(Modifier.fillMaxWidth().height(152.dp)) {
-            GradientView(Modifier.matchParentSize(), shape = "rise", cell = 14, intro = true)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to c.bgCanvas)))
+        Box(Modifier.fillMaxWidth().height(168.dp)) {
+            GradientView(Modifier.matchParentSize(), shape = "band", cell = 12, intro = true, ascii = 1)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.62f to Color.Transparent, 1f to c.bgCanvas)))
             AnimatedContent(
                 tab,
                 modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = Space.s5, vertical = Space.s3),

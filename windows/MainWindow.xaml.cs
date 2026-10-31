@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(Router r)
     {
         InitializeComponent();
+        InitViewerKeys();
         _r = r;
         _pages = new[] { Page0, Page1, Page2, Page3, Page4 };
         _hosts = new[] { Host0, Host1, Host2, Host3, Host4 };
@@ -390,7 +391,7 @@ public sealed partial class MainWindow : Window
         body.Children.Add(new StackPanel { Margin = new Thickness(8, 0, 8, 8), Children = { name, info } });
 
         var tile = new Button { Style = St("TileStyle"), Content = body };
-        tile.Click += (_, _) => _r.Files.Open(e);
+        tile.Click += (_, _) => { if (e.Mime.StartsWith("image/")) OpenViewer(e); else _r.Files.Open(e); };
         var menu = new MenuFlyout();
         var del = new MenuFlyoutItem { Text = "Elimina" };
         del.Click += async (_, _) => await ConfirmDeleteAsync(e);

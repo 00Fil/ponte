@@ -193,14 +193,65 @@
         <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="20,16" />
     </Style>
-    <Style x:Key="TileStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
-        <Setter Property="Background" Value="{ThemeResource BgSurface}" />
-        <Setter Property="BorderBrush" Value="{ThemeResource LineSeparator}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="12" />
+    <!-- Scheda dell'archivio: modello proprio, così l'hover non passa dagli stati di default del pulsante (che tingevano tutto di grigio). -->
+    <ControlTemplate x:Key="TileTemplate" TargetType="Button">
+        <Grid x:Name="Root" Background="Transparent">
+            <Border x:Name="Face" CornerRadius="12" Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1" />
+            <Border x:Name="Ring" CornerRadius="12" BorderBrush="{ThemeResource AccentDefault}" BorderThickness="1.5" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" />
+            <Border x:Name="Veil" CornerRadius="12" Background="{ThemeResource LabelPrimary}" Opacity="0" IsHitTestVisible="False" />
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Ring" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.16" />
+                            <DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.16" />
+                        </Storyboard>
+                    </VisualState>
+                    <VisualState x:Name="PointerOver">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Ring" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.16" />
+                        </Storyboard>
+                    </VisualState>
+                    <VisualState x:Name="Pressed">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Ring" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.08" />
+                            <DoubleAnimation Storyboard.TargetName="Veil" Storyboard.TargetProperty="Opacity" To="0.06" Duration="0:0:0.08" />
+                        </Storyboard>
+                    </VisualState>
+                    <VisualState x:Name="Disabled" />
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+        </Grid>
+    </ControlTemplate>
+    <Style x:Key="TileStyle" TargetType="Button">
+        <Setter Property="Template" Value="{StaticResource TileTemplate}" />
         <Setter Property="Padding" Value="6" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style x:Key="ViewerRound" TargetType="Button">
+        <Setter Property="Width" Value="44" />
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="Disc" Fill="#FFFFFF" Opacity="0.14" />
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" />
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"><Storyboard><DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="Opacity" To="0.14" Duration="0:0:0.15" /></Storyboard></VisualState>
+                                <VisualState x:Name="PointerOver"><Storyboard><DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="Opacity" To="0.26" Duration="0:0:0.15" /></Storyboard></VisualState>
+                                <VisualState x:Name="Pressed"><Storyboard><DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="Opacity" To="0.38" Duration="0:0:0.08" /></Storyboard></VisualState>
+                                <VisualState x:Name="Disabled"><Storyboard><DoubleAnimation Storyboard.TargetName="Disc" Storyboard.TargetProperty="Opacity" To="0.05" Duration="0:0:0.1" /></Storyboard></VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
     <!-- Anteprima dentro una scheda: raggio interno = 20 - margine 8 = 12. -->
     <Style x:Key="ThumbStyle" TargetType="Border">

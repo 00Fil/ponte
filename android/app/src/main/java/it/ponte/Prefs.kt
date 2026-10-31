@@ -35,6 +35,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("onboarded", false)
         set(v) = sp.edit().putBoolean("onboarded", v).apply()
 
+    /** Ultima versione (versionCode) di cui l'utente ha visto la pagina "Passato alla versione". */
+    var seenVersion: Int
+        get() = sp.getInt("seenVersion", 0)
+        set(v) = sp.edit().putInt("seenVersion", v).apply()
+
     var notifications: Boolean
         get() = sp.getBoolean("notifications", false)
         set(v) = sp.edit().putBoolean("notifications", v).apply()

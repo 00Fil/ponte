@@ -20,7 +20,7 @@ import androidx.lifecycle.LifecycleEventObserver
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun GradientView(modifier: Modifier, shape: String = "horizon", cell: Int = 18, intro: Boolean = true, touch: Boolean = true) {
+fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, intro: Boolean = true, touch: Boolean = true, ascii: Int = -1) {
     val dark = isSystemInDarkTheme()
     val web = remember { mutableStateOf<WebView?>(null) }
     @Suppress("DEPRECATION")
@@ -38,7 +38,7 @@ fun GradientView(modifier: Modifier, shape: String = "horizon", cell: Int = 18, 
                 isHorizontalScrollBarEnabled = false
                 overScrollMode = View.OVER_SCROLL_NEVER
                 if (!touch) setOnTouchListener { _, _ -> false }
-                val q = "shape=$shape&cell=$cell&intro=${if (intro) 1 else 0}&light=${if (dark) 0 else 1}&touch=${if (touch) 1 else 0}"
+                val q = "shape=$shape&cell=$cell&intro=${if (intro) 1 else 0}&light=${if (dark) 0 else 1}&touch=${if (touch) 1 else 0}${if (ascii >= 0) "&ascii=$ascii" else ""}"
                 loadUrl("file:///android_asset/gradient.html?$q")
                 web.value = this
             }
