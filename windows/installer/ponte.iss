@@ -1,6 +1,5 @@
-; Ponte-Setup.exe: solo un contenitore. Estrae Ponte in una cartella temporanea e lancia "Ponte.exe --setup",
-; che mostra l'installazione con lo stile dell'app e copia i file in %LOCALAPPDATA%\Programs\Ponte.
-; Inno Setup non mostra nessuna finestra: InitializeSetup restituisce False dopo che Ponte ha finito.
+; Ponte-Setup.exe: contenitore. Estrae Ponte in una cartella temporanea (con la barra di avanzamento di Inno, così si vede
+; subito qualcosa) e poi lancia "Ponte.exe --setup", che mostra l'installazione con lo stile dell'app.
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
@@ -18,38 +17,36 @@ ArchitecturesAllowed=x64compatible
 OutputDir=..\..
 OutputBaseFilename=Ponte-Setup
 SetupIconFile=..\Assets\ponte.ico
-Compression=lzma2/normal
+WizardStyle=modern
+DisableWelcomePage=yes
+DisableReadyPage=yes
+DisableFinishedPage=yes
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+SetupLogging=no
+; Estrazione veloce: l'eseguibile pesa un po' di più ma parte in pochi secondi.
+Compression=lzma2/fast
 SolidCompression=yes
 
+[Messages]
+SetupWindowTitle=Ponte
+WizardInstalling=Preparo Ponte
+InstallingLabel=Un attimo, apro l'installazione di Ponte.
+
 [Files]
-Source: "..\..\out\*"; DestDir: "{tmp}\payload"; Flags: dontcopy recursesubdirs createallsubdirs
+Source: "..\..\out\*"; DestDir: "{tmp}\payload"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Code]
-procedure ExtractLevel(const Pattern: String);
-begin
-  try
-    ExtractTemporaryFiles(Pattern);
-  except
-    { nessun file a questo livello }
-  end;
-end;
-
-function InitializeSetup(): Boolean;
+procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
   Base: String;
 begin
-  Base := ExpandConstant('{tmp}\payload');
-  ExtractLevel('{tmp}\payload\*');
-  { Se * non scende nelle sottocartelle, si estraggono livello per livello. }
-  if not FileExists(Base + '\Assets\Web\gradient.html') then
+  if CurStep = ssPostInstall then
   begin
-    ExtractLevel('{tmp}\payload\*\*');
-    ExtractLevel('{tmp}\payload\*\*\*');
-    ExtractLevel('{tmp}\payload\*\*\*\*');
-    ExtractLevel('{tmp}\payload\*\*\*\*\*');
+    Base := ExpandConstant('{tmp}\payload');
+    WizardForm.Hide;
+    if not Exec(Base + '\Ponte.exe', '--setup', Base, SW_SHOWNORMAL, ewWaitUntilTerminated, Code) then
+      MsgBox('Non riesco ad avviare l''installazione di Ponte (errore ' + IntToStr(Code) + ').', mbError, MB_OK);
   end;
-  if not Exec(Base + '\Ponte.exe', '--setup', Base, SW_SHOWNORMAL, ewWaitUntilTerminated, Code) then
-    MsgBox('Non riesco ad avviare l''installazione di Ponte (errore ' + IntToStr(Code) + ').', mbError, MB_OK);
-  Result := False;
 end;

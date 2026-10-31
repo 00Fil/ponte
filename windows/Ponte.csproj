@@ -17,6 +17,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!-- Meno file e avvio più rapido: solo le lingue che servono e codice precompilato. -->
+    <SatelliteResourceLanguages>en;it</SatelliteResourceLanguages>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredPGO>false</TieredPGO>
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
