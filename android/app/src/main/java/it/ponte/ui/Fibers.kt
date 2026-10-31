@@ -82,6 +82,8 @@ class GlView(ctx: Context, private val renderer: GlScene, private val maxRatio: 
     private var cssH = 1f
     private val density = ctx.resources.displayMetrics.density
     private var lastNanos = 0L
+    private var surfW = 0
+    private var surfH = 0
 
     init {
         isOpaque = false
@@ -113,6 +115,13 @@ class GlView(ctx: Context, private val renderer: GlScene, private val maxRatio: 
         if (!running) return@FrameCallback
         val dt = if (lastNanos == 0L) 1f / 60f else ((now - lastNanos) / 1e9f)
         lastNanos = now
+        // Si disegna sempre sulla dimensione reale della superficie: se il sistema ne tiene una diversa da quella chiesta
+        // (succede quando la vista nasce durante una transizione) il disegno finirebbe in un angolo.
+        val sz = e.size()
+        if (sz[0] > 0 && sz[1] > 0 && (sz[0] != surfW || sz[1] != surfH)) {
+            surfW = sz[0]; surfH = sz[1]
+            renderer.resize(surfW, surfH)
+        }
         renderer.step(min(dt, 0.05f), min(dt, 1f))
         renderer.render(cssW, cssH)
         e.swap()
@@ -134,6 +143,7 @@ class GlView(ctx: Context, private val renderer: GlScene, private val maxRatio: 
         val ph = max(1, (cssH * ratio).roundToInt())
         st.setDefaultBufferSize(pw, ph)
         renderer.resize(pw, ph)
+        surfW = 0 // alla prossima immagine si rilegge la dimensione effettiva
     }
 
     override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
@@ -194,6 +204,16 @@ private class Egl(st: SurfaceTexture) {
     }
 
     fun swap() { EGL14.eglSwapBuffers(display, surface) }
+
+    private val dim = IntArray(2)
+    private val one = IntArray(1)
+
+    /** Larghezza e altezza reali della superficie in pixel. */
+    fun size(): IntArray {
+        EGL14.eglQuerySurface(display, surface, EGL14.EGL_WIDTH, one, 0); dim[0] = one[0]
+        EGL14.eglQuerySurface(display, surface, EGL14.EGL_HEIGHT, one, 0); dim[1] = one[0]
+        return dim
+    }
 
     fun destroy() {
         EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
