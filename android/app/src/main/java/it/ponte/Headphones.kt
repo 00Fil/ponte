@@ -35,7 +35,10 @@ import org.json.JSONObject
  * - Quando su quel dispositivo parte l'audio, le cuffie preferite passano lì: gli altri le lasciano.
  * - Se le cuffie non arrivano (spente, lontane, bloccate altrove) vale la riserva: casse o muto.
  * - "Blocca qui" ferma tutto: le cuffie restano dove sono finché non sblocchi.
- * - Al più un dispositivo tiene le cuffie, e dopo un po' di silenzio le lascia libere.
+ * - Le cuffie hanno 2 posti: due dispositivi (telefono e PC) le tengono collegate insieme e il passaggio è immediato, senza
+ *   ricollegare niente. Solo un terzo dispositivo che le chiede libera un posto, e a lasciarlo è quello usato meno di recente
+ *   (mai quello bloccato, per ultimo quello che sta suonando). Dopo un po' di silenzio le cuffie vengono lasciate libere.
+ * - Il dispositivo in uso si decide dall'ultimo input di ciascuno (tocco, mouse, tastiera), non dall'ordine dei messaggi.
  */
 class Headphones(private val ctx: Context, private val r: Router) {
     data class Hp(val address: String, val name: String, val connected: Boolean)
@@ -53,15 +56,22 @@ class Headphones(private val ctx: Context, private val r: Router) {
     private var a2dp: BluetoothA2dp? = null
     private val since = HashMap<String, Long>()
     private var connectedBefore = emptySet<String>()
+    private var connectedNow = emptySet<String>()
     private var lastActive = 0L
     private var playing = false
     private var lastInput = 0L
     private var lastFocusSent = 0L
-    private var myClaimTs = 0L
+    private var lastAnnounce = 0L
+    /** Ultimo input di ogni dispositivo, sull'orologio di questo (per gli altri: arrivo del messaggio meno "ago"). */
+    private val lastInputAt = HashMap<String, Long>()
+    private data class HpState(val on: Boolean, val play: Boolean, val use: Long, val seen: Long)
+    /** Cuffie -> dispositivo -> stato, così ognuno sa chi occupa i 2 posti. */
+    private val holders = HashMap<String, HashMap<String, HpState>>()
     private var mutedByUs = false
     private var watcher: View? = null
 
     private val me get() = r.deviceId
+    private val SLOTS = 2
 
     fun hasPermission() =
         Build.VERSION.SDK_INT < 31 || ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
@@ -118,16 +128,26 @@ class Headphones(private val ctx: Context, private val r: Router) {
     fun onUserInput() {
         val now = System.currentTimeMillis()
         val wasIdle = now - lastInput > 30_000
+        val was = focus.value
         lastInput = now
-        if (focus.value != me || (wasIdle && now - lastFocusSent > 15_000)) {
-            focus.value = me
+        lastInputAt[me] = now
+        focus.value = computeFocus()
+        if (was != me || (wasIdle && now - lastFocusSent > 15_000)) {
             lastFocusSent = now
-            r.send(newMsg("focus"))
+            r.send(newMsg("focus", "ago" to 0))
         }
     }
 
     fun onFocus(m: JSONObject) {
-        focus.value = m.optString("from").ifEmpty { null }
+        val from = m.optString("from").ifEmpty { return }
+        lastInputAt[from] = System.currentTimeMillis() - m.optLong("ago", 0)
+        focus.value = computeFocus()
+    }
+
+    /** Il dispositivo in uso è quello con l'input più recente; se nessuno ha toccato nulla da 10 minuti, nessuno. */
+    private fun computeFocus(): String? {
+        val now = System.currentTimeMillis()
+        return lastInputAt.filterValues { now - it < 10 * 60_000L }.maxByOrNull { it.value }?.key
     }
 
     // ------------------------------------------------------------ blocco
@@ -238,7 +258,8 @@ class Headphones(private val ctx: Context, private val r: Router) {
         for (a in mine - connectedBefore) {
             unmute()
             val lock = lockedBy.value
-            if (lock == me || (lock == null && (focus.value == me || holder.value == null || holder.value == me))) claim(a)
+            // Collegate dalle cuffie stesse o a mano: si tengono se c'è un posto libero o se qui è in uso; se tocca un altro, le lascio.
+            if (lock == me || (lock == null && (focus.value == me || freeSlot(a)))) claim(a)
             else r.scope.launch { release(a) }
         }
         // Cuffie appena andate via mentre l'audio suona: riserva.
@@ -246,6 +267,14 @@ class Headphones(private val ctx: Context, private val r: Router) {
         connectedBefore = mine
 
         since.keys.retainAll(mine)
+        // Annuncio lo stato delle cuffie quando cambia e comunque ogni 45 secondi, così gli altri sanno chi occupa i posti.
+        val changed = mine != connectedNow
+        connectedNow = mine
+        if (changed || now - lastAnnounce > 45_000) {
+            lastAnnounce = now
+            val all = (marked + holders.keys).toSet()
+            for (a in all) announce(a, a in mine)
+        }
         if (mine.isEmpty()) return
         mine.forEach { since.getOrPut(it) { now } }
 
@@ -256,26 +285,59 @@ class Headphones(private val ctx: Context, private val r: Router) {
         }
     }
 
+    private fun live(hp: String): Map<String, HpState> {
+        val now = System.currentTimeMillis()
+        val m = holders[hp] ?: return emptyMap()
+        m.entries.removeAll { now - it.value.seen > 150_000 || !it.value.on }
+        return m
+    }
+
+    /** C'è un posto libero sulle cuffie, senza contare me? */
+    private fun freeSlot(hp: String) = live(hp).count { it.key != me } < SLOTS
+
+    private fun announce(hp: String, on: Boolean) {
+        val now = System.currentTimeMillis()
+        val use = maxOf(lastActive, lastInput)
+        holders.getOrPut(hp) { HashMap() }[me] = HpState(on, playing, use, now)
+        r.send(newMsg("bt.state", "hp" to hp, "on" to on, "play" to playing, "ago" to if (use == 0L) 3_600_000L else now - use))
+    }
+
+    fun onState(m: JSONObject) {
+        val hp = m.optString("hp")
+        val from = m.optString("from")
+        if (hp.isEmpty() || from.isEmpty()) return
+        val now = System.currentTimeMillis()
+        holders.getOrPut(hp) { HashMap() }[from] = HpState(m.optBoolean("on"), m.optBoolean("play"), now - m.optLong("ago"), now)
+    }
+
     fun claim(address: String) {
-        myClaimTs = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        holders.getOrPut(address) { HashMap() }[me] = HpState(true, playing, now, now)
         holder.value = me
         r.send(newMsg("bt.claim", "hp" to address, "prio" to prio()))
     }
 
+    /**
+     * Qualcuno chiede le cuffie. Con un posto libero nessuno fa niente (restano collegati entrambi). Se i posti sono pieni
+     * lascia le cuffie chi vale meno: non bloccato, non in riproduzione, usato meno di recente. Tutti applicano la stessa regola
+     * sugli stessi dati, quindi se ne va solo il dispositivo giusto.
+     */
     fun onClaim(m: JSONObject) {
         val addr = m.optString("hp")
         val from = m.optString("from")
         if (addr.isEmpty()) return
         holder.value = from
+        val now = System.currentTimeMillis()
+        holders.getOrPut(addr) { HashMap() }[from] = HpState(true, false, now, now)
         if (!isConnected(addr)) return
-        // Due dispositivi le prendono insieme (es. cuffie appena accese): vince il bloccato, poi quello in uso, poi l'id minore.
-        val theirs = m.optInt("prio", 0)
-        val mine = prio()
-        if (System.currentTimeMillis() - myClaimTs < 5_000 && (mine > theirs || (mine == theirs && me < from))) {
-            holder.value = me
-            return
-        }
-        r.scope.launch {
+        holders.getOrPut(addr) { HashMap() }[me] = HpState(true, playing, maxOf(lastActive, lastInput), now)
+        val others = live(addr).filter { it.key != from }
+        val count = others.size - (SLOTS - 1)
+        if (count <= 0) return
+        val victims = others.entries.sortedWith(
+            compareBy<Map.Entry<String, HpState>>({ if (lockedBy.value == it.key) 1 else 0 }, { if (it.value.play) 1 else 0 }, { it.value.use }, { it.key }),
+        ).take(count).map { it.key }
+        if (me in victims) r.scope.launch {
             release(addr)
             if (playing) fallback()
         }
@@ -293,6 +355,7 @@ class Headphones(private val ctx: Context, private val r: Router) {
     suspend fun release(address: String) {
         val ok = Root.bluetooth(ctx, "disconnect", address)
         cannotDisconnect.value = !ok
+        announce(address, false)
         delay(1_000)
         refresh()
     }

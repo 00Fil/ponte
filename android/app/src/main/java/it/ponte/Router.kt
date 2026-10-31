@@ -215,6 +215,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "audio.start" -> audio.onStart(m)
             "audio.stop" -> audio.onStop(m)
             "bt.claim" -> headphones.onClaim(m)
+            "bt.state" -> headphones.onState(m)
             "focus" -> headphones.onFocus(m)
             "audio.lock" -> headphones.onLock(m)
         }

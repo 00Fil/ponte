@@ -305,10 +305,19 @@ fun ArchiveScreen(r: Router) {
             onDismissRequest = { toDelete = null },
             containerColor = c.bgSurface,
             shape = RoundedCornerShape(36.dp),
-            title = { Text(if (e.kind == "screenshot") "Eliminare lo screenshot?" else "Eliminare il file?", style = CanoneType.title3, color = c.labelPrimary) },
-            text = { Text("Sparisce da questo dispositivo. Sugli altri resta.", style = CanoneType.body, color = c.labelSecondary) },
-            dismissButton = { CButton("Annulla", { toDelete = null }) },
-            confirmButton = { CButton("Elimina", { r.files.delete(e); toDelete = null }, kind = ButtonKind.Destructive) },
+            title = { Text(e.name, style = CanoneType.title3, color = c.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = { Text("Condividi lo manda a WhatsApp o a un'altra app. Elimina lo toglie solo da questo dispositivo.", style = CanoneType.body, color = c.labelSecondary) },
+            dismissButton = { CButton("Elimina", { r.files.delete(e); toDelete = null }, kind = ButtonKind.Destructive) },
+            confirmButton = {
+                CButton("Condividi", {
+                    toDelete = null
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType(if (e.mime.startsWith("text/")) "application/octet-stream" else e.mime)
+                        .putExtra(Intent.EXTRA_STREAM, r.files.uriFor(e))
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    try { ctx.startActivity(Intent.createChooser(send, e.name)) } catch (_: ActivityNotFoundException) { toast(ctx, "Nessuna app può riceverlo") }
+                }, kind = ButtonKind.Primary)
+            },
         )
     }
 }

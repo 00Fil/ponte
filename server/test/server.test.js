@@ -79,6 +79,8 @@ test('i messaggi con "to" vanno solo al destinatario', async () => {
   const a = await connect('disp-to-aaaa');
   const b = await connect('disp-to-bbbb');
   const c = await connect('disp-to-cccc');
+  msg(a, 'focus', { ago: 0 });
+  await waitFor(() => b.inbox.find((m) => m.t === 'focus'));
   msg(a, 'audio.route', { to: 'disp-to-bbbb', sink: 'disp-to-cccc' });
   await waitFor(() => b.inbox.find((m) => m.t === 'audio.route'));
   await new Promise((r) => setTimeout(r, 50));

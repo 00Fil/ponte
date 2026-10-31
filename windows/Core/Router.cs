@@ -264,6 +264,9 @@ public sealed class Router
             case "bt.claim":
                 Hp.OnClaim(m);
                 break;
+            case "bt.state":
+                Hp.OnState(m);
+                break;
             case "focus":
                 Hp.OnFocus(m);
                 break;

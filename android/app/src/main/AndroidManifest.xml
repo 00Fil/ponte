@@ -117,7 +117,7 @@
             android:exported="false" />
 
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="it.ponte.PonteFileProvider"
             android:authorities="${applicationId}.files"
             android:exported="false"
             android:grantUriPermissions="true">

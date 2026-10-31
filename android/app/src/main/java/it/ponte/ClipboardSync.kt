@@ -97,8 +97,23 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
                 lastApplied = uri.toString()
                 ignoreUntil = System.currentTimeMillis() + 3000
                 cm.setPrimaryClip(ClipData.newUri(ctx.contentResolver, e.name, uri))
+                offerShare(e, uri)
             } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * WhatsApp e altre app non accettano ogni tipo di file incollato: per questo, quando un file arriva dal PC,
+     * una notifica porta direttamente al menu Condividi (WhatsApp, Telegram, posta...), che funziona sempre.
+     */
+    private fun offerShare(e: FileEntry, uri: android.net.Uri) {
+        if (e.kind == "screenshot") return
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+            .setType(if (e.mime.startsWith("text/")) "application/octet-stream" else e.mime)
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val chooser = android.content.Intent.createChooser(send, e.name).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        notifyUser(ctx, chooser, "File copiato: " + e.name, "Incollalo dove vuoi. Per WhatsApp tocca qui e scegli la chat.")
     }
 
     private fun apply(text: String) {
