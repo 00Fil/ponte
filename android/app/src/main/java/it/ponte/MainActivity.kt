@@ -50,6 +50,11 @@ import it.ponte.ui.SettingsScreen
 import it.ponte.ui.Space
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        Ponte.ensure(this).clipLog.onForeground()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

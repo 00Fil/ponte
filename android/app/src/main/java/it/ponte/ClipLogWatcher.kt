@@ -2,6 +2,7 @@ package it.ponte
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -27,26 +28,45 @@ import kotlinx.coroutines.launch
 class ClipLogWatcher(private val ctx: Context, private val r: Router) {
     private val main = Handler(Looper.getMainLooper())
     private var last = 0L
+    @Volatile private var proc: Process? = null
+    @Volatile private var approvedRun = false
 
     fun hasLogPermission() =
         ctx.checkSelfPermission(Manifest.permission.READ_LOGS) == PackageManager.PERMISSION_GRANTED
 
+    private fun ready() = hasLogPermission() && Settings.canDrawOverlays(ctx)
+
     fun start() {
         r.scope.launch {
             while (isActive) {
-                if (hasLogPermission() && Settings.canDrawOverlays(ctx)) watch()
-                // Se manca un permesso si ricontrolla ogni tanto; se il log si chiude si riparte.
+                if (ready() && proc?.isAlive != true) watch(foreground = false)
                 delay(30_000)
             }
         }
     }
 
-    private fun watch() {
+    /**
+     * Da Android 13 il sistema chiede "Consentire l'accesso ai log?" solo se l'app è in primo piano:
+     * avviato in background, logcat viene limitato in silenzio ai soli log di Ponte.
+     * Per questo, ogni volta che apri Ponte, se la lettura non era partita in primo piano si riavvia.
+     */
+    fun onForeground() {
+        if (!ready() || (approvedRun && proc?.isAlive == true)) return
+        proc?.destroy()
+        r.scope.launch { watch(foreground = true) }
+    }
+
+    private fun watch(foreground: Boolean) {
         try {
             val p = ProcessBuilder("logcat", "-T", "1", "-v", "brief", "-b", "main", "ClipboardService:E", "*:S")
                 .redirectErrorStream(true).start()
+            proc = p
+            approvedRun = foreground
+            val started = System.currentTimeMillis()
             p.inputStream.bufferedReader().useLines { lines ->
                 for (l in lines) {
+                    // La prima riga può essere vecchia (-T 1): la si ignora.
+                    if (System.currentTimeMillis() - started < 1500) continue
                     if (l.contains("Denying clipboard access") && l.contains(ctx.packageName)) {
                         val now = System.currentTimeMillis()
                         if (now - last > 250) {
@@ -66,17 +86,27 @@ class ClipLogWatcher(private val ctx: Context, private val r: Router) {
         val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         var done = false
         lateinit var view: View
-        fun finish() {
+        fun finish(read: Boolean) {
             if (done) return
             done = true
             try { wm.removeView(view) } catch (_: Exception) {}
+            // Se la finestra non ha preso il focus, si ripiega su un'attività trasparente.
+            if (!read) {
+                try {
+                    ctx.startActivity(
+                        Intent(ctx, ClipSendActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                            .putExtra("silent", true),
+                    )
+                } catch (_: Exception) {}
+            }
         }
         view = object : View(ctx) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
                 if (hasWindowFocus && !done) {
                     r.clipboard.readAndSendFocused()
-                    finish()
+                    finish(read = true)
                 }
             }
         }
@@ -88,8 +118,9 @@ class ClipLogWatcher(private val ctx: Context, private val r: Router) {
         ).apply { gravity = Gravity.TOP or Gravity.START }
         try {
             wm.addView(view, lp)
-            main.postDelayed({ finish() }, 800)
+            main.postDelayed({ finish(read = false) }, 400)
         } catch (_: Exception) {
+            finish(read = false)
         }
     }
 }
