@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import it.ponte.ui.GradientView
 import it.ponte.ui.Brand
 import it.ponte.ui.DownloadCard
+import it.ponte.ui.HomeScreen
+import kotlinx.coroutines.launch
 import it.ponte.ui.TabGlyph
 import androidx.compose.runtime.collectAsState
 import it.ponte.ui.Onboarding
@@ -87,7 +89,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni")
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -110,16 +112,18 @@ private fun PonteApp(r: Router) {
 @Composable
 private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
     val c = Canone.colors
-    var tab by remember { mutableIntStateOf(0) }
-    var previous by remember { mutableIntStateOf(0) }
-    fun select(i: Int) { previous = tab; tab = i }
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val tab = pager.currentPage
+    fun select(i: Int) { scope.launch { pager.animateScrollToPage(i) } }
 
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
-            0 -> DevicesScreen(r)
-            1 -> ClipScreen(r)
-            2 -> ArchiveScreen(r)
-            3 -> AudioScreen(r)
+            0 -> HomeScreen(r) { select(it) }
+            1 -> DevicesScreen(r)
+            2 -> ClipScreen(r)
+            3 -> ArchiveScreen(r)
+            4 -> AudioScreen(r)
             else -> SettingsScreen(r, replayOnboarding)
         }
     }
@@ -151,16 +155,9 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
         ) { dl?.let { Box(Modifier.padding(horizontal = Space.s4, vertical = Space.s2)) { DownloadCard(it) } } }
     }
 
+    // Le pagine si scorrono anche con il dito, di lato; il titolo e la barra seguono.
     val pages: @Composable (Modifier) -> Unit = { m ->
-        AnimatedContent(
-            tab, modifier = m,
-            transitionSpec = {
-                val dir = if (targetState > initialState) 1 else -1
-                (slideInHorizontally(tween(360)) { it / 8 * dir } + fadeIn(tween(300, 60)))
-                    .togetherWith(slideOutHorizontally(tween(260)) { -it / 8 * dir } + fadeOut(tween(180)))
-            },
-            label = "pagina",
-        ) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
+        androidx.compose.foundation.pager.HorizontalPager(pager, m, beyondViewportPageCount = 0) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
     }
 
     // Il layout segue la finestra, non il dispositivo: barra laterale da 1024, barra in basso sotto.

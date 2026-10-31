@@ -36,8 +36,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         InitViewerKeys();
-        InitUpdateCard();
         _r = r;
+        InitUpdateCard();
         _pages = new[] { Page0, Page1, Page2, Page3, Page4 };
         _hosts = new[] { Host0, Host1, Host2, Host3, Host4 };
 

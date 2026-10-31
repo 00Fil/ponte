@@ -42,18 +42,27 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
         fun o(x: Float, y: Float) = Offset(x * u, y * u)
         fun sz(w: Float, h: Float) = Size(w * u, h * u)
         when (index) {
-            0 -> { // schermo e piedistallo
+            0 -> { // casa
+                val roof = Path().apply { moveTo(3.5f * u, 11f * u); lineTo(12f * u, 4f * u); lineTo(20.5f * u, 11f * u) }
+                drawPath(roof, color, style = st)
+                val body = Path().apply {
+                    moveTo(6f * u, 9.6f * u); lineTo(6f * u, 19f * u); lineTo(10f * u, 19f * u); lineTo(10f * u, 14f * u)
+                    lineTo(14f * u, 14f * u); lineTo(14f * u, 19f * u); lineTo(18f * u, 19f * u); lineTo(18f * u, 9.6f * u)
+                }
+                drawPath(body, color, style = st)
+            }
+            1 -> { // schermo e piedistallo
                 drawRoundRect(color, o(4f, 5f), sz(16f, 11f), CornerRadius(2.5f * u), style = st)
                 drawLine(color, o(9f, 20f), o(15f, 20f), 1.8f * u, StrokeCap.Round)
                 drawLine(color, o(12f, 16f), o(12f, 20f), 1.8f * u, StrokeCap.Round)
             }
-            1 -> { // cartellina con molletta
+            2 -> { // cartellina con molletta
                 drawRoundRect(color, o(6f, 5f), sz(12f, 16f), CornerRadius(2.5f * u), style = st)
                 drawRoundRect(color, o(9f, 2.8f), sz(6f, 4f), CornerRadius(1.6f * u), style = st)
                 drawLine(color, o(9f, 12f), o(15f, 12f), 1.8f * u, StrokeCap.Round)
                 drawLine(color, o(9f, 16f), o(13f, 16f), 1.8f * u, StrokeCap.Round)
             }
-            2 -> { // fotografia
+            3 -> { // fotografia
                 drawRoundRect(color, o(3.5f, 5f), sz(17f, 14f), CornerRadius(3f * u), style = st)
                 val p = Path().apply {
                     moveTo(3.8f * u, 16.5f * u); lineTo(9f * u, 11.5f * u); lineTo(13f * u, 15.2f * u)
@@ -62,7 +71,7 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
                 drawPath(p, color, style = st)
                 drawCircle(color, 1.4f * u, o(15.8f, 9.2f), style = st)
             }
-            3 -> { // cuffie: le conchiglie scendono al posto con un rimbalzo
+            4 -> { // cuffie: le conchiglie scendono al posto con un rimbalzo
                 val dy = if (selected) (1f - gesture.value) * -2.4f * u else 0f
                 val arc = Path().apply { arcTo(androidx.compose.ui.geometry.Rect(o(4.2f, 3.5f), sz(15.6f, 15.6f)), 180f, 180f, true) }
                 drawPath(arc, color, style = st)

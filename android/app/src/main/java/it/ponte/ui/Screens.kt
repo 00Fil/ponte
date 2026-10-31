@@ -95,10 +95,10 @@ private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
 
 /** Prima scheda: le fibre animate dietro lo stato generale. Non reagisce al tocco, così non ruba lo scorrimento. */
 @Composable
-private fun HeroCard(title: String, sub: String) {
+internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.unit.Dp = 176.dp) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
-    Box(Modifier.fillMaxWidth().height(176.dp).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
+    Box(Modifier.fillMaxWidth().height(height).clip(shape).background(c.bgSunken).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
         GradientView(Modifier.matchParentSize(), shape = "hero", cell = 12, ascii = 1, touch = false, bg = c.bgSunken)
         Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.3f to androidx.compose.ui.graphics.Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.94f))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {

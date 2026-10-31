@@ -40,7 +40,28 @@ fun GradientView(modifier: Modifier, shape: String = "hero", cell: Int = 18, int
                 overScrollMode = View.OVER_SCROLL_NEVER
                 if (!touch) setOnTouchListener { _, _ -> false }
                 val q = "shape=$shape&cell=$cell&intro=${if (intro) 1 else 0}&light=${if (dark) 0 else 1}&touch=${if (touch) 1 else 0}${if (ascii >= 0) "&ascii=$ascii" else ""}${if (bg != null) "&bg=%06X".format(bg.toArgb() and 0xFFFFFF) else ""}"
-                loadUrl("file:///android_asset/gradient.html?$q")
+                settings.domStorageEnabled = true
+                // Le risorse (pagina e font) arrivano da un indirizzo https finto servito dagli asset: contesto sicuro, il font si carica.
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                        val u = request.url
+                        if (u.host != "ponte.app") return null
+                        val name = u.path.orEmpty().trimStart('/').ifEmpty { "gradient.html" }
+                        return try {
+                            val mime = when (name.substringAfterLast('.')) { "html" -> "text/html"; "ttf" -> "font/ttf"; "js" -> "text/javascript"; else -> "application/octet-stream" }
+                            android.webkit.WebResourceResponse(mime, "utf-8", 200, "OK", mapOf("Access-Control-Allow-Origin" to "*"), ctx.assets.open(name))
+                        } catch (_: Exception) {
+                            android.webkit.WebResourceResponse("text/plain", "utf-8", 404, "Not found", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                        }
+                    }
+                }
+                webChromeClient = object : android.webkit.WebChromeClient() {
+                    override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
+                        android.util.Log.w("PonteGL", "${m.message()} (${m.lineNumber()})")
+                        return true
+                    }
+                }
+                loadUrl("https://ponte.app/gradient.html?$q")
                 web.value = this
             }
         },
