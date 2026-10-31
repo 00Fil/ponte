@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { createBackup } from './backup.js';
 import { WebSocketServer } from 'ws';
 import { GALLERY_HTML } from './gallery.js';
 
@@ -82,6 +83,7 @@ export async function start({
     Readable.fromWeb(a.body).pipe(res);
   };
 
+  const backup = createBackup(dataDir, { reserveBytes: Number(process.env.PONTE_BACKUP_RESERVE_MB ?? 1024) * 1024 * 1024 });
   const filesDir = path.join(dataDir, 'files');
   const tmpDir = path.join(dataDir, 'tmp');
   const indexPath = path.join(dataDir, 'index.jsonl');
@@ -154,6 +156,9 @@ export async function start({
     }
     if (url.pathname === '/api/update' || url.pathname.startsWith('/api/update/')) {
       return void handleUpdate(url, res).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
+    }
+    if (url.pathname === '/api/storage' || url.pathname.startsWith('/api/backup/')) {
+      return void backup.handle(req, res, url).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
     }
     if (url.pathname === '/api/clips') {
       const since = Number(url.searchParams.get('since') ?? 0) || 0;
@@ -339,6 +344,7 @@ export async function start({
     for (const ws of wss.clients) if (now - ws.lastSeen > 180_000) ws.terminate();
   }, 60_000);
 
+  server.requestTimeout = 0; // i backup caricano file grandi su connessioni lente
   await new Promise((resolve) => server.listen(port, resolve));
   return {
     port: server.address().port,

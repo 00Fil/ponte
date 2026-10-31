@@ -50,6 +50,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val media = MediaSwitch(ctx, this)
     val clipLog = ClipLogWatcher(ctx, this)
     val updater = Updater(ctx, this)
+    val backup = Backup(ctx, this)
     private val hub = HubLink(this)
     private val lan = LanMesh(this)
     val bt = BtMesh(ctx, this)

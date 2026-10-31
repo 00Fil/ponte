@@ -81,7 +81,7 @@ import kotlinx.coroutines.withContext
 import java.util.Date
 
 @Composable
-private fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
+internal fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
     val c = Canone.colors
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -112,7 +112,7 @@ internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.un
 }
 
 @Composable
-private fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, color = Canone.colors.labelPrimary)
+internal fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, color = Canone.colors.labelPrimary)
 
 @Composable
 private fun CChip(label: String, selected: Boolean, onClick: () -> Unit) {
@@ -485,7 +485,7 @@ fun AudioScreen(r: Router) {
 // ---------------------------------------------------------------- Impostazioni
 
 @Composable
-fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
+fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () -> Unit = {}) {
     val ctx = LocalContext.current
     var name by remember { mutableStateOf(r.prefs.name) }
     var hub by remember { mutableStateOf(r.prefs.hubUrl) }
@@ -581,6 +581,14 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}) {
                     val busy = upd?.phase == Updater.Phase.Checking || upd?.phase == Updater.Phase.Downloading || upd?.phase == Updater.Phase.Installing
                     if (busy) UpdateRing(upd!!.phase, if ((upd?.total ?: 0) > 0) upd!!.done.toFloat() / upd!!.total else 0f, 28.dp)
                     else CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true, manual = true) } })
+                }
+            }
+        }
+        item {
+            CCard {
+                SectionTitle("Backup del telefono")
+                CRow("Copia tutto sul tuo server", "File, contatti, SMS, chiamate e app, da rimettere dopo lo sblocco del bootloader") {
+                    CButton("Apri", onBackup)
                 }
             }
         }

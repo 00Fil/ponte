@@ -108,13 +108,19 @@ private fun PonteApp(r: Router) {
         when (m) {
             0 -> Onboarding(r) { r.prefs.seenVersion = code; mode = 2 }
             1 -> UpdateDone(name) { r.prefs.seenVersion = code; mode = 2 }
-            else -> MainShell(r) { r.prefs.onboarded = false; mode = 0 }
+            else -> {
+                var showBackup by remember { mutableStateOf(false) }
+                Box(Modifier.fillMaxSize()) {
+                    MainShell(r, onBackup = { showBackup = true }) { r.prefs.onboarded = false; mode = 0 }
+                    if (showBackup) it.ponte.ui.BackupScreen(r) { showBackup = false }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
+private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> Unit) {
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -129,7 +135,7 @@ private fun MainShell(r: Router, replayOnboarding: () -> Unit) {
             2 -> ClipScreen(r)
             3 -> ArchiveScreen(r)
             4 -> AudioScreen(r)
-            else -> SettingsScreen(r, replayOnboarding)
+            else -> SettingsScreen(r, replayOnboarding, onBackup)
         }
     }
 
