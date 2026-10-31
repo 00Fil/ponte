@@ -448,6 +448,15 @@ fun SettingsScreen(r: Router) {
                     ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
                 }
                 CDivider()
+                PermRow("Appunti in tempo reale", "Legge i log di sistema per accorgersi di quando copi", r.clipLog.hasLogPermission()) {
+                    // Con il root si concede da soli; altrimenti serve il comando adb mostrato qui sotto.
+                    val ok = try {
+                        Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
+                    } catch (_: Exception) { false }
+                    toast(ctx, if (ok) "Concesso: riapri Ponte" else "Serve il comando adb, vedi sotto")
+                }
+                CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
+                CDivider()
                 PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
                 CDivider()
                 PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {

@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.flow.MutableStateFlow
 
+const val HISTORY_MAX = 5000
+
 data class ClipItem(val text: String, val from: String, val ts: Long, val mine: Boolean)
 
 class ClipboardSync(private val ctx: Context, private val r: Router) {
@@ -26,6 +28,16 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
             // un'attività trasparente passa un istante in primo piano e legge gli appunti.
             text == null -> if (android.provider.Settings.canDrawOverlays(ctx)) launchReader()
             text != lastApplied && text.isNotEmpty() && text.length <= 1_000_000 -> send(text)
+        }
+    }
+
+    /** Chiamato da ClipLogWatcher mentre una finestra di Ponte ha il focus: qui gli appunti sono leggibili. */
+    fun readAndSendFocused() {
+        if (System.currentTimeMillis() < ignoreUntil) return
+        val text = read() ?: return
+        if (text.isNotEmpty() && text != lastApplied && text.length <= 1_000_000) {
+            lastApplied = text
+            send(text)
         }
     }
 
@@ -90,7 +102,7 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
     fun catchUp() {
         val base = r.prefs.httpBase() ?: return
         try {
-            val req = okhttp3.Request.Builder().url("$base/api/clips?limit=50").header("Authorization", "Bearer ${r.prefs.token}").build()
+            val req = okhttp3.Request.Builder().url("$base/api/clips").header("Authorization", "Bearer ${r.prefs.token}").build()
             val arr = http.newCall(req).execute().use { if (!it.isSuccessful) return else org.json.JSONArray(it.body!!.string()) }
             val known = history.value.map { it.text }.toSet()
             val add = (0 until arr.length()).mapNotNull { i ->
@@ -98,12 +110,12 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
                 val t = o.optString("text")
                 if (t.isEmpty() || t in known) null else ClipItem(t, o.optString("from"), o.optLong("ts"), o.optString("from") == r.deviceId)
             }
-            if (add.isNotEmpty()) history.value = (history.value + add).sortedByDescending { it.ts }.take(50)
+            if (add.isNotEmpty()) history.value = (history.value + add).sortedByDescending { it.ts }.take(HISTORY_MAX)
         } catch (_: Exception) {
         }
     }
 
     private fun push(item: ClipItem) {
-        history.value = (listOf(item) + history.value.filter { it.text != item.text }).take(50)
+        history.value = (listOf(item) + history.value.filter { it.text != item.text }).take(HISTORY_MAX)
     }
 }

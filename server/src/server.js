@@ -43,7 +43,6 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
 
   // Cronologia degli appunti: resta sul server e i dispositivi la recuperano quando si riconnettono.
   const clipsPath = path.join(dataDir, 'clips.jsonl');
-  const MAX_CLIPS = 500;
   /** @type {Array<{id: string, from: string, ts: number, text: string}>} */
   let clips = [];
   if (fs.existsSync(clipsPath)) {
@@ -51,8 +50,6 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
       if (!line.trim()) continue;
       try { clips.push(JSON.parse(line)); } catch { /* riga rovinata */ }
     }
-    clips = clips.slice(-MAX_CLIPS);
-    fs.writeFileSync(clipsPath, clips.map((c) => JSON.stringify(c) + '\n').join(''));
   }
   const clipIds = new Set(clips.map((c) => c.id));
   const saveClip = (m) => {
@@ -61,12 +58,6 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     clips.push(c);
     clipIds.add(c.id);
     fs.appendFileSync(clipsPath, JSON.stringify(c) + '\n');
-    if (clips.length > MAX_CLIPS * 2) {
-      clips = clips.slice(-MAX_CLIPS);
-      clipIds.clear();
-      for (const x of clips) clipIds.add(x.id);
-      fs.writeFileSync(clipsPath, clips.map((x) => JSON.stringify(x) + '\n').join(''));
-    }
   };
 
   /** @type {Map<string, {ws: import('ws').WebSocket, info: object}>} */
@@ -103,7 +94,7 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     }
     if (url.pathname === '/api/clips') {
       const since = Number(url.searchParams.get('since') ?? 0) || 0;
-      const limit = Math.min(Number(url.searchParams.get('limit') ?? 50) || 50, MAX_CLIPS);
+      const limit = Number(url.searchParams.get('limit') ?? 0) || clips.length;
       const list = clips.filter((c) => c.ts > since).slice(-limit);
       res.setHeader('content-type', 'application/json');
       return void res.end(JSON.stringify(list));

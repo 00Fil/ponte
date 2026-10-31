@@ -47,6 +47,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val files = FileStore(ctx, this)
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
+    val clipLog = ClipLogWatcher(ctx, this)
     private val hub = HubLink(this)
     private val lan = LanMesh(this)
     private val shots = ScreenshotWatcher(ctx, this)
@@ -71,6 +72,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     fun start() {
         clipboard.start()
         headphones.start()
+        clipLog.start()
         screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)
             .createMulticastLock("ponte").apply { setReferenceCounted(false); if (screenOn) acquire() }

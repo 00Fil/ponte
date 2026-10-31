@@ -180,7 +180,7 @@ public sealed partial class MainWindow : Window
             h.Children.Add(Card(Text("Nessun appunto. Copia qualcosa su un dispositivo collegato e comparirà qui.", "Footnote")));
             return;
         }
-        foreach (var c in history)
+        foreach (var c in history.Take(100))
         {
             var item = c;
             var who = item.Mine ? "Inviato da qui" : _r.DeviceName(item.From);

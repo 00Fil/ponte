@@ -11,6 +11,7 @@ public sealed class ClipboardSync
     private readonly Router _r;
     private readonly DispatcherQueue _ui;
     private readonly List<ClipItem> _history = new();
+    private const int HistoryMax = 5000;
     private string? _lastApplied;
 
     public ClipboardSync(Router r, DispatcherQueue ui)
@@ -87,7 +88,7 @@ public sealed class ClipboardSync
         _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/clips?limit=50");
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/clips");
             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _r.S.Token);
             using var resp = await _http.SendAsync(req);
             if (!resp.IsSuccessStatusCode) return;
@@ -103,7 +104,7 @@ public sealed class ClipboardSync
                     _history.Add(new ClipItem(text, o.S("from"), o.L("ts"), o.S("from") == _r.DeviceId));
                 }
                 _history.Sort((a, b) => b.Ts.CompareTo(a.Ts));
-                if (_history.Count > 50) _history.RemoveRange(50, _history.Count - 50);
+                if (_history.Count > HistoryMax) _history.RemoveRange(HistoryMax, _history.Count - HistoryMax);
             }
             _r.Raise();
         }
@@ -116,7 +117,7 @@ public sealed class ClipboardSync
         {
             _history.RemoveAll(h => h.Text == item.Text);
             _history.Insert(0, item);
-            if (_history.Count > 50) _history.RemoveRange(50, _history.Count - 50);
+            if (_history.Count > HistoryMax) _history.RemoveRange(HistoryMax, _history.Count - HistoryMax);
         }
         _r.Raise();
     }
