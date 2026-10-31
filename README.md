@@ -28,6 +28,20 @@ Android non avvisa le app in background quando copi. Ponte se ne accorge leggend
 1. Impostazioni di Ponte, "Mostra sopra altre app".
 2. Dal PC con il debug USB attivo: `adb shell pm grant it.ponte.app android.permission.READ_LOGS` (con il root basta il pulsante nelle impostazioni di Ponte).
 
+## Rete privata (Headscale)
+Collegamento diretto e cifrato tra i tuoi dispositivi anche senza Wi-Fi in comune.
+1. Dokploy: nuovo Compose da questo repo, percorso `./headscale/docker-compose.yml`. Variabile `HEADSCALE_URL=https://rete.tuodominio.it`. Dominio sul servizio `headscale`, porta 8080, HTTPS.
+2. Nel terminale del container: `headscale users create io` e poi `headscale preauthkeys create --user io --reusable --expiration 24h` (copia la chiave).
+3. Su ogni dispositivo installa Tailscale:
+   - Windows: `tailscale up --login-server https://rete.tuodominio.it --authkey LA_CHIAVE`
+   - Android: app Tailscale, menu in alto, "Change server" (o tocca 5 volte la versione nelle impostazioni), inserisci l'indirizzo, poi accedi con la chiave.
+4. Fatto: Ponte trova da solo gli indirizzi 100.x tramite il server e ci si collega direttamente. In Dispositivi compare "Diretto".
+Su Windows consenti Ponte anche sulle reti pubbliche quando il firewall lo chiede, altrimenti gli altri non possono collegarsi a lui.
+
+## Passaggio automatico dell'audio
+In Audio: segna le cuffie, scegli le "Cuffie preferite qui" e cosa fare se non ci sono (casse o muto). Le cuffie vanno al dispositivo dove fai partire l'audio, se è quello che stai usando (ultimo tocco, mouse o tastiera). "Blocca qui" (anche dal riquadro rapido su Android o dal menu nell'area di notifica su Windows) le tiene ferme.
+Su Android spostare le cuffie richiede il root: Ponte lo chiede a Magisk/KernelSU la prima volta. Serve anche "Mostra sopra altre app" per capire quando usi il dispositivo.
+
 ## In tutti i dispositivi
 Stesso indirizzo del server e **stesso token** in Impostazioni.
 

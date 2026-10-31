@@ -99,7 +99,27 @@ public sealed class Router
     public JsonObject Hello() => Proto.NewMsg(
         "hello",
         ("from", DeviceId), ("name", S.Name), ("platform", "windows"),
-        ("caps", new JsonArray(Caps().Select(c => (JsonNode?)JsonValue.Create(c)).ToArray())));
+        ("caps", new JsonArray(Caps().Select(c => (JsonNode?)JsonValue.Create(c)).ToArray())),
+        ("addrs", new JsonArray(LocalAddrs().Select(a => (JsonNode?)JsonValue.Create(a)).ToArray())),
+        ("port", Proto.LanTcpPort));
+
+    /// <summary>Indirizzi IPv4 di questo PC, prima quelli della rete privata Headscale/Tailscale (100.64.0.0/10).</summary>
+    public static List<string> LocalAddrs()
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                            && n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Where(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Select(a => a.Address.ToString())
+                .Where(a => !a.StartsWith("169.254."))
+                .OrderBy(a => Proto.IsTailnet(a) ? 0 : 1)
+                .Take(8).ToList();
+        }
+        catch (Exception) { return new(); }
+    }
 
     public JsonObject HelloLan()
     {
@@ -216,6 +236,11 @@ public sealed class Router
                             list.Add(new Device(d.S("id"), d.S("name"), d.S("platform"), Proto.Caps(d), "server"));
                 lock (_lock) _hubDevices = list;
                 Changed?.Invoke();
+                // Il server fa da rubrica: con gli indirizzi diretti ci si collega senza passare da lui.
+                if (m["list"] is JsonArray all)
+                    foreach (var n in all)
+                        if (n is JsonObject d && d.S("id") != DeviceId && d["addrs"] is JsonArray ad && ad.Count > 0)
+                            _lan.Dial(d.S("id"), ad.Select(x => x?.GetValue<string>() ?? "").ToList(), (int)d.L("port", Proto.LanTcpPort));
                 break;
             case "clip":
                 Clip.OnRemote(m.S("text"), m.S("from"));
@@ -228,6 +253,12 @@ public sealed class Router
                 break;
             case "bt.claim":
                 Hp.OnClaim(m);
+                break;
+            case "focus":
+                Hp.OnFocus(m);
+                break;
+            case "audio.lock":
+                Hp.OnLock(m);
                 break;
             case "audio.route":
                 Audio.Route(m["sink"] is JsonValue v && v.TryGetValue<string>(out var sink) ? sink : null);

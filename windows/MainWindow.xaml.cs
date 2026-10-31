@@ -69,6 +69,8 @@ public sealed partial class MainWindow : Window
 
     private void OnTrayOpen(object sender, RoutedEventArgs e) => ShowWindow();
 
+    private void OnTrayLock(object sender, RoutedEventArgs e) => _r.Hp.ToggleLock();
+
     private void OnTrayExit(object sender, RoutedEventArgs e)
     {
         _exiting = true;
@@ -147,7 +149,7 @@ public sealed partial class MainWindow : Window
             Text("Collegamenti", "Title3"),
             Row("Server", "Per chi è fuori casa e per l'archivio", Badge(hub, tone)),
             Divider(),
-            Row("Rete locale", "Collegamento diretto, più veloce",
+            Row("Diretto", "Rete locale o rete privata, senza server",
                 !_r.S.LanEnabled ? Badge("Disattivata") : near == 0 ? Badge("Nessun dispositivo") : Badge($"{near} collegati", "Positive"))));
 
         var others = new List<UIElement> { Text("Altri dispositivi", "Title3") };
@@ -160,7 +162,7 @@ public sealed partial class MainWindow : Window
             var what = new List<string> { d.Platform == "windows" ? "Windows" : "Android" };
             if (d.Caps.Contains("audio-sink")) what.Add("riceve audio");
             if (d.Caps.Contains("notif-src")) what.Add("manda notifiche");
-            others.Add(Row(d.Name, string.Join(" · ", what), Badge(d.Via == "lan" ? "Rete locale" : "Server", d.Via == "lan" ? "Accent" : "Neutral")));
+            others.Add(Row(d.Name, string.Join(" · ", what), Badge(d.Via == "lan" ? "Diretto" : "Server", d.Via == "lan" ? "Accent" : "Neutral")));
         }
         h.Children.Add(Card(others.ToArray()));
     }
@@ -290,6 +292,34 @@ public sealed partial class MainWindow : Window
     {
         var h = Reset("Audio");
         var hps = _r.Hp.List;
+        string Who(string? id) => id == null ? "nessuno" : id == _r.DeviceId ? "questo PC" : _r.DeviceName(id);
+        var locked = _r.Hp.LockedBy == _r.DeviceId;
+        var pref = _r.S.PreferredHp;
+        var choices = new List<string> { "" };
+        choices.AddRange(hps.Select(x => x.Address));
+        var auto = new List<UIElement>
+        {
+            Text("Passaggio automatico", "Title3"),
+            Text("Le cuffie vanno dove fai partire l'audio, se è il dispositivo che stai usando. Blocca per tenerle qui mentre usi altro.", "Footnote"),
+            Row("Cuffie su", Who(_r.Hp.Holder)),
+            Row("In uso", Who(_r.Hp.Focus)),
+            Row("Blocco", _r.Hp.LockedBy == null ? "Nessuno" : "Su " + Who(_r.Hp.LockedBy),
+                Btn(locked ? "Sblocca" : "Blocca qui", () => _r.Hp.ToggleLock(), locked ? "SecondaryButton" : "PrimaryButton")),
+            Divider(),
+            Row("Cuffie preferite qui", hps.FirstOrDefault(x => x.Address == pref)?.Name ?? "Nessuna: passaggio spento", Btn("Cambia", () =>
+            {
+                _r.S.PreferredHp = choices[(choices.IndexOf(_r.S.PreferredHp) + 1) % choices.Count];
+                _r.S.Save();
+                RenderAudio();
+            })),
+            Row("Se non ci sono", _r.S.FallbackMute ? "Muto" : "Casse", Btn("Cambia", () =>
+            {
+                _r.S.FallbackMute = !_r.S.FallbackMute;
+                _r.S.Save();
+                RenderAudio();
+            })),
+        };
+        h.Children.Add(Card(auto.ToArray()));
         var marked = _r.S.Headphones;
         var hp = new List<UIElement>
         {
@@ -368,7 +398,7 @@ public sealed partial class MainWindow : Window
 
         h.Children.Add(Card(
             Text("Funzioni", "Title3"),
-            Toggle("Rete locale diretta", "Trova da solo i dispositivi sulla stessa rete", s.LanEnabled, on => { s.LanEnabled = on; Apply(); }),
+            Toggle("Collegamento diretto", "Rete locale e rete privata Headscale", s.LanEnabled, on => { s.LanEnabled = on; Apply(); }),
             Divider(),
             Toggle("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", s.Screenshots, on => { s.Screenshots = on; Apply(); }),
             Row("Cartella degli screenshot", s.EffectiveScreenshotFolder, Btn("Cambia", async () => await PickScreenshotFolderAsync())),

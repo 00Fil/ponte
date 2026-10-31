@@ -39,6 +39,7 @@
             <tb:TaskbarIcon.ContextFlyout>
                 <MenuFlyout>
                     <MenuFlyoutItem Text="Apri Ponte" Click="OnTrayOpen" />
+                    <MenuFlyoutItem Text="Blocca o sblocca l'audio qui" Click="OnTrayLock" />
                     <MenuFlyoutItem Text="Esci" Click="OnTrayExit" />
                 </MenuFlyout>
             </tb:TaskbarIcon.ContextFlyout>

@@ -44,6 +44,29 @@ class ClipTileService : TileService() {
     }
 }
 
+/** Riquadro "Blocca audio" nelle impostazioni rapide: le cuffie restano dove sono finché non lo spegni. */
+class AudioLockTileService : TileService() {
+    override fun onStartListening() {
+        super.onStartListening()
+        update()
+    }
+
+    override fun onClick() {
+        val r = Ponte.ensure(this)
+        r.headphones.toggleLock()
+        update()
+    }
+
+    private fun update() {
+        val r = Ponte.ensure(this)
+        val t = qsTile ?: return
+        t.state = if (r.headphones.lockedBy.value == r.deviceId) android.service.quicksettings.Tile.STATE_ACTIVE
+        else android.service.quicksettings.Tile.STATE_INACTIVE
+        t.label = "Blocca audio"
+        t.updateTile()
+    }
+}
+
 /** Voce "Invia con Ponte" nel menu Condividi di Android: testo come appunti, file e immagini nell'archivio. */
 class ShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {

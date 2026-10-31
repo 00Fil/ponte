@@ -1,0 +1,20 @@
+# Headscale: la rete privata dei tuoi dispositivi (server di controllo compatibile con Tailscale).
+# In Dokploy: Compose da questo repo, percorso ./headscale/docker-compose.yml,
+# dominio sul servizio "headscale", porta 8080, HTTPS attivo.
+services:
+  headscale:
+    image: headscale/headscale:0.29.2
+    restart: unless-stopped
+    command: serve
+    environment:
+      HEADSCALE_SERVER_URL: ${HEADSCALE_URL:?imposta HEADSCALE_URL, es. https://rete.tuodominio.it}
+    tmpfs:
+      - /var/run/headscale
+    volumes:
+      - ./config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+    expose:
+      - "8080"
+
+volumes:
+  headscale-data:

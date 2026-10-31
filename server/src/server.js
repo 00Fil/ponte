@@ -208,6 +208,11 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
           name: String(hello.name ?? 'Dispositivo').slice(0, 60),
           platform: hello.platform === 'android' ? 'android' : 'windows',
           caps: Array.isArray(hello.caps) ? hello.caps.filter((c) => typeof c === 'string').slice(0, 12) : [],
+          // Indirizzi su cui il dispositivo accetta collegamenti diretti (rete locale, rete privata Headscale).
+          addrs: Array.isArray(hello.addrs)
+            ? hello.addrs.filter((x) => typeof x === 'string' && /^[0-9a-fA-F:.]{3,45}$/.test(x)).slice(0, 8)
+            : [],
+          port: Number.isInteger(hello.port) && hello.port > 0 && hello.port < 65536 ? hello.port : 47800,
         };
         devices.set(dev.id, { ws, info });
         broadcastDevices();

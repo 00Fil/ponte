@@ -40,7 +40,9 @@ Sulla LAN il primo frame è `hello` con il campo `proof = hex(HMAC-SHA256(chiave
 | `audio.route` | `to` (la sorgente), `sink` (deviceId o `null`) | Chiede alla sorgente di mandare l'audio a `sink`, o di fermarsi |
 | `audio.start` | `sid` (u32), `to`, `rate` 48000, `ch` 2 | La sorgente annuncia il flusso al ricevitore |
 | `audio.stop` | `sid`, `to` | |
-| `bt.claim` | `hp` (indirizzo Bluetooth, maiuscolo, `AA:BB:CC:DD:EE:FF`) | Chi riceve e ha quelle cuffie segnate e collegate le scollega: al più un dispositivo le tiene. |
+| `bt.claim` | `hp` (indirizzo Bluetooth, maiuscolo, `AA:BB:CC:DD:EE:FF`), `prio` (2 bloccato qui, 1 in uso, 0 altro) | Chi riceve e ha quelle cuffie collegate le scollega. Se anche lui le ha prese da meno di 5 s vince `prio` più alto, poi l'id minore. |
+| `focus` | | Il mittente è il dispositivo in uso (ultimo input). Inviato al passaggio di mano o dopo 30 s di inattività, al più ogni 15 s. |
+| `audio.lock` | `by` (id o stringa vuota) | Blocco del passaggio automatico: le cuffie restano a `by` finché non si sblocca. |
 
 ## Audio
 
@@ -64,3 +66,14 @@ Tutte con `Authorization: Bearer TOKEN`, salvo `/healthz` e `/archivio` (la pagi
 - `GET /api/files?since=<ms>` → `[{fid,name,kind,mime,size,ts,from}]`, per recuperare ciò che si è perso da offline
 - `GET /api/files/<fid>` → il file
 - `GET /archivio` → galleria web di screenshot e file
+
+
+## Indirizzi diretti
+
+`hello` porta anche `addrs` (fino a 8 IPv4, prima quelli della rete privata 100.64.0.0/10) e `port`. Il server li gira nella lista `devices`.
+Ogni dispositivo li salva e si collega via TCP diretto (stesse regole della rete locale: si collega chi ha l'id minore, `hello` con `proof`).
+Con Headscale/Tailscale il collegamento è diretto e cifrato anche senza Wi-Fi in comune.
+
+## Cronologia degli appunti
+
+`GET /api/clips?since=<ms>&limit=<n>` (Bearer): tutti gli appunti passati dal server, dal più vecchio.

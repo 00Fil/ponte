@@ -13,6 +13,13 @@ public static class Proto
     public const int AudioRate = 48000;
     public const int AudioPacketBytes = 3840; // 20 ms, 48 kHz, stereo, 16 bit
 
+    /// <summary>Rete privata Headscale/Tailscale: 100.64.0.0/10.</summary>
+    public static bool IsTailnet(string ip)
+    {
+        var p = ip.Split('.');
+        return p.Length == 4 && p[0] == "100" && int.TryParse(p[1], out var b) && b >= 64 && b <= 127;
+    }
+
     public static JsonObject NewMsg(string t, params (string Key, JsonNode? Value)[] extra)
     {
         var o = new JsonObject

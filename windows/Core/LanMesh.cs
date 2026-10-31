@@ -125,7 +125,61 @@ public sealed class LanMesh
             _ = Task.Run(() => AcceptAsync(_listener, ct));
             _ = Task.Run(() => ListenAsync(_udp, ct));
             _ = Task.Run(() => AnnounceAsync(_udp, ct));
+            _ = Task.Run(() => RedialKnownAsync(ct));
         }
+    }
+
+    /// <summary>
+    /// Collegamento diretto a un dispositivo di cui si conoscono gli indirizzi (dal server o dalla rubrica salvata).
+    /// Prima l'indirizzo della rete privata: funziona anche senza Wi-Fi in comune ed è cifrato da WireGuard.
+    /// </summary>
+    public void Dial(string id, List<string> addrs, int port = Proto.LanTcpPort)
+    {
+        CancellationToken ct;
+        lock (_gate) { if (_cts == null) return; ct = _cts.Token; }
+        if (id == _r.DeviceId) return;
+        var clean = addrs.Where(a => IPAddress.TryParse(a, out _)).Distinct().OrderBy(a => Proto.IsTailnet(a) ? 0 : 1).ToList();
+        if (clean.Count == 0) return;
+        lock (_r.S.Peers) _r.S.Peers[id] = clean;
+        try { _r.S.Save(); } catch (Exception) { }
+        if (string.CompareOrdinal(_r.DeviceId, id) >= 0 || _r.HasLanLink(id)) return;
+        lock (_connecting) if (!_connecting.Add(id)) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var a in clean)
+                {
+                    var c = new TcpClient();
+                    try
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        timeout.CancelAfter(3000);
+                        await c.ConnectAsync(IPAddress.Parse(a), port, timeout.Token);
+                    }
+                    catch (Exception) { c.Dispose(); continue; }
+                    lock (_connecting) _connecting.Remove(id);
+                    new TcpLink(_r, c).Run();
+                    return;
+                }
+            }
+            finally { lock (_connecting) _connecting.Remove(id); }
+        });
+    }
+
+    private async Task RedialKnownAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(60_000, ct);
+                List<KeyValuePair<string, List<string>>> peers;
+                lock (_r.S.Peers) peers = _r.S.Peers.ToList();
+                foreach (var (id, addrs) in peers) if (!_r.HasLanLink(id)) Dial(id, addrs);
+            }
+        }
+        catch (Exception) { }
     }
 
     public void Stop()

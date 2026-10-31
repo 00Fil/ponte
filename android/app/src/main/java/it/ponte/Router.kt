@@ -59,6 +59,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            if (i.action == Intent.ACTION_USER_PRESENT) { headphones.onUserInput(); return }
             screenOn = i.action == Intent.ACTION_SCREEN_ON
             if (screenOn) {
                 multicast?.let { if (!it.isHeld) it.acquire() }
@@ -79,6 +80,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         ctx.registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
         })
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto,
         // questo recupera solo ciò che si fosse perso (telefono spento, rete assente).
@@ -111,7 +113,21 @@ class Router(val ctx: Context, val prefs: Prefs) {
     fun hello(): JSONObject = newMsg(
         "hello",
         "from" to deviceId, "name" to prefs.name, "platform" to "android", "caps" to JSONArray(caps()),
+        "addrs" to JSONArray(localAddrs()), "port" to LAN_TCP_PORT,
     )
+
+    /** Indirizzi IPv4 di questo dispositivo, prima quelli della rete privata Headscale/Tailscale (100.64.0.0/10). */
+    fun localAddrs(): List<String> = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList() }
+            .filterIsInstance<java.net.Inet4Address>()
+            .mapNotNull { it.hostAddress }
+            .sortedBy { if (isTailnet(it)) 0 else 1 }
+            .take(8)
+    } catch (_: Exception) {
+        emptyList()
+    }
 
     fun helloLan(): JSONObject = hello().put("proof", Lan.proof(prefs.token, deviceId))
 
@@ -169,12 +185,22 @@ class Router(val ctx: Context, val prefs: Prefs) {
                     if (d.optString("id") == deviceId) null
                     else Device(d.optString("id"), d.optString("name"), d.optString("platform"), parseCaps(d.optJSONArray("caps")), "server")
                 }
+                // Il server fa da rubrica: con gli indirizzi diretti ci si collega senza passare da lui.
+                for (i in 0 until a.length()) {
+                    val d = a.optJSONObject(i) ?: continue
+                    val id = d.optString("id")
+                    val addrs = d.optJSONArray("addrs") ?: continue
+                    if (id == deviceId || addrs.length() == 0) continue
+                    lan.dial(id, (0 until addrs.length()).map { addrs.optString(it) }, d.optInt("port", LAN_TCP_PORT))
+                }
             }
             "clip" -> clipboard.onRemote(m.optString("text"), m.optString("from"))
             "file.begin", "file.chunk", "file.end" -> files.onMessage(m)
             "audio.start" -> audio.onStart(m)
             "audio.stop" -> audio.onStop(m)
             "bt.claim" -> headphones.onClaim(m)
+            "focus" -> headphones.onFocus(m)
+            "audio.lock" -> headphones.onLock(m)
         }
     }
 

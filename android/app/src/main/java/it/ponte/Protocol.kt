@@ -27,6 +27,15 @@ data class Device(
     val via: String, // "lan" oppure "server"
 )
 
+/** Rete privata Headscale/Tailscale: 100.64.0.0/10. */
+fun isTailnet(ip: String): Boolean {
+    val p = ip.split('.')
+    if (p.size != 4) return false
+    val a = p[0].toIntOrNull() ?: return false
+    val b = p[1].toIntOrNull() ?: return false
+    return a == 100 && b in 64..127
+}
+
 fun parseCaps(a: JSONArray?): Set<String> = buildSet { if (a != null) for (i in 0 until a.length()) add(a.optString(i)) }
 
 /** Un collegamento verso un altro dispositivo (rete locale) o verso il server. */

@@ -137,7 +137,7 @@ fun DevicesScreen(r: Router) {
                 SectionTitle("Collegamenti")
                 CRow("Server", "Per chi è fuori casa e per l'archivio") { CBadge(hub, hubTone) }
                 CDivider()
-                CRow("Rete locale", "Collegamento diretto, più veloce") {
+                CRow("Diretto", "Rete locale o rete privata, senza server") {
                     when {
                         !lan -> CBadge("Disattivata")
                         near == 0 -> CBadge("Nessun dispositivo")
@@ -158,14 +158,14 @@ fun DevicesScreen(r: Router) {
                         if ("audio-src" in d.caps) add("sorgente audio")
                         if ("audio-sink" in d.caps) add("riceve audio")
                     }.joinToString(" · ")
-                    CRow(d.name, what) { CBadge(if (d.via == "lan") "Rete locale" else "Server", if (d.via == "lan") Tone.Accent else Tone.Neutral) }
+                    CRow(d.name, what) { CBadge(if (d.via == "lan") "Diretto" else "Server", if (d.via == "lan") Tone.Accent else Tone.Neutral) }
                 }
             }
         }
         item {
             CCard {
                 SectionTitle("Funzioni")
-                CSwitchRow("Rete locale diretta", "Trova da solo i dispositivi sulla stessa rete", lan) {
+                CSwitchRow("Collegamento diretto", "Rete locale e rete privata Headscale", lan) {
                     lan = it; r.prefs.lanEnabled = it; r.reconfigure()
                 }
                 CDivider()
@@ -330,7 +330,46 @@ fun AudioScreen(r: Router) {
     var idle by remember { mutableIntStateOf(r.prefs.idleMinutes) }
     var perm by remember { mutableStateOf(r.headphones.hasPermission()) }
     val askBt = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { perm = r.headphones.hasPermission() }
+    val holder by r.headphones.holder.collectAsState()
+    val focus by r.headphones.focus.collectAsState()
+    val lockedBy by r.headphones.lockedBy.collectAsState()
+    val rooted by r.headphones.rooted.collectAsState()
+    var preferred by remember { mutableStateOf(r.prefs.preferredHp) }
+    var mute by remember { mutableStateOf(r.prefs.fallbackMute) }
+    fun who(id: String?) = when (id) { null -> "nessuno"; r.deviceId -> "questo dispositivo"; else -> r.deviceName(id) }
     ScreenList("Audio") {
+        item {
+            CCard {
+                SectionTitle("Passaggio automatico")
+                CText("Le cuffie vanno dove fai partire l'audio, se è il dispositivo che stai usando. Blocca per tenerle qui mentre usi altro.")
+                CRow("Cuffie su", who(holder))
+                CRow("In uso", who(focus))
+                CRow("Blocco", if (lockedBy == null) "Nessuno" else "Su " + who(lockedBy)) {
+                    CButton(if (lockedBy == r.deviceId) "Sblocca" else "Blocca qui", { r.headphones.toggleLock() },
+                        kind = if (lockedBy == r.deviceId) ButtonKind.Secondary else ButtonKind.Primary)
+                }
+                CDivider()
+                val choices = listOf("") + hps.map { it.address }
+                CRow("Cuffie preferite qui", hps.firstOrNull { it.address == preferred }?.name ?: "Nessuna: passaggio spento") {
+                    CButton("Cambia", {
+                        preferred = choices[(choices.indexOf(preferred) + 1) % choices.size]
+                        r.prefs.preferredHp = preferred
+                    })
+                }
+                CRow("Se non ci sono", if (mute) "Muto" else "Altoparlante") {
+                    CButton("Cambia", { mute = !mute; r.prefs.fallbackMute = mute })
+                }
+                if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
+                    CButton("Collega qui", { r.headphones.connectHere(preferred) })
+                }
+                if (rooted == false) {
+                    CText("Su Android collegare e scollegare le cuffie richiede il root. Senza, Ponte avvisa gli altri dispositivi ma qui non può spostarle.", tertiary = true)
+                }
+                if (!android.provider.Settings.canDrawOverlays(ctx)) {
+                    CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
+                }
+            }
+        }
         item {
             CCard {
                 SectionTitle("Cuffie")
@@ -359,8 +398,7 @@ fun AudioScreen(r: Router) {
                 }
                 if (cannot) {
                     CText(
-                        "Android non permette a Ponte di scollegare le cuffie da questo dispositivo: lo fa solo con un permesso di sistema. " +
-                            "Gli altri dispositivi le rilasciano comunque, ma qui resta da scollegarle a mano.",
+                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito: serve il root, e Ponte deve averlo ottenuto.",
                         tertiary = true,
                     )
                 }

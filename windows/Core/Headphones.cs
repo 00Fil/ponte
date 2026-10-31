@@ -7,8 +7,11 @@ namespace Ponte;
 public sealed record HpInfo(string Address, string Name, bool Connected);
 
 /// <summary>
-/// Cuffie con due soli slot Bluetooth: tiene collegato al massimo un dispositivo alla volta.
-/// Quando qui parte l'audio avvisa gli altri (bt.claim), dopo un po' di inattività scollega le cuffie.
+/// Passaggio automatico delle cuffie, alla Apple.
+/// Il dispositivo "in uso" è l'ultimo su cui hai mosso il mouse, toccato o premuto un tasto.
+/// Quando su quel dispositivo parte l'audio, le cuffie preferite passano lì e gli altri le lasciano.
+/// Se non arrivano vale la riserva (casse o muto). "Blocca qui" le tiene dove sono.
+/// Al più un dispositivo tiene le cuffie; dopo un po' di silenzio le lascia libere.
 /// Il collegamento si governa attivando o disattivando i servizi audio Bluetooth del dispositivo.
 /// </summary>
 public sealed class Headphones
@@ -22,22 +25,99 @@ public sealed class Headphones
 
     private readonly Router _r;
     private readonly Dictionary<string, DateTime> _since = new();
+    private HashSet<string> _connectedBefore = new();
     private DateTime _lastActive = DateTime.MinValue;
-    private bool _wasActive;
+    private DateTime _lastFocusSent = DateTime.MinValue;
+    private DateTime _myClaim = DateTime.MinValue;
+    private uint _lastInputTick;
+    private bool _playing;
+    private bool _mutedByUs;
     private readonly MMDeviceEnumerator _enum = new();
 
     public IReadOnlyList<HpInfo> List { get; private set; } = Array.Empty<HpInfo>();
+    public string? Holder { get; private set; }
+    public string? Focus { get; private set; }
+    public string? LockedBy { get; private set; }
+
+    private string Me => _r.DeviceId;
 
     public Headphones(Router r) => _r = r;
 
-    public void Start() => Task.Run(async () =>
+    public void Start()
     {
-        while (true)
+        _ = Task.Run(async () =>
         {
-            try { Tick(); } catch (Exception) { }
-            await Task.Delay(_r.S.Headphones.Count == 0 ? 60_000 : 10_000);
+            while (true)
+            {
+                try { Tick(); } catch (Exception) { }
+                await Task.Delay(_r.S.Headphones.Count == 0 && _r.S.PreferredHp.Length == 0 ? 60_000 : 5_000);
+            }
+        });
+        // Mouse, tastiera e audio: controlli leggeri ogni secondo, solo se il passaggio automatico è acceso.
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    if (_r.S.PreferredHp.Length > 0)
+                    {
+                        CheckInput();
+                        OnPlayback(AudioIsPlaying());
+                    }
+                }
+                catch (Exception) { }
+                await Task.Delay(_r.S.PreferredHp.Length > 0 ? 1_000 : 10_000);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ dispositivo in uso
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LastInputInfo { public uint Size; public uint Time; }
+
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInputInfo info);
+
+    private void CheckInput()
+    {
+        var li = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        if (!GetLastInputInfo(ref li) || li.Time == _lastInputTick) return;
+        var wasIdle = unchecked(li.Time - _lastInputTick) > 30_000;
+        _lastInputTick = li.Time;
+        var now = DateTime.UtcNow;
+        if (Focus != Me || (wasIdle && now - _lastFocusSent > TimeSpan.FromSeconds(15)))
+        {
+            Focus = Me;
+            _lastFocusSent = now;
+            _r.Send(Proto.NewMsg("focus"));
+            _r.Raise();
         }
-    });
+    }
+
+    public void OnFocus(JsonObject m)
+    {
+        Focus = m.S("from");
+        _r.Raise();
+    }
+
+    // ------------------------------------------------------------------ blocco
+
+    public void ToggleLock()
+    {
+        LockedBy = LockedBy == Me ? null : Me;
+        _r.Send(Proto.NewMsg("audio.lock", ("by", LockedBy ?? "")));
+        _r.Raise();
+    }
+
+    public void OnLock(JsonObject m)
+    {
+        var by = m.S("by");
+        LockedBy = by.Length == 0 ? null : by;
+        _r.Raise();
+    }
+
+    // ------------------------------------------------------------------ audio
 
     private bool AudioIsPlaying()
     {
@@ -49,42 +129,121 @@ public sealed class Headphones
         catch (Exception) { return false; }
     }
 
+    private void OnPlayback(bool active)
+    {
+        if (active) _lastActive = DateTime.UtcNow;
+        if (active && !_playing) { _playing = true; OnAudioStart(); }
+        else if (!active) _playing = false;
+    }
+
+    private int Prio() => LockedBy == Me ? 2 : Focus == Me ? 1 : 0;
+
+    private bool MayTake() => LockedBy == Me || (LockedBy == null && (Focus == Me || Focus == null));
+
+    private void OnAudioStart()
+    {
+        var hp = _r.S.PreferredHp;
+        if (hp.Length == 0) return;
+        var here = IsConnected(hp);
+        if (!MayTake())
+        {
+            if (!here) Fallback();
+            return;
+        }
+        Claim(hp);
+        if (here) return;
+        _ = Task.Run(async () =>
+        {
+            SetServices(hp, enable: true);
+            await Task.Delay(8_000);
+            List = Enumerate();
+            if (!IsConnected(hp) && _playing) Fallback();
+            _r.Raise();
+        });
+    }
+
+    private void Fallback()
+    {
+        if (_r.S.FallbackMute) SetMute(true);
+    }
+
+    private void SetMute(bool mute)
+    {
+        if (mute == _mutedByUs) return;
+        try
+        {
+            using var dev = _enum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            dev.AudioEndpointVolume.Mute = mute;
+            _mutedByUs = mute;
+        }
+        catch (Exception) { }
+    }
+
+    // ------------------------------------------------------------------ cuffie
+
+    private bool IsConnected(string address) => List.Any(h => h.Address == address && h.Connected);
+
     private void Tick()
     {
         var before = List;
         List = Enumerate();
-        var marked = _r.S.Headphones;
-        var mine = List.Where(h => h.Connected && marked.Contains(h.Address)).ToList();
+        var marked = new HashSet<string>(_r.S.Headphones);
+        if (_r.S.PreferredHp.Length > 0) marked.Add(_r.S.PreferredHp);
+        var mine = List.Where(h => h.Connected && marked.Contains(h.Address)).Select(h => h.Address).ToHashSet();
         var now = DateTime.UtcNow;
-        foreach (var k in _since.Keys.Where(k => mine.All(h => h.Address != k)).ToList()) _since.Remove(k);
-        if (!List.SequenceEqual(before)) _r.Raise();
-        if (mine.Count == 0) { _wasActive = false; return; }
-        foreach (var h in mine) _since.TryAdd(h.Address, now);
 
-        var active = AudioIsPlaying();
-        if (active)
+        // Cuffie appena collegate qui (anche a mano): se tocca a noi le teniamo e avvisiamo gli altri, se no le lasciamo.
+        foreach (var a in mine.Except(_connectedBefore))
         {
-            _lastActive = now;
-            if (!_wasActive) foreach (var h in mine) Claim(h.Address);
+            SetMute(false);
+            if (LockedBy == Me || (LockedBy == null && (Focus == Me || Holder == null || Holder == Me))) Claim(a);
+            else Release(a);
         }
-        _wasActive = active;
+        // Cuffie appena andate via mentre l'audio suona: riserva.
+        if (_connectedBefore.Except(mine).Any() && _playing) Fallback();
+        _connectedBefore = mine;
+
+        foreach (var k in _since.Keys.Where(k => !mine.Contains(k)).ToList()) _since.Remove(k);
+        if (!List.SequenceEqual(before)) _r.Raise();
+        if (mine.Count == 0) return;
+        foreach (var a in mine) _since.TryAdd(a, now);
 
         var idle = _r.S.IdleMinutes;
-        if (idle > 0 && !active)
+        if (idle > 0 && !_playing && LockedBy != Me)
         {
             var since = _since.Values.Min();
             var reference = _lastActive > since ? _lastActive : since;
-            if (now - reference > TimeSpan.FromMinutes(idle)) foreach (var h in mine) Release(h.Address);
+            if (now - reference > TimeSpan.FromMinutes(idle)) foreach (var a in mine) Release(a);
         }
     }
 
-    public void Claim(string address) => _r.Send(Proto.NewMsg("bt.claim", ("hp", address)));
+    public void Claim(string address)
+    {
+        _myClaim = DateTime.UtcNow;
+        Holder = Me;
+        _r.Send(Proto.NewMsg("bt.claim", ("hp", address), ("prio", Prio())));
+        _r.Raise();
+    }
 
     public void OnClaim(JsonObject m)
     {
         var addr = m.S("hp");
-        if (addr.Length == 0 || !_r.S.Headphones.Contains(addr)) return;
-        if (List.Any(h => h.Address == addr && h.Connected)) Release(addr);
+        var from = m.S("from");
+        if (addr.Length == 0) return;
+        Holder = from;
+        _r.Raise();
+        if (!IsConnected(addr)) return;
+        // Due dispositivi le prendono insieme: vince il bloccato, poi quello in uso, poi l'id minore.
+        var theirs = (int)m.L("prio");
+        var mine = Prio();
+        if (DateTime.UtcNow - _myClaim < TimeSpan.FromSeconds(5) &&
+            (mine > theirs || (mine == theirs && string.CompareOrdinal(Me, from) < 0)))
+        {
+            Holder = Me;
+            return;
+        }
+        Release(addr);
+        if (_playing) Fallback();
     }
 
     /// <summary>Collega le cuffie a questo PC e avvisa gli altri di lasciarle.</summary>

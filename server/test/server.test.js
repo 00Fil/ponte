@@ -153,3 +153,21 @@ test('gli appunti restano sul server e si recuperano dopo', async () => {
   assert.equal(noAuth.status, 401);
   a.close();
 });
+
+test('la lista dispositivi porta gli indirizzi diretti', async () => {
+  const a = await new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://${base}/ws`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    ws.inbox = [];
+    ws.on('message', (d, isBin) => { if (!isBin) ws.inbox.push(JSON.parse(d.toString())); });
+    ws.on('open', () => {
+      ws.send(JSON.stringify({ t: 'hello', id: uid(), from: 'disp-addr', name: 'x', platform: 'android', caps: [], addrs: ['100.64.0.5', 'bad host!'], port: 47800 }));
+      resolve(ws);
+    });
+    ws.on('error', reject);
+  });
+  const list = await waitFor(() => a.inbox.find((m) => m.t === 'devices' && m.list.some((d) => d.id === 'disp-addr'))?.list);
+  const me = list.find((d) => d.id === 'disp-addr');
+  assert.deepEqual(me.addrs, ['100.64.0.5']);
+  assert.equal(me.port, 47800);
+  a.close();
+});

@@ -20,6 +20,12 @@ public sealed class Settings
     public bool ShowPhoneNotifications { get; set; } = true;
     public HashSet<string> Headphones { get; set; } = new();
     public int IdleMinutes { get; set; } = 10;
+    /// <summary>Cuffie in cui far andare l'audio di questo PC ("" = passaggio automatico spento).</summary>
+    public string PreferredHp { get; set; } = "";
+    /// <summary>Se le cuffie preferite non ci sono: true = muto, false = casse.</summary>
+    public bool FallbackMute { get; set; }
+    /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>
+    public Dictionary<string, List<string>> Peers { get; set; } = new();
 
     /// <summary>Il token sta su disco cifrato con DPAPI: si decifra solo con questo account Windows.</summary>
     [JsonIgnore]

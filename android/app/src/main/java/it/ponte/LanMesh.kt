@@ -94,6 +94,45 @@ class LanMesh(private val r: Router) {
             launch { accept() }
             launch { listen() }
             launch { announce() }
+            launch { redialKnown() }
+        }
+    }
+
+    /**
+     * Collegamento diretto a un dispositivo di cui si conoscono gli indirizzi (dal server o dalla rubrica salvata).
+     * Si prova prima l'indirizzo della rete privata: funziona anche senza Wi-Fi in comune ed è cifrato da WireGuard.
+     */
+    fun dial(id: String, addrs: List<String>, port: Int = LAN_TCP_PORT) {
+        if (job == null || id == r.deviceId) return
+        val clean = addrs.filter { it.isNotBlank() }.distinct().sortedBy { if (isTailnet(it)) 0 else 1 }
+        if (clean.isEmpty()) return
+        r.prefs.peers = r.prefs.peers + (id to clean)
+        // Si collega solo chi ha l'id minore: nasce un solo collegamento per coppia.
+        if (r.deviceId >= id || r.hasLanLink(id) || !connecting.add(id)) return
+        r.scope.launch {
+            try {
+                for (host in clean) {
+                    val s = Socket()
+                    try {
+                        s.connect(InetSocketAddress(host, port), 3_000)
+                    } catch (_: IOException) {
+                        try { s.close() } catch (_: IOException) {}
+                        continue
+                    }
+                    connecting.remove(id)
+                    TcpLink(r, s).run()
+                    return@launch
+                }
+            } finally {
+                connecting.remove(id)
+            }
+        }
+    }
+
+    private suspend fun redialKnown() {
+        while (r.scope.isActive) {
+            delay(if (r.screenOn) 60_000 else 300_000)
+            r.prefs.peers.forEach { (id, addrs) -> if (!r.hasLanLink(id)) dial(id, addrs) }
         }
     }
 

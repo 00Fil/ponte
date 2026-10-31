@@ -34,10 +34,32 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("notifications", false)
         set(v) = sp.edit().putBoolean("notifications", v).apply()
 
+    /** Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile. */
+    var peers: Map<String, List<String>>
+        get() = try {
+            val o = org.json.JSONObject(sp.getString("peers", "{}") ?: "{}")
+            o.keys().asSequence().associateWith { k -> o.getJSONArray(k).let { a -> (0 until a.length()).map { a.getString(it) } } }
+        } catch (_: Exception) { emptyMap() }
+        set(v) {
+            val o = org.json.JSONObject()
+            v.forEach { (k, l) -> o.put(k, org.json.JSONArray(l)) }
+            sp.edit().putString("peers", o.toString()).apply()
+        }
+
     /** Indirizzi Bluetooth delle cuffie marcate come tali. */
     var headphones: Set<String>
         get() = sp.getStringSet("headphones", emptySet()) ?: emptySet()
         set(v) = sp.edit().putStringSet("headphones", v.toSet()).apply()
+
+    /** Cuffie in cui far andare l'audio di questo dispositivo ("" = passaggio automatico spento). */
+    var preferredHp: String
+        get() = sp.getString("preferredHp", "") ?: ""
+        set(v) = sp.edit().putString("preferredHp", v).apply()
+
+    /** Se le cuffie preferite non ci sono: true = muto, false = casse. */
+    var fallbackMute: Boolean
+        get() = sp.getBoolean("fallbackMute", false)
+        set(v) = sp.edit().putBoolean("fallbackMute", v).apply()
 
     /** Minuti di inattività dopo i quali scollegare le cuffie (0 = mai). */
     var idleMinutes: Int
