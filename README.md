@@ -16,7 +16,9 @@ Due strade insieme: rete locale diretta e server (per quando sei fuori casa). Sp
 Prova locale: `cd server && npm install && PONTE_TOKEN=0123456789abcdef npm start`.
 
 ## 2. Windows
-Visual Studio 2022 con "Sviluppo desktop .NET" e Windows App SDK, apri `windows/Ponte.csproj` e avvia. Oppure `dotnet build -c Release`.
+Installazione: scarica `Ponte-Setup.exe` dalla release "latest" ed eseguilo (niente amministratore). Mette Ponte nel menu Start, lo avvia con Windows se vuoi, compare in Impostazioni > App e si aggiorna da solo.
+
+Da sorgente: Visual Studio 2022 con "Sviluppo desktop .NET" e Windows App SDK, apri `windows/Ponte.csproj` e avvia. Oppure `dotnet build -c Release`.
 In Strumento di cattura attiva il salvataggio automatico degli screenshot. Alla prima esecuzione consenti il firewall sulle reti private.
 
 ## 3. Android

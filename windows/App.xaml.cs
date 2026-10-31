@@ -13,8 +13,11 @@ public partial class App : Application
     {
         // Una sola copia alla volta: Ponte vive nell'area di notifica.
         _single = new Mutex(true, @"Local\Ponte-single-instance", out var first);
+        var show = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Ponte-show");
         if (!first)
         {
+            // Già in esecuzione (magari solo nell'area di notifica): la finestra esistente torna in primo piano.
+            if (!Environment.GetCommandLineArgs().Contains("--background")) show.Set();
             Environment.Exit(0);
             return;
         }
@@ -30,5 +33,9 @@ public partial class App : Application
         router.Start(_window.DispatcherQueue);
         _window.InitTray();
         if (!background) _window.Activate();
+        new Thread(() =>
+        {
+            while (true) { show.WaitOne(); _window.DispatcherQueue.TryEnqueue(_window.Present); }
+        }) { IsBackground = true }.Start();
     }
 }

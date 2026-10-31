@@ -47,7 +47,7 @@ public sealed partial class MainWindow
     /// <summary>Sfumature dal gradiente al colore di fondo, così testata e pagina si fondono.</summary>
     private void UpdateFades()
     {
-        var bg = (Root.Background as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Black;
+        var bg = (ContentArea.Background as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Black;
         Brush Fade(double from) => new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0),

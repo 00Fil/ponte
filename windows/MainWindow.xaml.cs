@@ -67,6 +67,9 @@ public sealed partial class MainWindow : Window
     /// <summary>Finestra senza barra di sistema: bordo e ridimensionamento restano, i tre pallini sono nostri. Dimensione e posizione seguono lo schermo.</summary>
     private void SetupFrame()
     {
+        // Senza Mica (Windows 10) la barra laterale usa il suo colore pieno.
+        if (!Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported()) SideFallback.Visibility = Visibility.Visible;
+        try { SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt }; } catch (Exception) { }
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragArea);
         if (AppWindow.Presenter is OverlappedPresenter p) p.SetBorderAndTitleBar(true, false);
@@ -113,6 +116,8 @@ public sealed partial class MainWindow : Window
         Tray.LeftClickCommand = new Cmd(() => DispatcherQueue.TryEnqueue(ShowWindow));
         Tray.ForceCreate();
     }
+
+    public void Present() => ShowWindow();
 
     private void ShowWindow()
     {

@@ -5,7 +5,7 @@
     xmlns:tb="using:H.NotifyIcon"
     Title="Ponte">
 
-    <Grid x:Name="Root" Background="{ThemeResource BgCanvas}">
+    <Grid x:Name="Root" Background="Transparent">
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="SideCol" Width="232" />
             <ColumnDefinition Width="*" />
@@ -16,13 +16,14 @@
         </Grid.RowDefinitions>
 
         <!-- Barra laterale, dalle finestre estese (1024) in su: marchio, voci con icona, stato del server. -->
-        <Grid x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Background="{ThemeResource BgSunken}"
+        <Grid x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Background="Transparent"
               BorderBrush="{ThemeResource LineSeparator}" BorderThickness="0,0,1,0" Padding="12,0,12,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <Border x:Name="SideFallback" Grid.RowSpan="3" Margin="-12,0,-12,-16" Background="{ThemeResource BgSunken}" Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,52,8,20">
                 <Border Width="28" Height="28" CornerRadius="9" Background="{StaticResource BrandGradient}">
                     <TextBlock Text="P" Foreground="White" FontFamily="{StaticResource FontSansMedium}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -39,7 +40,7 @@
         </Grid>
 
         <!-- Testata con il gradiente ASCII; sotto, le cinque pagine (una alla volta, ricostruite dal codice). Titolo e contenuto stanno sulla stessa colonna. -->
-        <Grid Grid.Row="0" Grid.Column="1">
+        <Grid x:Name="ContentArea" Grid.Row="0" Grid.Column="1" Background="{ThemeResource BgCanvas}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="132" />
                 <RowDefinition Height="*" />
