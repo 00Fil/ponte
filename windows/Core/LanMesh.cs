@@ -187,7 +187,7 @@ public sealed class LanMesh
                     try { await udp.SendAsync(data, data.Length, new IPEndPoint(target, Proto.LanUdpPort)); }
                     catch (Exception) { }
                 }
-                await Task.Delay(5000, ct);
+                await Task.Delay(10_000, ct);
             }
         }
         catch (Exception) { }

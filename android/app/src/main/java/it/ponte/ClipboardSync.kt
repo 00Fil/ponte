@@ -84,6 +84,25 @@ class ClipboardSync(private val ctx: Context, private val r: Router) {
         apply(text)
     }
 
+    private val http by lazy { okhttp3.OkHttpClient() }
+
+    /** Recupera dal server la cronologia degli appunti. Aggiorna solo la cronologia: gli appunti del telefono non si toccano. */
+    fun catchUp() {
+        val base = r.prefs.httpBase() ?: return
+        try {
+            val req = okhttp3.Request.Builder().url("$base/api/clips?limit=50").header("Authorization", "Bearer ${r.prefs.token}").build()
+            val arr = http.newCall(req).execute().use { if (!it.isSuccessful) return else org.json.JSONArray(it.body!!.string()) }
+            val known = history.value.map { it.text }.toSet()
+            val add = (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val t = o.optString("text")
+                if (t.isEmpty() || t in known) null else ClipItem(t, o.optString("from"), o.optLong("ts"), o.optString("from") == r.deviceId)
+            }
+            if (add.isNotEmpty()) history.value = (history.value + add).sortedByDescending { it.ts }.take(50)
+        } catch (_: Exception) {
+        }
+    }
+
     private fun push(item: ClipItem) {
         history.value = (listOf(item) + history.value.filter { it.text != item.text }).take(50)
     }

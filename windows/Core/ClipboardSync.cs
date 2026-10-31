@@ -77,6 +77,39 @@ public sealed class ClipboardSync
         });
     }
 
+    private HttpClient? _http;
+
+    /// <summary>Recupera dal server la cronologia degli appunti. Aggiorna solo la cronologia: gli appunti del PC non si toccano.</summary>
+    public async Task CatchUp()
+    {
+        var baseUrl = _r.S.HttpBase();
+        if (baseUrl == null) return;
+        _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/clips?limit=50");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _r.S.Token);
+            using var resp = await _http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) return;
+            if (System.Text.Json.Nodes.JsonNode.Parse(await resp.Content.ReadAsStringAsync()) is not System.Text.Json.Nodes.JsonArray list) return;
+            lock (_history)
+            {
+                var known = _history.Select(h => h.Text).ToHashSet();
+                foreach (var n in list)
+                {
+                    if (n is not System.Text.Json.Nodes.JsonObject o) continue;
+                    var text = o.S("text");
+                    if (text.Length == 0 || known.Contains(text)) continue;
+                    _history.Add(new ClipItem(text, o.S("from"), o.L("ts"), o.S("from") == _r.DeviceId));
+                }
+                _history.Sort((a, b) => b.Ts.CompareTo(a.Ts));
+                if (_history.Count > 50) _history.RemoveRange(50, _history.Count - 50);
+            }
+            _r.Raise();
+        }
+        catch (Exception) { /* senza rete si riprova alla prossima connessione */ }
+    }
+
     private void Push(ClipItem item)
     {
         lock (_history)

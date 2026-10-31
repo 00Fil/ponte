@@ -1,6 +1,11 @@
 package it.ponte
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PowerManager
+import kotlinx.coroutines.delay
 import android.net.wifi.WifiManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,12 +52,46 @@ class Router(val ctx: Context, val prefs: Prefs) {
     private val shots = ScreenshotWatcher(ctx, this)
     private var multicast: WifiManager.MulticastLock? = null
 
+    /** A schermo spento si risparmia: niente blocco multicast e annunci in rete locale molto più rari. */
+    @Volatile var screenOn = true
+        private set
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            screenOn = i.action == Intent.ACTION_SCREEN_ON
+            if (screenOn) {
+                multicast?.let { if (!it.isHeld) it.acquire() }
+                scope.launch { syncAll() }
+            } else {
+                multicast?.let { if (it.isHeld) it.release() }
+            }
+        }
+    }
+
     fun start() {
         clipboard.start()
         headphones.start()
+        screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-            .createMulticastLock("ponte").apply { setReferenceCounted(false); acquire() }
+            .createMulticastLock("ponte").apply { setReferenceCounted(false); if (screenOn) acquire() }
+        ctx.registerReceiver(screenReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        })
+        // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto,
+        // questo recupera solo ciò che si fosse perso (telefono spento, rete assente).
+        scope.launch {
+            while (true) {
+                delay(15 * 60_000L)
+                syncAll()
+            }
+        }
         reconfigure()
+    }
+
+    suspend fun syncAll() {
+        files.catchUp()
+        clipboard.catchUp()
     }
 
     /** Da chiamare dopo ogni cambio di impostazioni. */
@@ -93,7 +132,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     fun maxQueued(): Long = links.maxOfOrNull { it.queued() } ?: 0L
 
     fun onHubConnected() {
-        scope.launch { files.catchUp() }
+        scope.launch { syncAll() }
     }
 
     // ---- invio e ricezione ----

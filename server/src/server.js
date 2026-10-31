@@ -41,6 +41,34 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     }
   }
 
+  // Cronologia degli appunti: resta sul server e i dispositivi la recuperano quando si riconnettono.
+  const clipsPath = path.join(dataDir, 'clips.jsonl');
+  const MAX_CLIPS = 500;
+  /** @type {Array<{id: string, from: string, ts: number, text: string}>} */
+  let clips = [];
+  if (fs.existsSync(clipsPath)) {
+    for (const line of fs.readFileSync(clipsPath, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try { clips.push(JSON.parse(line)); } catch { /* riga rovinata */ }
+    }
+    clips = clips.slice(-MAX_CLIPS);
+    fs.writeFileSync(clipsPath, clips.map((c) => JSON.stringify(c) + '\n').join(''));
+  }
+  const clipIds = new Set(clips.map((c) => c.id));
+  const saveClip = (m) => {
+    if (typeof m.text !== 'string' || !m.text || clipIds.has(m.id)) return;
+    const c = { id: m.id, from: m.from, ts: m.ts, text: m.text };
+    clips.push(c);
+    clipIds.add(c.id);
+    fs.appendFileSync(clipsPath, JSON.stringify(c) + '\n');
+    if (clips.length > MAX_CLIPS * 2) {
+      clips = clips.slice(-MAX_CLIPS);
+      clipIds.clear();
+      for (const x of clips) clipIds.add(x.id);
+      fs.writeFileSync(clipsPath, clips.map((x) => JSON.stringify(x) + '\n').join(''));
+    }
+  };
+
   /** @type {Map<string, {ws: import('ws').WebSocket, info: object}>} */
   const devices = new Map();
   /** @type {Map<number, {from: string, to: string}>} */
@@ -72,6 +100,13 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     if (!(h.startsWith('Bearer ') && safeEqual(h.slice(7), token))) {
       res.statusCode = 401;
       return void res.end();
+    }
+    if (url.pathname === '/api/clips') {
+      const since = Number(url.searchParams.get('since') ?? 0) || 0;
+      const limit = Math.min(Number(url.searchParams.get('limit') ?? 50) || 50, MAX_CLIPS);
+      const list = clips.filter((c) => c.ts > since).slice(-limit);
+      res.setHeader('content-type', 'application/json');
+      return void res.end(JSON.stringify(list));
     }
     if (url.pathname === '/api/files') {
       const since = Number(url.searchParams.get('since') ?? 0) || 0;
@@ -163,8 +198,10 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
 
   wss.on('connection', (ws) => {
     let dev = null;
-    ws.isAlive = true;
-    ws.on('pong', () => { ws.isAlive = true; });
+    ws.lastSeen = Date.now();
+    const seenNow = () => { ws.lastSeen = Date.now(); };
+    ws.on('pong', seenNow);
+    ws.on('ping', seenNow);
 
     ws.on('message', (data, isBinary) => {
       if (!dev) {
@@ -194,6 +231,7 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
         return;
       }
 
+      seenNow();
       let m;
       try { m = JSON.parse(data.toString()); } catch { return; }
       if (typeof m.t !== 'string' || typeof m.id !== 'string') return;
@@ -208,7 +246,9 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
       } else if (m.t === 'audio.stop') {
         const st = streams.get(m.sid);
         if (st && st.from === dev.id) streams.delete(m.sid);
-      } else if (!['clip', 'notif', 'audio.route'].includes(m.t)) {
+      } else if (m.t === 'clip') {
+        saveClip(m);
+      } else if (!['notif', 'audio.route', 'bt.claim'].includes(m.t)) {
         return;
       }
 
@@ -233,13 +273,12 @@ export async function start({ port = 8080, token, dataDir, maxFileBytes = 200 * 
     ws.on('error', () => ws.terminate());
   });
 
+  // Il server non manda ping: sono i client a farlo (ogni 55-60 s), così il telefono non si sveglia di più.
+  // Qui si chiude solo chi tace da troppo.
   const beat = setInterval(() => {
-    for (const ws of wss.clients) {
-      if (!ws.isAlive) { ws.terminate(); continue; }
-      ws.isAlive = false;
-      ws.ping();
-    }
-  }, 20000);
+    const now = Date.now();
+    for (const ws of wss.clients) if (now - ws.lastSeen > 180_000) ws.terminate();
+  }, 60_000);
 
   await new Promise((resolve) => server.listen(port, resolve));
   return {

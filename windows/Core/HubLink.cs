@@ -83,7 +83,7 @@ public sealed class HubLink
 
             using var ws = new ClientWebSocket();
             ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
-            ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
+            ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(55);
             WsLink? link = null;
             try
             {

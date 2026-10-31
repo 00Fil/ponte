@@ -24,7 +24,7 @@ private class WsLink(private val ws: WebSocket) : Link {
 /** Collegamento con il server sul VPS. Si riconnette da solo, con attesa crescente. */
 class HubLink(private val r: Router) {
     private val client = OkHttpClient.Builder()
-        .pingInterval(20, TimeUnit.SECONDS)
+        .pingInterval(60, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
     private var job: Job? = null

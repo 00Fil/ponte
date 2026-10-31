@@ -35,7 +35,7 @@ public sealed class Headphones
         while (true)
         {
             try { Tick(); } catch (Exception) { }
-            await Task.Delay(5000);
+            await Task.Delay(_r.S.Headphones.Count == 0 ? 60_000 : 10_000);
         }
     });
 

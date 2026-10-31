@@ -138,7 +138,7 @@ class LanMesh(private val r: Router) {
                 } catch (_: IOException) {
                 }
             }
-            delay(5_000)
+            delay(if (r.screenOn) 10_000 else 120_000)
         }
     }
 

@@ -47,6 +47,15 @@ public sealed class Router
         Clip = new ClipboardSync(this, ui);
         Clip.Start();
         Hp.Start();
+        // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromMinutes(15));
+                try { await SyncAll(); } catch (Exception) { }
+            }
+        });
         Reconfigure();
     }
 
@@ -139,7 +148,14 @@ public sealed class Router
 
     public long MaxQueued() { lock (_lock) return _links.Count == 0 ? 0 : _links.Max(l => l.Queued); }
 
-    public void OnHubConnected() => _ = Task.Run(Files.CatchUp);
+    public void OnHubConnected() => _ = Task.Run(SyncAll);
+
+    /// <summary>Recupera dal server ciò che si fosse perso: archivio e cronologia degli appunti.</summary>
+    public async Task SyncAll()
+    {
+        await Files.CatchUp();
+        await Clip.CatchUp();
+    }
 
     // ---- invio e ricezione ----
 

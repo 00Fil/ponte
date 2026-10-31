@@ -44,7 +44,8 @@ class Headphones(private val ctx: Context, private val r: Router) {
         r.scope.launch {
             while (true) {
                 try { tick() } catch (_: Exception) {}
-                delay(5000)
+                // Senza cuffie segnate non c'è nulla da controllare spesso.
+                delay(if (r.prefs.headphones.isEmpty()) 60_000L else if (r.screenOn) 10_000L else 30_000L)
             }
         }
     }

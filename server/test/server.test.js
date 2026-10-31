@@ -140,3 +140,16 @@ test('audio: il binario passa solo dalla sorgente al destinatario annunciato', a
   assert.equal(sink.bin.length, 1);
   src.close(); sink.close(); other.close();
 });
+
+test('gli appunti restano sul server e si recuperano dopo', async () => {
+  const a = await connect('dispositivo-a');
+  const id = uid();
+  a.send(JSON.stringify({ t: 'clip', id, text: 'ciao dal server' }));
+  await new Promise((r) => setTimeout(r, 100));
+  const res = await fetch(`http://${base}/api/clips?since=0`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  const list = await res.json();
+  assert.ok(list.some((c) => c.id === id && c.text === 'ciao dal server' && c.from === 'dispositivo-a'));
+  const noAuth = await fetch(`http://${base}/api/clips`);
+  assert.equal(noAuth.status, 401);
+  a.close();
+});
