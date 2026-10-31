@@ -7,21 +7,33 @@ using System.Text.Json.Nodes;
 
 namespace Ponte;
 
+/// <summary>
+/// Collegamento diretto con un altro dispositivo su qualsiasi canale a flusso (TCP, Bluetooth RFCOMM).
+/// Trame: [u32 BE lunghezza][u8 tipo][dati], tipo 0 = JSON, 1 = audio. Il primo messaggio è hello con proof.
+/// </summary>
 internal sealed class TcpLink : ILink
 {
     private readonly Router _r;
-    private readonly TcpClient _c;
-    private readonly NetworkStream _s;
+    private readonly Stream _in;
+    private readonly Stream _out;
+    private readonly Action _close;
     private readonly object _w = new();
 
-    public TcpLink(Router r, TcpClient c)
+    public TcpLink(Router r, TcpClient c) : this(r, c.GetStream(), c.GetStream(), c.Close, "lan")
     {
-        _r = r;
-        _c = c;
-        _s = c.GetStream();
+        try { c.NoDelay = true; } catch (Exception) { }
     }
 
-    public string Kind => "lan";
+    public TcpLink(Router r, Stream input, Stream output, Action close, string kind)
+    {
+        _r = r;
+        _in = input;
+        _out = output;
+        _close = close;
+        Kind = kind;
+    }
+
+    public string Kind { get; }
     public string? PeerId { get; set; }
     public long Queued => 0;
 
@@ -34,8 +46,9 @@ internal sealed class TcpLink : ILink
             head[4] = type;
             lock (_w)
             {
-                _s.Write(head, 0, 5);
-                _s.Write(payload, 0, payload.Length);
+                _out.Write(head, 0, 5);
+                _out.Write(payload, 0, payload.Length);
+                _out.Flush();
             }
             return true;
         }
@@ -43,31 +56,30 @@ internal sealed class TcpLink : ILink
     }
 
     public bool SendJson(string json) => Write(0, Encoding.UTF8.GetBytes(json));
-    public bool SendAudio(byte[] packet) => Write(1, packet);
-    public void Close() { try { _c.Close(); } catch (Exception) { /* già chiuso */ } }
+    public bool SendAudio(byte[] packet) => Kind != "bt" && Write(1, packet);
+    public void Close() { try { _close(); } catch (Exception) { /* già chiuso */ } }
 
     public void Run()
     {
         try
         {
-            _c.NoDelay = true;
             Write(0, Encoding.UTF8.GetBytes(_r.HelloLan().ToJsonString()));
             var lenBuf = new byte[4];
+            var typeBuf = new byte[1];
             while (true)
             {
-                _s.ReadExactly(lenBuf, 0, 4);
+                _in.ReadExactly(lenBuf, 0, 4);
                 var len = BinaryPrimitives.ReadInt32BigEndian(lenBuf);
                 if (len < 1 || len > 1_048_576) break;
-                var type = _s.ReadByte();
-                if (type < 0) break;
+                _in.ReadExactly(typeBuf, 0, 1);
                 var buf = new byte[len - 1];
-                _s.ReadExactly(buf, 0, buf.Length);
+                _in.ReadExactly(buf, 0, buf.Length);
                 if (PeerId == null)
                 {
-                    if (type != 0 || !AcceptHello(buf)) break;
+                    if (typeBuf[0] != 0 || !AcceptHello(buf)) break;
                 }
-                else if (type == 0) _r.OnText(Encoding.UTF8.GetString(buf), this);
-                else if (type == 1) _r.OnAudio(buf);
+                else if (typeBuf[0] == 0) _r.OnText(Encoding.UTF8.GetString(buf), this);
+                else if (typeBuf[0] == 1) _r.OnAudio(buf);
             }
         }
         catch (Exception) { /* collegamento caduto */ }
@@ -86,7 +98,7 @@ internal sealed class TcpLink : ILink
         if (!Lan.Verify(_r.S.Token, from, m.S("proof"))) return false;
         PeerId = from;
         _r.AddLink(this);
-        _r.LanPeerSeen(new Device(from, m.S("name"), m.S("platform"), Proto.Caps(m), "lan"));
+        _r.LanPeerSeen(new Device(from, m.S("name"), m.S("platform"), Proto.Caps(m), Kind));
         return true;
     }
 }

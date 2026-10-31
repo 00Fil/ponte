@@ -10,6 +10,8 @@ import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -18,10 +20,21 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 
-private class TcpLink(private val r: Router, private val s: Socket) : Link {
-    override val kind = "lan"
+/**
+ * Collegamento diretto con un altro dispositivo su qualsiasi canale a flusso (TCP, Bluetooth RFCOMM).
+ * Trame: [u32 BE lunghezza][u8 tipo][dati], tipo 0 = JSON, 1 = audio. Il primo messaggio è hello con proof.
+ */
+class StreamLink(
+    private val r: Router,
+    inp: InputStream,
+    outp: OutputStream,
+    private val closer: () -> Unit,
+    override val kind: String,
+    private val initiator: Boolean = false,
+) : Link {
     override var peerId: String? = null
-    private val out = DataOutputStream(BufferedOutputStream(s.getOutputStream()))
+    private val out = DataOutputStream(BufferedOutputStream(outp))
+    private val input = DataInputStream(BufferedInputStream(inp))
     private val lock = Any()
 
     private fun write(type: Int, payload: ByteArray): Boolean = try {
@@ -39,20 +52,17 @@ private class TcpLink(private val r: Router, private val s: Socket) : Link {
 
     override fun sendJson(s: String) = write(0, s.toByteArray())
     override fun queued() = 0L
-    override fun close() { try { s.close() } catch (_: IOException) {} }
+    override fun close() { try { closer() } catch (_: Exception) {} }
 
     fun run() {
         try {
-            s.tcpNoDelay = true
-            s.keepAlive = true
             write(0, r.helloLan().toString().toByteArray())
-            val inp = DataInputStream(BufferedInputStream(s.getInputStream()))
             while (true) {
-                val len = inp.readInt()
+                val len = input.readInt()
                 if (len < 1 || len > 1_048_576) break
-                val type = inp.readUnsignedByte()
+                val type = input.readUnsignedByte()
                 val buf = ByteArray(len - 1)
-                inp.readFully(buf)
+                input.readFully(buf)
                 if (peerId == null) {
                     if (type != 0 || !acceptHello(buf)) break
                 } else if (type == 0) {
@@ -73,11 +83,18 @@ private class TcpLink(private val r: Router, private val s: Socket) : Link {
         val from = m.optString("from")
         if (m.optString("t") != "hello" || from.isEmpty() || from == r.deviceId) return false
         if (!Lan.verify(r.prefs.token, from, m.optString("proof"))) return false
+        // Bluetooth tra due Android: si chiamano a vicenda; resta il collegamento aperto da chi ha l'id minore.
+        if (kind == "bt" && initiator && m.optString("platform") == "android" && r.deviceId > from) return false
         peerId = from
         r.addLink(this)
-        r.lanPeerSeen(Device(from, m.optString("name"), m.optString("platform"), parseCaps(m.optJSONArray("caps")), "lan"))
+        r.lanPeerSeen(Device(from, m.optString("name"), m.optString("platform"), parseCaps(m.optJSONArray("caps")), kind))
         return true
     }
+}
+
+fun tcpLink(r: Router, s: Socket): StreamLink {
+    try { s.tcpNoDelay = true; s.keepAlive = true } catch (_: Exception) {}
+    return StreamLink(r, s.getInputStream(), s.getOutputStream(), { s.close() }, "lan")
 }
 
 /** Scoperta in UDP broadcast e collegamenti TCP diretti tra i dispositivi di casa. */
@@ -120,11 +137,26 @@ class LanMesh(private val r: Router) {
                         continue
                     }
                     connecting.remove(id)
-                    TcpLink(r, s).run()
+                    tcpLink(r, s).run()
                     return@launch
                 }
             } finally {
                 connecting.remove(id)
+            }
+        }
+    }
+
+    /** Collegamento a un indirizzo di cui non si conosce ancora il dispositivo (es. capo gruppo Wi-Fi Direct). */
+    fun dialHost(host: String, port: Int = LAN_TCP_PORT) {
+        if (job == null || !connecting.add("host:$host")) return
+        r.scope.launch {
+            try {
+                val s = Socket()
+                s.connect(InetSocketAddress(host, port), 5_000)
+                tcpLink(r, s).run()
+            } catch (_: IOException) {
+            } finally {
+                connecting.remove("host:$host")
             }
         }
     }
@@ -150,7 +182,7 @@ class LanMesh(private val r: Router) {
             val ss = ServerSocket(LAN_TCP_PORT).also { server = it }
             while (true) {
                 val s = ss.accept()
-                r.scope.launch { TcpLink(r, s).run() }
+                r.scope.launch { tcpLink(r, s).run() }
             }
         } catch (_: IOException) {
         }
@@ -200,7 +232,7 @@ class LanMesh(private val r: Router) {
                     try {
                         val s = Socket()
                         s.connect(InetSocketAddress(host, port), 3_000)
-                        TcpLink(r, s).run()
+                        tcpLink(r, s).run()
                     } catch (_: IOException) {
                     } finally {
                         connecting.remove(id)

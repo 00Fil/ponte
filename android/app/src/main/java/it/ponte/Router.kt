@@ -50,6 +50,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val clipLog = ClipLogWatcher(ctx, this)
     private val hub = HubLink(this)
     private val lan = LanMesh(this)
+    val bt = BtMesh(ctx, this)
+    val p2p = P2pMesh(ctx, this)
     private val shots = ScreenshotWatcher(ctx, this)
     private var multicast: WifiManager.MulticastLock? = null
 
@@ -74,6 +76,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
         clipboard.start()
         headphones.start()
         clipLog.start()
+        bt.start()
+        p2p.start()
         screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)
             .createMulticastLock("ponte").apply { setReferenceCounted(false); if (screenOn) acquire() }
@@ -140,11 +144,16 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     fun removeLink(l: Link) {
         links.remove(l)
-        if (l.kind == "lan") l.peerId?.let { id -> lanPeers.value = lanPeers.value - id }
+        if (l.kind != "hub") l.peerId?.let { id ->
+            if (links.none { it.peerId == id && it.kind != "hub" }) lanPeers.value = lanPeers.value - id
+        }
         if (l.kind == "hub") hubDevices.value = emptyList()
     }
 
     fun hasLanLink(id: String) = links.any { it.kind == "lan" && it.peerId == id }
+
+    /** Né server né rete locale: restano Bluetooth e Wi-Fi Direct. */
+    fun isolated() = hubState.value != "Connesso" && links.none { it.kind == "lan" }
     fun closeLanLinks() = links.filter { it.kind == "lan" }.forEach { it.close(); removeLink(it) }
     fun lanPeerSeen(d: Device) { lanPeers.value = lanPeers.value + (d.id to d) }
     fun maxQueued(): Long = links.maxOfOrNull { it.queued() } ?: 0L
@@ -160,10 +169,15 @@ class Router(val ctx: Context, val prefs: Prefs) {
         seen[m.getString("id")] = true
         val text = m.toString()
         val to = m.optString("to").ifEmpty { null }
+        val hubUp = links.any { it.kind == "hub" }
+        // Il Bluetooth è lento: si usa solo quando quel dispositivo non è raggiungibile in altro modo.
+        val usable = links.filter { l ->
+            l.kind != "bt" || (!hubUp && links.none { it.kind == "lan" && it.peerId == l.peerId })
+        }
         val targets = if (to != null) {
-            links.filter { it.peerId == to }.ifEmpty { links.filter { it.kind == "hub" } }
+            usable.filter { it.peerId == to }.ifEmpty { usable.filter { it.kind == "hub" } }
         } else {
-            links.toList()
+            usable
         }
         // Le scritture su socket non possono stare sul thread principale (NetworkOnMainThreadException).
         sender.execute { for (l in targets) try { l.sendJson(text) } catch (_: Exception) {} }
@@ -203,6 +217,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "audio.lock" -> headphones.onLock(m)
         }
     }
+
+    fun dialHost(host: String) = lan.dialHost(host)
 
     fun onAudio(b: ByteArray) = audio.onPacket(b)
 

@@ -162,7 +162,7 @@ public sealed partial class MainWindow : Window
             var what = new List<string> { d.Platform == "windows" ? "Windows" : "Android" };
             if (d.Caps.Contains("audio-sink")) what.Add("riceve audio");
             if (d.Caps.Contains("notif-src")) what.Add("manda notifiche");
-            others.Add(Row(d.Name, string.Join(" · ", what), Badge(d.Via == "lan" ? "Diretto" : "Server", d.Via == "lan" ? "Accent" : "Neutral")));
+            others.Add(Row(d.Name, string.Join(" · ", what), Badge(d.Via switch { "lan" => "Diretto", "bt" => "Bluetooth", _ => "Server" }, d.Via == "server" ? "Neutral" : "Accent")));
         }
         h.Children.Add(Card(others.ToArray()));
     }

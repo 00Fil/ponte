@@ -42,6 +42,11 @@ Su Windows consenti Ponte anche sulle reti pubbliche quando il firewall lo chied
 In Audio: segna le cuffie, scegli le "Cuffie preferite qui" e cosa fare se non ci sono (casse o muto). Le cuffie vanno al dispositivo dove fai partire l'audio, se è quello che stai usando (ultimo tocco, mouse o tastiera). "Blocca qui" (anche dal riquadro rapido su Android o dal menu nell'area di notifica su Windows) le tiene ferme.
 Su Android spostare le cuffie richiede il root: Ponte lo chiede a Magisk/KernelSU la prima volta. Serve anche "Mostra sopra altre app" per capire quando usi il dispositivo.
 
+## Senza internet né Wi-Fi in comune
+- **Stesso Wi-Fi o hotspot del telefono**: funziona tutto, anche senza internet.
+- **Bluetooth** (telefono e tablet con il PC, e tra loro): basta che siano associati. Appunti, notifiche, cuffie e file piccoli. Su Android concedi "Bluetooth" nelle impostazioni di Ponte.
+- **Wi-Fi Direct** tra telefono e tablet: anche file grandi e audio, a schermo acceso. Concedi "Dispositivi Wi-Fi vicini".
+
 ## In tutti i dispositivi
 Stesso indirizzo del server e **stesso token** in Impostazioni.
 

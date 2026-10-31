@@ -158,7 +158,7 @@ fun DevicesScreen(r: Router) {
                         if ("audio-src" in d.caps) add("sorgente audio")
                         if ("audio-sink" in d.caps) add("riceve audio")
                     }.joinToString(" · ")
-                    CRow(d.name, what) { CBadge(if (d.via == "lan") "Diretto" else "Server", if (d.via == "lan") Tone.Accent else Tone.Neutral) }
+                    CRow(d.name, what) { CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent) }
                 }
             }
         }
@@ -447,6 +447,8 @@ fun SettingsScreen(r: Router) {
     }
     val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
     val askImages = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++; r.reconfigure() }
+    val askOther = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    val nearbyPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
 
     @Composable
     fun PermRow(title: String, note: String, granted: Boolean, action: () -> Unit) {
@@ -494,6 +496,16 @@ fun SettingsScreen(r: Router) {
                     toast(ctx, if (ok) "Concesso: riapri Ponte" else "Serve il comando adb, vedi sotto")
                 }
                 CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
+                CDivider()
+                if (Build.VERSION.SDK_INT >= 31) {
+                    PermRow("Bluetooth", "Cuffie e collegamento di riserva senza Wi-Fi", has(ctx, Manifest.permission.BLUETOOTH_CONNECT)) {
+                        askOther.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                    CDivider()
+                }
+                PermRow("Dispositivi Wi-Fi vicini", "Wi-Fi Direct tra telefono e tablet quando non c'è rete", has(ctx, nearbyPerm)) {
+                    askOther.launch(nearbyPerm)
+                }
                 CDivider()
                 PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
                 CDivider()

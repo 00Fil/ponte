@@ -16,6 +16,7 @@ public sealed class Router
 
     private readonly HubLink _hub;
     private readonly LanMesh _lan;
+    private readonly BtMesh _bt;
     private ScreenshotWatcher? _shots;
 
     private readonly object _lock = new();
@@ -40,6 +41,7 @@ public sealed class Router
         Hp = new Headphones(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
+        _bt = new BtMesh(this);
     }
 
     public void Start(DispatcherQueue ui)
@@ -47,6 +49,7 @@ public sealed class Router
         Clip = new ClipboardSync(this, ui);
         Clip.Start();
         Hp.Start();
+        _ = _bt.StartAsync();
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
         _ = Task.Run(async () =>
         {
@@ -145,7 +148,7 @@ public sealed class Router
         lock (_lock)
         {
             _links.Remove(l);
-            if (l.Kind == "lan" && l.PeerId != null) _lanPeers.Remove(l.PeerId);
+            if (l.Kind != "hub" && l.PeerId != null && !_links.Any(x => x.PeerId == l.PeerId && x.Kind != "hub")) _lanPeers.Remove(l.PeerId);
             if (l.Kind == "hub") _hubDevices = new();
         }
         Changed?.Invoke();
@@ -194,9 +197,12 @@ public sealed class Router
     {
         lock (_lock)
         {
-            if (to == null) return _links.ToList();
-            var direct = _links.Where(l => l.PeerId == to).ToList();
-            return direct.Count > 0 ? direct : _links.Where(l => l.Kind == "hub").ToList();
+            // Il Bluetooth è lento: si usa solo quando quel dispositivo non è raggiungibile in altro modo.
+            var hubUp = _links.Any(l => l.Kind == "hub");
+            var usable = _links.Where(l => l.Kind != "bt" || (!hubUp && !_links.Any(x => x.Kind == "lan" && x.PeerId == l.PeerId))).ToList();
+            if (to == null) return usable;
+            var direct = usable.Where(l => l.PeerId == to).ToList();
+            return direct.Count > 0 ? direct : usable.Where(l => l.Kind == "hub").ToList();
         }
     }
 
@@ -212,7 +218,8 @@ public sealed class Router
     public bool SendAudio(string sinkId, byte[] packet)
     {
         var targets = Targets(sinkId);
-        return targets.Count > 0 && targets[0].SendAudio(packet);
+        var t = targets.FirstOrDefault(l => l.Kind != "bt");
+        return t != null && t.SendAudio(packet);
     }
 
     public void OnText(string text, ILink link)
