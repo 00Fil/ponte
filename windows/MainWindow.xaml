@@ -15,7 +15,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Barra laterale, dalle finestre estese (1024) in su: marchio, voci con icona, stato del server. -->
+        <!-- Barra laterale, dalle finestre estese (1024) in su: marchio, voci con icona e contatori, questo dispositivo. -->
         <Grid x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Background="Transparent"
               BorderBrush="{ThemeResource LineSeparator}" BorderThickness="0,0,1,0" Padding="12,0,12,16">
             <Grid.RowDefinitions>
@@ -30,19 +30,47 @@
                 </Border>
                 <TextBlock Text="Ponte" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
             </StackPanel>
-            <Grid Grid.Row="1">
-                <!-- Indicatore della voce attiva: scorre sotto le voci. -->
-                <Border x:Name="NavIndicator" Height="34" Margin="0,3,0,0" VerticalAlignment="Top" CornerRadius="8"
+            <!-- Voci in tre gruppi: spazio di lavoro, strumenti, impostazioni in fondo. L'indicatore scivola sotto la voce attiva. -->
+            <Grid x:Name="NavLayer" Grid.Row="1" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border x:Name="NavIndicator" Grid.RowSpan="4" Height="36" VerticalAlignment="Top" CornerRadius="9"
                         Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1">
-                    <Border Width="3" Height="14" CornerRadius="1.5" HorizontalAlignment="Left" Margin="-1,0,0,0" Background="{ThemeResource AccentDefault}" />
+                    <Border Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" Margin="-1,0,0,0" Background="{ThemeResource AccentDefault}" />
                 </Border>
-                <StackPanel x:Name="SideTabs" Spacing="2" />
-            </Grid>
-            <Border Grid.Row="2" Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1" CornerRadius="12" Padding="12,10">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Ellipse x:Name="SideDot" Width="8" Height="8" Fill="{ThemeResource LabelDisabled}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SideStatus" Style="{StaticResource Footnote}" VerticalAlignment="Center" />
+                <StackPanel Grid.Row="0" Spacing="2">
+                    <TextBlock Text="SPAZIO" Style="{StaticResource SectionLabel}" />
+                    <StackPanel x:Name="NavMain" Spacing="2" />
                 </StackPanel>
+                <StackPanel Grid.Row="1" Spacing="2" Margin="0,18,0,0">
+                    <TextBlock Text="STRUMENTI" Style="{StaticResource SectionLabel}" />
+                    <StackPanel x:Name="NavTools" Spacing="2" />
+                </StackPanel>
+                <StackPanel Grid.Row="3" Spacing="2">
+                    <Border Style="{StaticResource DividerStyle}" Margin="8,0,8,10" />
+                    <StackPanel x:Name="NavFoot" Spacing="2" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Questo dispositivo, come l'account in un'app di sistema. -->
+            <Border Grid.Row="2" Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1" CornerRadius="12" Padding="10">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="16" Background="{ThemeResource AccentSubtle}">
+                        <FontIcon Glyph="&#xE7F4;" FontSize="15" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{ThemeResource AccentOnSubtle}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="SideDevice" Style="{StaticResource BodyText}" FontFamily="{StaticResource FontSansMedium}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="SideVersion" Style="{StaticResource Footnote}" Foreground="{ThemeResource LabelTertiary}" />
+                    </StackPanel>
+                </Grid>
             </Border>
         </Grid>
 

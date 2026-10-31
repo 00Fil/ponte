@@ -67,6 +67,12 @@ class Updater(private val ctx: Context, private val r: Router) {
             }
             status.value = "Installo la versione 1.0.$build"
             if (Root.available() && rootInstall(apk)) return
+            if (!ctx.packageManager.canRequestPackageInstalls()) {
+                status.value = "Consenti a Ponte di installare app, poi riprova"
+                tell(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${ctx.packageName}")),
+                    "Serve un permesso per aggiornare", "Tocca per consentire a Ponte di installare i suoi aggiornamenti")
+                return
+            }
             sessionInstall(apk)
         } catch (_: Exception) {
             status.value = "Aggiornamento non riuscito, riprovo più tardi"
@@ -79,10 +85,18 @@ class Updater(private val ctx: Context, private val r: Router) {
 
     private fun rootInstall(apk: File): Boolean = try {
         val p = ProcessBuilder("su", "-c", "pm install -r \"${apk.absolutePath}\"").redirectErrorStream(true).start()
-        p.waitFor(120, TimeUnit.SECONDS) && p.exitValue() == 0
+        val out = p.inputStream.bufferedReader().readText()
+        val ok = p.waitFor(120, TimeUnit.SECONDS) && p.exitValue() == 0
+        if (!ok && out.contains("UPDATE_INCOMPATIBLE")) {
+            status.value = DIFFERENT_KEY
+            tell(null, "Reinstalla Ponte una volta", DIFFERENT_KEY)
+        }
+        ok
     } catch (_: Exception) {
         false
     }
+
+    private fun tell(intent: Intent?, title: String, text: String) = notifyUser(ctx, intent, title, text)
 
     /** Installazione con PackageInstaller: da Android 12 gli aggiornamenti di sé stessa non chiedono conferma. */
     private fun sessionInstall(apk: File) {
@@ -101,6 +115,24 @@ class Updater(private val ctx: Context, private val r: Router) {
     }
 }
 
+const val DIFFERENT_KEY = "Questa copia ha una firma diversa dalle nuove: disinstalla Ponte e installa l'ultima versione una volta sola, poi si aggiorna da sola"
+
+fun notifyUser(c: Context, intent: Intent?, title: String, text: String) {
+    val nm = c.getSystemService(NotificationManager::class.java)
+    nm.createNotificationChannel(NotificationChannel("aggiornamenti", "Aggiornamenti", NotificationManager.IMPORTANCE_DEFAULT))
+    val b = Notification.Builder(c, "aggiornamenti")
+        .setSmallIcon(R.drawable.ic_ponte)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setStyle(Notification.BigTextStyle().bigText(text))
+        .setAutoCancel(true)
+    if (intent != null) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        b.setContentIntent(PendingIntent.getActivity(c, 7, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+    }
+    nm.notify(7, b.build())
+}
+
 /** Esito dell'installazione. Se Android vuole una conferma, la si chiede con una notifica. */
 class InstallReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
@@ -111,19 +143,19 @@ class InstallReceiver : BroadcastReceiver() {
                 val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 try { c.startActivity(confirm) } catch (_: Exception) {}
-                val nm = c.getSystemService(NotificationManager::class.java)
-                nm.createNotificationChannel(NotificationChannel("aggiornamenti", "Aggiornamenti", NotificationManager.IMPORTANCE_DEFAULT))
-                val pi = PendingIntent.getActivity(c, 7, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                nm.notify(7, Notification.Builder(c, "aggiornamenti")
-                    .setSmallIcon(R.drawable.ic_ponte)
-                    .setContentTitle("Aggiornamento di Ponte pronto")
-                    .setContentText("Tocca per installarlo")
-                    .setContentIntent(pi)
-                    .setAutoCancel(true)
-                    .build())
+                notifyUser(c, confirm, "Aggiornamento di Ponte pronto", "Tocca per installarlo")
                 r?.updater?.status?.value = "In attesa della tua conferma"
             }
             PackageInstaller.STATUS_SUCCESS -> r?.updater?.status?.value = "Aggiornato"
+            PackageInstaller.STATUS_FAILURE_INCOMPATIBLE, PackageInstaller.STATUS_FAILURE_CONFLICT -> {
+                r?.updater?.status?.value = DIFFERENT_KEY
+                notifyUser(c, null, "Reinstalla Ponte una volta", DIFFERENT_KEY)
+            }
+            PackageInstaller.STATUS_FAILURE_BLOCKED -> {
+                r?.updater?.status?.value = "Android ha bloccato l'installazione: consenti a Ponte di installare app"
+                notifyUser(c, Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${c.packageName}")),
+                    "Serve un permesso per aggiornare", "Tocca per consentire a Ponte di installare i suoi aggiornamenti")
+            }
             else -> r?.updater?.status?.value = "Installazione non riuscita: " + (i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "")
         }
     }

@@ -312,13 +312,21 @@
         <Setter Property="FontFamily" Value="{StaticResource FontSansMedium}" />
     </Style>
 
+    <Style x:Key="SectionLabel" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource FontSansMedium}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="CharacterSpacing" Value="80" />
+        <Setter Property="Foreground" Value="{ThemeResource LabelTertiary}" />
+        <Setter Property="Margin" Value="12,0,12,6" />
+    </Style>
+
     <!-- Barra laterale: voci con icona, riquadro arrotondato. -->
     <ControlTemplate x:Key="NavItemTemplate" TargetType="Button">
         <Grid MinHeight="40" Background="Transparent">
             <Border x:Name="Bg" Height="34" CornerRadius="8" Background="{TemplateBinding Background}">
                 <Grid>
-                    <Border x:Name="Veil" CornerRadius="8" Opacity="0" IsHitTestVisible="False" Background="{TemplateBinding Foreground}" />
-                    <ContentPresenter Content="{TemplateBinding Content}" Padding="12,0" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{TemplateBinding Foreground}" />
+                    <Border x:Name="Veil" CornerRadius="9" Opacity="0" IsHitTestVisible="False" Background="{TemplateBinding Foreground}" />
+                    <ContentPresenter Content="{TemplateBinding Content}" Padding="12,0" VerticalAlignment="Center" HorizontalAlignment="Stretch" Foreground="{TemplateBinding Foreground}" />
                 </Grid>
             </Border>
             <VisualStateManager.VisualStateGroups>

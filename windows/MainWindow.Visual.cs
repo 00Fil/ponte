@@ -109,13 +109,15 @@ public sealed partial class MainWindow
     /// <summary>Indicatore della barra laterale: una molla smorzata, così se cambi voce a metà corsa riparte dalla velocità che ha.</summary>
     private void MoveIndicator(int index, bool animate)
     {
-        const float pitch = 42f; // voce 40 + spaziatura 2
+        if (index >= _nav.Count || _nav[index].ActualHeight < 1) return;
+        var y = (float)_nav[index].TransformToVisual(NavLayer).TransformPoint(new Windows.Foundation.Point(0, 0)).Y + 2f;
         var v = ElementCompositionPreview.GetElementVisual(NavIndicator);
         var c = v.Compositor;
         ElementCompositionPreview.SetIsTranslationEnabled(NavIndicator, true);
-        var target = new Vector3(0f, index * pitch, 0f);
+        var target = new Vector3(0f, y, 0f);
         if (!animate)
         {
+            v.StopAnimation("Translation");
             var snap = c.CreateVector3KeyFrameAnimation();
             snap.InsertKeyFrame(1f, target);
             snap.Duration = TimeSpan.FromMilliseconds(1);

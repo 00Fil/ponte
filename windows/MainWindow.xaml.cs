@@ -175,11 +175,12 @@ public sealed partial class MainWindow : Window
                 var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
                 nb.Click += (_, _) => Select(idx);
                 _nav.Add(nb);
-                SideTabs.Children.Add(nb);
+                (t < 3 ? NavMain : t == 3 ? NavTools : NavFoot).Children.Add(nb);
             }
         }
         for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
         MoveIndicator(i, animate: !first);
+        if (first) NavLayer.SizeChanged += (_, _) => MoveIndicator(_tab, animate: false);
 
         BottomTabs.Children.Clear();
         BottomTabs.ColumnDefinitions.Clear();
@@ -197,29 +198,44 @@ public sealed partial class MainWindow : Window
     }
 
     private static readonly string[] Glyphs = { "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE713" };
+    private readonly TextBlock[] _badge = new TextBlock[5];
+    private readonly Border[] _badgeBox = new Border[5];
 
-    private static StackPanel NavContent(int t)
+    private Grid NavContent(int t)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        row.Children.Add(new FontIcon { Glyph = Glyphs[t], FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
-        row.Children.Add(new TextBlock { Text = Tabs[t], VerticalAlignment = VerticalAlignment.Center });
-        return row;
+        var g = new Grid { ColumnSpacing = 12 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.Children.Add(new FontIcon { Glyph = Glyphs[t], FontSize = 17, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
+        var label = new TextBlock { Text = Tabs[t], VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(label, 1);
+        g.Children.Add(label);
+        // Contatore a destra (non per Impostazioni).
+        var n = new TextBlock { FontSize = 11, FontFamily = (FontFamily)Application.Current.Resources["FontSansMedium"], Foreground = Canone.Get("LabelSecondary", Dark) };
+        var box = new Border { Background = Canone.Get("BgSunken", Dark), CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 1, 7, 1), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Child = n };
+        Grid.SetColumn(box, 2);
+        g.Children.Add(box);
+        _badge[t] = n;
+        _badgeBox[t] = box;
+        return g;
     }
 
-    /// <summary>Stato del server in fondo alla barra laterale.</summary>
+    private void SetBadge(int t, int count)
+    {
+        if (_badge[t] == null) return;
+        _badge[t].Text = count > 99 ? "99+" : count.ToString();
+        _badgeBox[t].Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Contatori delle voci e identità di questo dispositivo, in fondo alla barra laterale.</summary>
     private void UpdateSideStatus()
     {
-        var hub = _r.HubState;
-        SideStatus.Text = hub == "Connesso" ? "Server collegato" : hub == "Non configurato" ? "Server non impostato" : hub;
-        var d = Dark;
-        var (r, g, b2) = hub switch
-        {
-            "Connesso" => d ? ((byte)0x4C, (byte)0xC3, (byte)0x8A) : ((byte)0x17, (byte)0x8A, (byte)0x52),
-            "Connessione in corso" => d ? ((byte)0xF0, (byte)0xA5, (byte)0x4A) : ((byte)0xC9, (byte)0x7A, (byte)0x14),
-            "Non configurato" => ((byte)0x85, (byte)0x85, (byte)0x7F),
-            _ => d ? ((byte)0xFF, (byte)0x7A, (byte)0x73) : ((byte)0xC3, (byte)0x26, (byte)0x2B),
-        };
-        SideDot.Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, r, g, b2));
+        SideDevice.Text = _r.S.Name.Length > 0 ? _r.S.Name : Environment.MachineName;
+        SideVersion.Text = "Questo PC · " + _r.Update.Current.ToString("'1.0.'0");
+        SetBadge(0, _r.Devices.Count);
+        SetBadge(1, _r.Clip.History.Count);
+        SetBadge(2, _r.Files.Items.Count);
     }
 
     private void Refresh()
