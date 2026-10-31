@@ -154,7 +154,7 @@ public sealed partial class MainWindow
 
     private List<UIElement> StepWelcome()
     {
-        var title = Text("Ponte", "Title1");
+        var title = Text("Ponte", "Display");
         title.FontSize = 64;
         title.LineHeight = 68;
         return new List<UIElement>
@@ -172,7 +172,7 @@ public sealed partial class MainWindow
         var name = new TextBox { Text = s.Name, PlaceholderText = "PC della scrivania" };
         var hub = new TextBox { Text = s.HubUrl, PlaceholderText = "ponte.esempio.it", FontFamily = (FontFamily)Application.Current.Resources["FontMono"] };
         var token = new PasswordBox { Password = s.Token, PlaceholderText = "Lo stesso del server" };
-        var title = Text("Collega i tuoi dispositivi", "Title1");
+        var title = Text("Collega i tuoi dispositivi", "Display");
         title.FontSize = 31;
         return new List<UIElement>
         {
@@ -195,7 +195,7 @@ public sealed partial class MainWindow
     private List<UIElement> StepOptions()
     {
         var s = _r.S;
-        var title = Text("Come vuoi usarlo", "Title1");
+        var title = Text("Come vuoi usarlo", "Display");
         title.FontSize = 31;
         return new List<UIElement>
         {
@@ -225,7 +225,7 @@ public sealed partial class MainWindow
         return new List<UIElement>
         {
             check,
-            Text("Tutto pronto", "Title1"),
+            Text("Tutto pronto", "Display"),
             Text("Copia qualcosa qui e incollalo sul telefono. Il resto lo fa Ponte.", "BodyText"),
             Btn("Apri Ponte", FinishOnboarding, "PrimaryButton"),
         };

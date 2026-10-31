@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
         UpdateFades();
         Root.SizeChanged += (_, _) => ApplyLayout();
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
+        Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
         Select(_r.S.Token.Length == 0 ? 4 : 0);
         if (!_r.S.Onboarded) ShowOnboarding();
@@ -138,7 +139,7 @@ public sealed partial class MainWindow : Window
     private void ApplyLayout()
     {
         var wide = Root.ActualWidth >= 1024;
-        SideCol.Width = new GridLength(wide ? 240 : 0);
+        SideCol.Width = new GridLength(wide ? 232 : 0);
         Side.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
         Bottom.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -163,8 +164,8 @@ public sealed partial class MainWindow : Window
         {
             var idx = t;
             var style = t == i ? "TabButtonSelected" : "TabButton";
-            var sb = Btn(Tabs[t], () => Select(idx), style);
-            sb.HorizontalContentAlignment = HorizontalAlignment.Left;
+            var sb = new Button { Style = St(t == i ? "NavItemSelected" : "NavItem"), Content = NavContent(t) };
+            sb.Click += (_, _) => Select(idx);
             SideTabs.Children.Add(sb);
             var b = Btn(Tabs[t], () => Select(idx), style);
             BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -172,11 +173,39 @@ public sealed partial class MainWindow : Window
             BottomTabs.Children.Add(b);
         }
         ApplyLayout();
+        UpdateSideStatus();
         if (i == 4) RenderSettings(); else Refresh();
+    }
+
+    private static readonly string[] Glyphs = { "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE713" };
+
+    private static StackPanel NavContent(int t)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        row.Children.Add(new FontIcon { Glyph = Glyphs[t], FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
+        row.Children.Add(new TextBlock { Text = Tabs[t], VerticalAlignment = VerticalAlignment.Center });
+        return row;
+    }
+
+    /// <summary>Stato del server in fondo alla barra laterale.</summary>
+    private void UpdateSideStatus()
+    {
+        var hub = _r.HubState;
+        SideStatus.Text = hub == "Connesso" ? "Server collegato" : hub == "Non configurato" ? "Server non impostato" : hub;
+        var d = Dark;
+        var (r, g, b2) = hub switch
+        {
+            "Connesso" => d ? ((byte)0x4C, (byte)0xC3, (byte)0x8A) : ((byte)0x17, (byte)0x8A, (byte)0x52),
+            "Connessione in corso" => d ? ((byte)0xF0, (byte)0xA5, (byte)0x4A) : ((byte)0xC9, (byte)0x7A, (byte)0x14),
+            "Non configurato" => ((byte)0x85, (byte)0x85, (byte)0x7F),
+            _ => d ? ((byte)0xFF, (byte)0x7A, (byte)0x73) : ((byte)0xC3, (byte)0x26, (byte)0x2B),
+        };
+        SideDot.Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, r, g, b2));
     }
 
     private void Refresh()
     {
+        UpdateSideStatus();
         switch (_tab)
         {
             case 0: RenderDevices(); break;
@@ -205,13 +234,13 @@ public sealed partial class MainWindow : Window
         var near = devices.Count(d => d.Via == "lan");
 
         h.Children.Add(Card(
-            Text("Collegamenti", "Title3"),
+            Text("Collegamenti", "SectionTitle"),
             Row("Server", "Per chi è fuori casa e per l'archivio", Badge(hub, tone)),
             Divider(),
             Row("Diretto", "Rete locale o rete privata, senza server",
                 !_r.S.LanEnabled ? Badge("Disattivata") : near == 0 ? Badge("Nessun dispositivo") : Badge($"{near} collegati", "Positive"))));
 
-        var others = new List<UIElement> { Text("Altri dispositivi", "Title3") };
+        var others = new List<UIElement> { Text("Altri dispositivi", "SectionTitle") };
         if (devices.Count == 0)
             others.Add(Text("Nessun altro dispositivo. Apri Ponte su un altro dispositivo, con lo stesso server e lo stesso token.", "Footnote"));
         for (var i = 0; i < devices.Count; i++)
@@ -231,9 +260,8 @@ public sealed partial class MainWindow : Window
     private void RenderClips()
     {
         var h = Reset("Appunti");
-        h.Children.Add(Card(
-            Text("Su Windows l'invio è automatico: ogni volta che copi, il testo arriva sugli altri dispositivi.", "Footnote"),
-            Btn("Invia appunti ora", async () => await _r.Clip.SendCurrentAsync(), "PrimaryButton")));
+        h.Children.Add(Card(Row("Invio automatico", "Su Windows ogni volta che copi, il testo arriva sugli altri dispositivi.",
+            Btn("Invia ora", async () => await _r.Clip.SendCurrentAsync(), "PrimaryButton"))));
 
         var history = _r.Clip.History;
         if (history.Count == 0)
@@ -241,15 +269,19 @@ public sealed partial class MainWindow : Window
             h.Children.Add(Card(Text("Nessun appunto. Copia qualcosa su un dispositivo collegato e comparirà qui.", "Footnote")));
             return;
         }
+        var rows = new List<UIElement>();
         foreach (var c in history.Take(100))
         {
             var item = c;
+            if (rows.Count > 0) rows.Add(Divider());
             var who = item.Mine ? "Inviato da qui" : _r.DeviceName(item.From);
             var time = DateTimeOffset.FromUnixTimeMilliseconds(item.Ts).ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
-            h.Children.Add(Card(
-                Row(item.Text.Length > 300 ? item.Text[..300] : item.Text, who + " · " + time),
-                Btn("Copia", () => _r.Clip.SetLocal(item.Text))));
+            var txt = item.Text.Length > 200 ? item.Text[..200] + "…" : item.Text;
+            var row = Row(txt, who + " · " + time, Btn("Copia", () => _r.Clip.SetLocal(item.Text)));
+            row.MinHeight = 48;
+            rows.Add(row);
         }
+        h.Children.Add(Card(rows.ToArray()));
     }
 
     // ---------------------------------------------------------------- Archivio
@@ -257,15 +289,20 @@ public sealed partial class MainWindow : Window
     private void RenderArchive()
     {
         var h = Reset("Archivio");
-        h.Children.Add(Btn("Invia file", async () => await PickFilesAsync(), "PrimaryButton"));
-
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         foreach (var (label, key) in new[] { ("Tutto", ""), ("Screenshot", "screenshot"), ("File", "file") })
         {
             var k = key;
             chips.Children.Add(Btn(label, () => { _filter = k; Refresh(); }, _filter == k ? "ChipButtonSelected" : "ChipButton"));
         }
-        h.Children.Add(chips);
+        var bar = new Grid();
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.Children.Add(chips);
+        var send = Btn("Invia file", async () => await PickFilesAsync(), "PrimaryButton");
+        Grid.SetColumn(send, 1);
+        bar.Children.Add(send);
+        h.Children.Add(bar);
 
         var items = _r.Files.Items.Where(f => _filter.Length == 0 || f.Kind == _filter).ToList();
         if (items.Count == 0)
@@ -279,7 +316,7 @@ public sealed partial class MainWindow : Window
             ItemsSource = tiles,
             Layout = new UniformGridLayout
             {
-                MinItemWidth = 200, MinItemHeight = 196, MinColumnSpacing = 12, MinRowSpacing = 12,
+                MinItemWidth = 184, MinItemHeight = 188, MinColumnSpacing = 12, MinRowSpacing = 12,
                 ItemsStretch = UniformGridLayoutItemsStretch.Fill,
             },
         });
@@ -358,7 +395,7 @@ public sealed partial class MainWindow : Window
         choices.AddRange(hps.Select(x => x.Address));
         var auto = new List<UIElement>
         {
-            Text("Passaggio automatico", "Title3"),
+            Text("Passaggio automatico", "SectionTitle"),
             Text("Le cuffie vanno dove fai partire l'audio, se è il dispositivo che stai usando. Blocca per tenerle qui mentre usi altro.", "Footnote"),
             Row("Cuffie su", Who(_r.Hp.Holder)),
             Row("In uso", Who(_r.Hp.Focus)),
@@ -382,7 +419,7 @@ public sealed partial class MainWindow : Window
         var marked = _r.S.Headphones;
         var hp = new List<UIElement>
         {
-            Text("Cuffie", "Title3"),
+            Text("Cuffie", "SectionTitle"),
             Text("Segna le cuffie associate. Ponte tiene collegato un solo dispositivo alla volta: quando l'audio parte qui gli altri le lasciano, e dopo un po' di inattività le lascia anche il PC, così non occupi i due slot.", "Footnote"),
         };
         if (hps.Count == 0) hp.Add(Text("Nessuna cuffia associata a questo PC.", "FootnoteTertiary"));
@@ -413,7 +450,7 @@ public sealed partial class MainWindow : Window
         var playingTo = _r.Audio.SinkId;
 
         h.Children.Add(Card(
-            Text("Ascolta altrove", "Title3"),
+            Text("Ascolta altrove", "SectionTitle"),
             Text("Scegli quale dispositivo deve suonare l'audio di questo PC. Le cuffie restano collegate a quel dispositivo: cambi solo da dove arriva il suono.", "Footnote"),
             Text("Il ritardo è di circa 100 ms. Va bene per video e musica, meno per i giochi.", "FootnoteTertiary")));
 
@@ -442,7 +479,7 @@ public sealed partial class MainWindow : Window
         var hub = new TextBox { Text = s.HubUrl, PlaceholderText = "ponte.esempio.it", FontFamily = (FontFamily)Application.Current.Resources["FontMono"] };
         var token = new PasswordBox { Password = s.Token, PlaceholderText = "Lo stesso impostato sul server" };
         h.Children.Add(Card(
-            Text("Questo dispositivo", "Title3"),
+            Text("Questo dispositivo", "SectionTitle"),
             Field("Nome del dispositivo", name),
             Field("Indirizzo del server", hub),
             Field("Token", token),
@@ -456,7 +493,7 @@ public sealed partial class MainWindow : Window
             }, "PrimaryButton")));
 
         h.Children.Add(Card(
-            Text("Funzioni", "Title3"),
+            Text("Funzioni", "SectionTitle"),
             Toggle("Collegamento diretto", "Rete locale e rete privata Headscale", s.LanEnabled, on => { s.LanEnabled = on; Apply(); }),
             Divider(),
             Toggle("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", s.Screenshots, on => { s.Screenshots = on; Apply(); }),
@@ -468,7 +505,7 @@ public sealed partial class MainWindow : Window
             Toggle("Avvia con Windows", "Ponte parte in background all'accesso", GetAutostart(), SetAutostart)));
 
         h.Children.Add(Card(
-            Text("Aggiornamenti", "Title3"),
+            Text("Aggiornamenti", "SectionTitle"),
             Row($"Versione 1.0.{_r.Update.Current}",
                 _r.Update.Status.Length > 0 ? _r.Update.Status : "Si aggiorna da sola dalle release su GitHub, tramite il tuo server",
                 Btn("Cerca ora", () => { _ = Task.Run(() => _r.Update.CheckAsync(install: true)); }))));
@@ -517,7 +554,7 @@ public sealed partial class MainWindow : Window
 
     private static Border Card(params UIElement[] children)
     {
-        var col = new StackPanel { Spacing = 16 };
+        var col = new StackPanel { Spacing = 12 };
         foreach (var c in children) col.Children.Add(c);
         return new Border { Style = St("CardStyle"), Child = col };
     }
@@ -546,7 +583,7 @@ public sealed partial class MainWindow : Window
 
     private static Grid Row(string title, string? note, FrameworkElement? trailing = null)
     {
-        var g = new Grid { ColumnSpacing = 12, MinHeight = 44 };
+        var g = new Grid { ColumnSpacing = 12, MinHeight = 40 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -564,7 +601,7 @@ public sealed partial class MainWindow : Window
 
     private static Grid Toggle(string title, string note, bool on, Action<bool> changed)
     {
-        var ts = new ToggleSwitch { IsOn = on, OnContent = "", OffContent = "", MinWidth = 0 };
+        var ts = new ToggleSwitch { IsOn = on, OnContent = "", OffContent = "", MinWidth = 0, Margin = new Thickness(0, 0, -8, 0) };
         ts.Toggled += (_, _) => changed(ts.IsOn);
         return Row(title, note, ts);
     }
@@ -572,7 +609,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Etichetta sempre sopra e sempre visibile; il segnaposto mostra solo un esempio.</summary>
     private static StackPanel Field(string label, Control input)
     {
-        var p = new StackPanel { Spacing = 8 };
+        var p = new StackPanel { Spacing = 6 };
         p.Children.Add(Text(label, "Footnote"));
         p.Children.Add(input);
         return p;

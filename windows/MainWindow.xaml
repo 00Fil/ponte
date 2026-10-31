@@ -7,7 +7,7 @@
 
     <Grid x:Name="Root" Background="{ThemeResource BgCanvas}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="SideCol" Width="240" />
+            <ColumnDefinition x:Name="SideCol" Width="232" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -15,29 +15,48 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Barra laterale, dalle finestre estese (1024) in su. -->
-        <StackPanel x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Padding="16" Spacing="4">
-            <TextBlock Text="Ponte" Style="{StaticResource Title3}" Margin="12,40,12,24" />
-            <StackPanel x:Name="SideTabs" Spacing="4" />
-        </StackPanel>
+        <!-- Barra laterale, dalle finestre estese (1024) in su: marchio, voci con icona, stato del server. -->
+        <Grid x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Background="{ThemeResource BgSunken}"
+              BorderBrush="{ThemeResource LineSeparator}" BorderThickness="0,0,1,0" Padding="12,0,12,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,52,8,20">
+                <Border Width="28" Height="28" CornerRadius="9" Background="{StaticResource BrandGradient}">
+                    <TextBlock Text="P" Foreground="White" FontFamily="{StaticResource FontSansMedium}" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="Ponte" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel x:Name="SideTabs" Grid.Row="1" Spacing="2" />
+            <Border Grid.Row="2" Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1" CornerRadius="12" Padding="12,10">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse x:Name="SideDot" Width="8" Height="8" Fill="{ThemeResource LabelDisabled}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="SideStatus" Style="{StaticResource Footnote}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
 
-        <!-- Testata con il gradiente ASCII e il titolo della pagina; sotto, le cinque pagine (una alla volta, ricostruite dal codice). -->
+        <!-- Testata con il gradiente ASCII; sotto, le cinque pagine (una alla volta, ricostruite dal codice). Titolo e contenuto stanno sulla stessa colonna. -->
         <Grid Grid.Row="0" Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="152" />
+                <RowDefinition Height="132" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid x:Name="Header">
                 <WebView2 x:Name="HeaderWeb" />
                 <Border x:Name="HeaderFade" IsHitTestVisible="False" />
-                <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" Margin="32,0,32,12" VerticalAlignment="Bottom" IsHitTestVisible="False" />
+                <Grid MaxWidth="840" Margin="32,0" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                    <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" Margin="0,0,0,12" />
+                </Grid>
             </Grid>
             <Grid Grid.Row="1">
-                <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="1024" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="720" Margin="24,8,24,48" Spacing="16" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
             </Grid>
         </Grid>
 
