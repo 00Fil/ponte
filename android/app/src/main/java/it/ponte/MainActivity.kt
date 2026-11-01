@@ -74,6 +74,7 @@ import it.ponte.ui.CanoneType
 import it.ponte.ui.ClipScreen
 import it.ponte.ui.DevicesScreen
 import it.ponte.ui.AudioScreen
+import it.ponte.ui.FinanceScreen
 import it.ponte.ui.PonteTheme
 import it.ponte.ui.SettingsScreen
 import it.ponte.ui.Space
