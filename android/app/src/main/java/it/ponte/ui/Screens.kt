@@ -27,8 +27,11 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -134,7 +137,7 @@ internal fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(c
 // ---------------------------------------------------------------- Dispositivi
 
 @Composable
-fun DevicesScreen(r: Router) {
+fun DevicesScreen(r: Router, onBack: (() -> Unit)? = null) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val devices by r.devices.collectAsState()
@@ -153,6 +156,7 @@ fun DevicesScreen(r: Router) {
     val near = devices.count { it.via == "lan" }
 
     ScreenList("Dispositivi") {
+        onBack?.let { back -> item { SettingsPageIntro("Stato della rete e dispositivi connessi al tuo account.", back) } }
         item { HeroCard(if (devices.isEmpty()) "Solo questo dispositivo" else if (devices.size == 1) "1 dispositivo collegato" else "${devices.size} dispositivi collegati", "Server: ${hub.lowercase()}") }
         item {
             CCard {
@@ -361,7 +365,7 @@ fun ArchiveScreen(r: Router) {
 // ---------------------------------------------------------------- Audio
 
 @Composable
-fun AudioScreen(r: Router) {
+fun AudioScreen(r: Router, onBack: (() -> Unit)? = null) {
     val devices by r.devices.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val sources = devices.filter { "audio-src" in it.caps }
@@ -381,6 +385,7 @@ fun AudioScreen(r: Router) {
     var autoPause by remember { mutableStateOf(r.prefs.autoPause) }
     fun who(id: String?) = when (id) { null -> "nessuno"; r.deviceId -> "questo dispositivo"; else -> r.deviceName(id) }
     ScreenList("Audio") {
+        onBack?.let { back -> item { SettingsPageIntro("Gestisci il passaggio delle cuffie e l'ascolto tra i tuoi dispositivi.", back) } }
         item {
             CCard {
                 SectionTitle("Passaggio automatico")
@@ -419,7 +424,7 @@ fun AudioScreen(r: Router) {
                 val rootError by Root.lastError.collectAsState()
                 if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
                 if (!android.provider.Settings.canDrawOverlays(ctx)) {
-                    CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
+                    CText("Per capire quando usi questo dispositivo serve il permesso "Mostra sopra altre app" (in Impostazioni).", tertiary = true)
                 }
             }
         }
@@ -451,7 +456,7 @@ fun AudioScreen(r: Router) {
                 }
                 if (cannot) {
                     CText(
-                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto \"Cuffie preferite qui\".",
+                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto "Cuffie preferite qui".",
                         tertiary = true,
                     )
                 }
@@ -485,13 +490,149 @@ fun AudioScreen(r: Router) {
 // ---------------------------------------------------------------- Impostazioni
 
 @Composable
-fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () -> Unit = {}) {
+fun SettingsScreen(
+    r: Router,
+    replayOnboarding: () -> Unit = {},
+    onBackup: () -> Unit = {},
+    page: String = "home",
+    onNavigate: (String) -> Unit = {},
+) {
+    when (page) {
+        "devices" -> DevicesScreen(r) { onNavigate("home") }
+        "audio" -> AudioScreen(r) { onNavigate("home") }
+        "device" -> DeviceSettingsScreen(r) { onNavigate("home") }
+        "permissions" -> PermissionsSettingsScreen(r) { onNavigate("home") }
+        "updates" -> UpdatesSettingsScreen(r) { onNavigate("home") }
+        "backup" -> BackupSettingsScreen({ onNavigate("home") }, onBackup)
+        else -> SettingsHomeScreen(onNavigate, replayOnboarding)
+    }
+}
+
+@Composable
+private fun SettingsHomeScreen(onNavigate: (String) -> Unit, replayOnboarding: () -> Unit) {
+    val c = Canone.colors
+    ScreenList("Impostazioni") {
+        item {
+            Column(Modifier.fillMaxWidth().padding(top = Space.s1, bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Text("Tutto al suo posto.", style = CanoneType.title3, color = c.labelPrimary)
+                CText("Configura Ponte, gestisci i collegamenti e personalizza il comportamento dei dispositivi.")
+            }
+        }
+        item {
+            SettingsGroup("CONNESSIONI") {
+                SettingsLinkRow(1, "Dispositivi collegati", "Stato del server, rete locale e dispositivi", onClick = { onNavigate("devices") })
+                SettingsDivider()
+                SettingsLinkRow(4, "Audio e cuffie", "Passaggio automatico e ascolto remoto", onClick = { onNavigate("audio") })
+                SettingsDivider()
+                SettingsLinkRow(6, "Questo dispositivo", "Nome, server e credenziali di connessione", onClick = { onNavigate("device") })
+            }
+        }
+        item {
+            SettingsGroup("SISTEMA") {
+                SettingsLinkRow(6, "Permessi", "Accessi richiesti per le funzioni di Ponte", onClick = { onNavigate("permissions") })
+                SettingsDivider()
+                SettingsLinkRow(6, "Aggiornamenti", "Versione installata e controllo manuale", onClick = { onNavigate("updates") })
+                SettingsDivider()
+                SettingsLinkRow(3, "Backup", "Copia dei dati del telefono sul tuo server", onClick = { onNavigate("backup") })
+            }
+        }
+        item {
+            CButton("Rivedi la configurazione iniziale", replayOnboarding, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    val c = Canone.colors
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface)
+            .padding(horizontal = Space.s4),
+        verticalArrangement = Arrangement.spacedBy(Space.s1),
+    ) {
+        Text(
+            title,
+            style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+            color = c.labelTertiary,
+            modifier = Modifier.padding(top = Space.s4, bottom = Space.s1),
+        )
+        content()
+    }
+}
+
+@Composable
+private fun SettingsLinkRow(icon: Int, title: String, note: String, onClick: () -> Unit) {
+    val c = Canone.colors
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = Space.s3),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s3),
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(c.accentSubtle),
+            contentAlignment = Alignment.Center,
+        ) {
+            TabGlyph(icon, c.accentOnSubtle, false, Modifier.size(21.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = CanoneType.bodyMedium, color = c.labelPrimary)
+            Text(note, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Text("›", style = CanoneType.title2, color = c.labelTertiary)
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(1.dp).background(Canone.colors.lineSeparator.copy(alpha = 0.7f)))
+}
+
+@Composable
+private fun SettingsPageIntro(note: String, onBack: () -> Unit) {
+    val c = Canone.colors
+    Column(Modifier.fillMaxWidth().padding(bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Row(
+            Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onBack).padding(vertical = Space.s1, horizontal = Space.s1),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.s1),
+        ) {
+            Text("‹", style = CanoneType.title2, color = c.accent)
+            Text("Impostazioni", style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.accent)
+        }
+        CText(note)
+    }
+}
+
+@Composable
+private fun DeviceSettingsScreen(r: Router, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var name by remember { mutableStateOf(r.prefs.name) }
     var hub by remember { mutableStateOf(r.prefs.hubUrl) }
     var token by remember { mutableStateOf(r.prefs.token) }
-    var tick by remember { mutableIntStateOf(0) }
+    ScreenList("Questo dispositivo") {
+        item { SettingsPageIntro("Identità e credenziali usate per collegare Ponte al tuo server.", onBack) }
+        item {
+            SettingsGroup("CONFIGURAZIONE") {
+                CField("Nome del dispositivo", name, { name = it }, "Tablet del salotto")
+                CField("Indirizzo del server", hub, { hub = it }, "ponte.esempio.it", mono = true)
+                CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
+                CButton("Salva modifiche", {
+                    r.prefs.name = name
+                    r.prefs.hubUrl = hub
+                    r.prefs.token = token
+                    r.reconfigure()
+                    toast(ctx, "Salvato")
+                }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+                Spacer(Modifier.height(Space.s2))
+            }
+        }
+    }
+}
 
+@Composable
+private fun PermissionsSettingsScreen(r: Router, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var tick by remember { mutableIntStateOf(0) }
     DisposableEffect(ctx) {
         val lc = (ctx as? ComponentActivity)?.lifecycle
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
@@ -513,87 +654,87 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () ->
         }
     }
 
-    ScreenList("Impostazioni") {
+    @Suppress("UNUSED_EXPRESSION") tick
+    ScreenList("Permessi") {
+        item { SettingsPageIntro("Ponte usa questi accessi per restare attivo e sincronizzare le funzioni tra dispositivi.", onBack) }
         item {
-            CCard {
-                SectionTitle("Questo dispositivo")
-                CField("Nome del dispositivo", name, { name = it }, "Tablet del salotto")
-                CField("Indirizzo del server", hub, { hub = it }, "ponte.esempio.it", mono = true)
-                CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
-                CButton("Salva", {
-                    r.prefs.name = name; r.prefs.hubUrl = hub; r.prefs.token = token
-                    r.reconfigure()
-                    toast(ctx, "Salvato")
-                }, kind = ButtonKind.Primary)
-            }
-        }
-        item {
-            @Suppress("UNUSED_EXPRESSION") tick
-            CCard {
-                SectionTitle("Permessi")
+            SettingsGroup("ACCESSI ANDROID") {
                 if (Build.VERSION.SDK_INT >= 33) {
-                    PermRow("Notifiche di Relay", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
+                    PermRow("Notifiche di Ponte", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
                         askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
-                    CDivider()
+                    SettingsDivider()
                 }
                 PermRow("Mostra sopra altre app", "Per inviare gli appunti copiati con l'app in background", Settings.canDrawOverlays(ctx)) {
                     ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
                 }
-                CDivider()
+                SettingsDivider()
                 PermRow("Appunti in tempo reale", "Legge i log di sistema per accorgersi di quando copi", r.clipLog.hasLogPermission()) {
-                    // Con il root si concede da soli; altrimenti serve il comando adb mostrato qui sotto.
                     val ok = try {
                         Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
                     } catch (_: Exception) { false }
-                    toast(ctx, if (ok) "Concesso: riapri Relay" else "Serve il comando adb, vedi sotto")
+                    toast(ctx, if (ok) "Concesso: riapri Ponte" else "Serve il comando adb, vedi sotto")
                 }
                 CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
-                CDivider()
+                SettingsDivider()
                 if (Build.VERSION.SDK_INT >= 31) {
                     PermRow("Bluetooth", "Cuffie e collegamento di riserva senza Wi-Fi", has(ctx, Manifest.permission.BLUETOOTH_CONNECT)) {
                         askOther.launch(Manifest.permission.BLUETOOTH_CONNECT)
                     }
-                    CDivider()
+                    SettingsDivider()
                 }
                 PermRow("Dispositivi Wi-Fi vicini", "Wi-Fi Direct tra telefono e tablet quando non c'è rete", has(ctx, nearbyPerm)) {
                     askOther.launch(nearbyPerm)
                 }
-                CDivider()
-                PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
-                CDivider()
+                SettingsDivider()
+                PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) {
+                    askImages.launch(imagesPermission())
+                }
+                SettingsDivider()
                 PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {
                     ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 }
-                CDivider()
+                SettingsDivider()
                 val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-                PermRow("Nessun risparmio batteria", "Evita che Android fermi Relay", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+                PermRow("Nessun risparmio batteria", "Evita che Android fermi Ponte", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
                     ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                 }
+                Spacer(Modifier.height(Space.s3))
             }
         }
+    }
+}
+
+@Composable
+private fun UpdatesSettingsScreen(r: Router, onBack: () -> Unit) {
+    val status by r.updater.status.collectAsState()
+    val upd by r.updater.ui.collectAsState()
+    val busy = upd?.phase == Updater.Phase.Checking || upd?.phase == Updater.Phase.Downloading || upd?.phase == Updater.Phase.Installing
+    ScreenList("Aggiornamenti") {
+        item { SettingsPageIntro("Mantieni Ponte aggiornato con le ultime versioni pubblicate.", onBack) }
         item {
-            val status by r.updater.status.collectAsState()
-            val upd by r.updater.ui.collectAsState()
-            CCard {
-                SectionTitle("Aggiornamenti")
-                CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola dalle release su GitHub, tramite il tuo server" }) {
-                    val busy = upd?.phase == Updater.Phase.Checking || upd?.phase == Updater.Phase.Downloading || upd?.phase == Updater.Phase.Installing
+            SettingsGroup("VERSIONE INSTALLATA") {
+                CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Gli aggiornamenti vengono verificati tramite il tuo server." }) {
                     if (busy) UpdateRing(upd!!.phase, if ((upd?.total ?: 0) > 0) upd!!.done.toFloat() / upd!!.total else 0f, 28.dp)
                     else CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true, manual = true) } })
                 }
+                Spacer(Modifier.height(Space.s3))
             }
         }
+    }
+}
+
+@Composable
+private fun BackupSettingsScreen(onBack: () -> Unit, onBackup: () -> Unit) {
+    ScreenList("Backup") {
+        item { SettingsPageIntro("Prepara una copia dei dati da ripristinare dopo lo sblocco del bootloader.", onBack) }
         item {
-            CCard {
-                SectionTitle("Backup del telefono")
-                CRow("Copia tutto sul tuo server", "File, contatti, SMS, chiamate e app, da rimettere dopo lo sblocco del bootloader") {
+            SettingsGroup("COPIA DI SICUREZZA") {
+                CRow("Copia tutto sul tuo server", "File, contatti, SMS, chiamate e app") {
                     CButton("Apri", onBackup)
                 }
+                Spacer(Modifier.height(Space.s3))
             }
-        }
-        item {
-            CButton("Rivedi la configurazione iniziale", replayOnboarding, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
         }
     }
 }

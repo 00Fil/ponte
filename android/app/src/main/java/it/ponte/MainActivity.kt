@@ -10,7 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,7 +26,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
@@ -35,9 +33,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.material3.Text
@@ -59,7 +55,6 @@ import androidx.compose.runtime.collectAsState
 import it.ponte.ui.Onboarding
 import it.ponte.ui.UpdateDone
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -71,14 +66,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.luminance
 import androidx.core.content.ContextCompat
 import it.ponte.ui.ArchiveScreen
 import it.ponte.ui.Canone
 import it.ponte.ui.CanoneType
 import it.ponte.ui.ClipScreen
-import it.ponte.ui.DevicesScreen
-import it.ponte.ui.AudioScreen
 import it.ponte.ui.FinanceScreen
 import it.ponte.ui.PonteTheme
 import it.ponte.ui.SettingsScreen
@@ -99,7 +93,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Finanze", "Impostazioni")
+private val TABS = listOf("Home", "Appunti", "Archivio", "Finanze", "Impostazioni")
+private val TAB_GLYPHS = listOf(0, 2, 3, 5, 6)
+private val MOBILE_TAB_LABELS = listOf("Home", "Appunti", "Archivio", "Finanze", "Impost.")
+
+private fun settingsTitle(page: String): String = when (page) {
+    "devices" -> "Dispositivi collegati"
+    "audio" -> "Audio e cuffie"
+    "device" -> "Questo dispositivo"
+    "permissions" -> "Permessi"
+    "updates" -> "Aggiornamenti"
+    "backup" -> "Backup"
+    else -> "Impostazioni"
+}
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -130,19 +136,30 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var settingsPage by remember { mutableStateOf("home") }
     fun select(i: Int) { scope.launch { pager.animateScrollToPage(i, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 320f)) } }
-    // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
+    fun selectTab(i: Int) {
+        if (i == 4) settingsPage = "home"
+        select(i)
+    }
+    // Posizione continua tra le pagine: titolo e barra seguono il gesto.
     val pos = { pager.currentPage + pager.currentPageOffsetFraction }
 
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
-            0 -> HomeScreen(r) { select(it) }
-            1 -> DevicesScreen(r)
-            2 -> ClipScreen(r)
-            3 -> ArchiveScreen(r)
-            4 -> AudioScreen(r)
-            5 -> FinanceScreen(r)
-            else -> SettingsScreen(r, replayOnboarding, onBackup)
+            0 -> HomeScreen(r) { destination ->
+                when (destination) {
+                    1 -> { settingsPage = "devices"; select(4) }
+                    2 -> select(1)
+                    3 -> select(2)
+                    4 -> { settingsPage = "audio"; select(4) }
+                    5 -> select(3)
+                }
+            }
+            1 -> ClipScreen(r)
+            2 -> ArchiveScreen(r)
+            3 -> FinanceScreen(r)
+            else -> SettingsScreen(r, replayOnboarding, onBackup, settingsPage) { settingsPage = it }
         }
     }
 
@@ -154,7 +171,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
                 TABS.forEachIndexed { i, t ->
                     Text(
-                        t, style = CanoneType.title1, color = c.labelPrimary,
+                        if (i == 4) settingsTitle(settingsPage) else t, style = CanoneType.title1, color = c.labelPrimary,
                         modifier = Modifier.graphicsLayer {
                             val d = i - pos()
                             alpha = (1f - kotlin.math.abs(d) * 1.6f).coerceIn(0f, 1f)
@@ -192,7 +209,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         it.ponte.ui.RelayMark(32.dp)
                         Text("Relay", style = CanoneType.title3, color = c.labelPrimary)
                     }
-                    TABS.forEachIndexed { i, t -> SideItem(t, i, pager.currentPage == i) { select(i) } }
+                    TABS.forEachIndexed { i, t -> SideItem(t, TAB_GLYPHS[i], pager.currentPage == i) { selectTab(i) } }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.fillMaxSize()) {
@@ -209,85 +226,69 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     pages(Modifier.fillMaxSize())
                     sheet()
                 }
-                TabBar(pos, pager.currentPage) { select(it) }
+                TabBar(pos, pager.currentPage) { selectTab(it) }
             }
         }
     }
 }
 
-/** Barra mobile: binario di vetro minimale e lente circolare che segue la pagina attiva. */
+/** Barra mobile: una superficie leggera, cinque destinazioni e stato selezionato morbido. */
 @Composable
 private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
     val c = Canone.colors
     val light = c.bgCanvas.luminance() > 0.5f
-    val railShape = RoundedCornerShape(26.dp)
-    val railFill = if (light) {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.96f), c.bgSurface.copy(alpha = 0.84f)))
-    } else {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), c.bgSurface.copy(alpha = 0.82f), c.bgCanvas.copy(alpha = 0.74f)))
-    }
-    val lensFill = if (light) {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.98f), c.bgSunken.copy(alpha = 0.9f)))
-    } else {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), c.bgSurface.copy(alpha = 0.95f), c.bgCanvas.copy(alpha = 0.9f)))
-    }
+    val barColor = if (light) c.bgSurface.copy(alpha = 0.97f) else c.bgSurface.copy(alpha = 0.96f)
 
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s4, vertical = Space.s2)) {
+    Box(
+        Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s4, vertical = Space.s2),
+    ) {
         BoxWithConstraints(
-            Modifier.fillMaxWidth().height(50.dp).shadow(12.dp, railShape).clip(railShape)
-                .background(railFill).border(0.75.dp, Color.White.copy(alpha = if (light) 0.88f else 0.2f), railShape),
+            Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(26.dp)).background(barColor),
         ) {
-            val itemW = maxWidth / TABS.size
-            val lens = minOf(44.dp, itemW * 0.88f)
+            val itemWidth = maxWidth / TABS.size
             val density = LocalDensity.current
-            val itemPx = with(density) { itemW.toPx() }
-            val lensPx = with(density) { lens.toPx() }
-            val indicatorX = (pos() * itemPx) + (itemPx - lensPx) / 2f
+            val itemPx = with(density) { itemWidth.toPx() }
             val glide by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = pos(),
-                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 310f),
-                label = "lente-vetro",
+                targetValue = pos().coerceIn(0f, (TABS.size - 1).toFloat()),
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 230f),
+                label = "tab-smooth",
             )
-            val reflectionX = (glide * itemPx) + (itemPx - lensPx) / 2f
-
-            // Riflesso minimo, ritardato rispetto alla lente: suggerisce lo spessore del vetro senza aggiungere peso visivo.
-            Box(
-                Modifier.align(Alignment.BottomStart).graphicsLayer {
-                    translationX = reflectionX + lensPx * 0.27f
-                    translationY = (-2).dp.toPx()
-                    alpha = if (light) 0.13f else 0.19f
-                }.size(lens * 0.46f, 1.dp).background(
-                    Brush.horizontalGradient(listOf(Color.Transparent, if (light) c.labelPrimary.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.7f), Color.Transparent)), CircleShape,
-                ),
-            )
-
+            val indicatorWidth = itemWidth - 6.dp
+            val indicatorPx = with(density) { indicatorWidth.toPx() }
             Box(
                 Modifier.align(Alignment.CenterStart).graphicsLayer {
-                    translationX = indicatorX
-                }.size(lens).shadow(8.dp, CircleShape).clip(CircleShape)
-                    .background(lensFill)
-                    .border(0.9.dp, Color.White.copy(alpha = if (light) 0.96f else 0.32f), CircleShape),
-            ) {
-                Box(
-                    Modifier.fillMaxSize().padding(3.dp).clip(CircleShape)
-                        .border(0.6.dp, c.lineStrong.copy(alpha = if (light) 0.42f else 0.26f), CircleShape),
-                )
-            }
+                    translationX = glide * itemPx + (itemPx - indicatorPx) / 2f
+                }.size(width = indicatorWidth, height = 60.dp)
+                    .clip(RoundedCornerShape(21.dp))
+                    .background(if (light) c.bgSunken.copy(alpha = 0.86f) else c.bgSunken.copy(alpha = 0.94f)),
+            )
 
-            Row(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 6.dp)) {
                 TABS.forEachIndexed { i, label ->
-                    Box(
+                    val proximity = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
+                    val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
+                    val textColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
+                    Column(
                         Modifier.weight(1f).fillMaxHeight()
                             .semantics { contentDescription = label; selected = current == i }
                             .clickable(
                                 role = Role.Tab, onClick = { onSelect(i) }, indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             ),
-                        contentAlignment = Alignment.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                     ) {
-                        val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
-                        val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, near)
-                        TabGlyph(i, iconColor, current == i, Modifier.size(20.dp))
+                        TabGlyph(TAB_GLYPHS[i], iconColor, current == i, Modifier.size(21.dp))
+                        Text(
+                            MOBILE_TAB_LABELS[i],
+                            style = CanoneType.footnote.copy(
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                fontWeight = if (current == i) FontWeight.Medium else FontWeight.Normal,
+                            ),
+                            color = textColor,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
