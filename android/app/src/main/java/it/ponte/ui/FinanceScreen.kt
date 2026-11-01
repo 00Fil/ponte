@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,13 +86,13 @@ fun FinanceScreen(r: Router) {
     ScreenList("Finanze") {
         item { FinanceHero(balance, entries.isNotEmpty(), net, income, expenses,
             onBalance = { dialogMode = "balance" }, onMovement = { dialogMode = "entry" }) }
-        item {
+    item {
             CCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionTitle("Spese")
                     CBadge(money(expenses), if (expenses > 0) Tone.Critical else Tone.Neutral)
                 }
-                CText("Giorno per giorno · più verde = più spese")
+            CText("Andamento giornaliero · ultimi 6 mesi")
                 FinanceHeatmap(entries, now)
                 val recentWeek = entries.filter { it.kind == "expense" && financeDate(it.ts) >= now.minusDays(6) }.sumOf { -it.cents }
                 val halfYear = entries.filter { it.kind == "expense" && financeDate(it.ts) >= now.with(DayOfWeek.MONDAY).minusWeeks(25) }.sumOf { -it.cents }
@@ -98,14 +102,16 @@ fun FinanceScreen(r: Router) {
         item {
             CCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    SectionTitle("Entrate e uscite")
-                    Text(if (net >= 0) "+${money(net)}" else "−${money(-net)}", style = CanoneType.footnote, color = if (net >= 0) Canone.colors.positive else Canone.colors.critical)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        SectionTitle("Entrate e uscite")
+                        CText("Confronto mensile · ultimi 6 mesi")
+                    }
+                    CBadge((if (net >= 0) "+" else "−") + money(kotlin.math.abs(net)), if (net >= 0) Tone.Positive else Tone.Critical)
                 }
-                CText("Saldo netto per mese")
                 FinanceFlowChart(entries, month)
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    CBadge("↑ Entrate superiori", Tone.Positive)
-                    CBadge("↓ Uscite superiori", Tone.Critical)
+                    FinanceChartLegend(Canone.colors.positive, "Entrate")
+                    FinanceChartLegend(Canone.colors.critical, "Uscite")
                 }
             }
         }
@@ -120,8 +126,8 @@ fun FinanceScreen(r: Router) {
                     byCategory.take(4).forEach { (category, amount) ->
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             CRow(category, money(amount), mono = true)
-                            Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Canone.colors.bgSunken)) {
-                                Box(Modifier.fillMaxWidth((amount.toFloat() / max).coerceIn(0f, 1f)).height(6.dp).clip(CircleShape).background(Canone.colors.positive))
+                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Canone.colors.bgSunken)) {
+                            Box(Modifier.fillMaxWidth((amount.toFloat() / max).coerceIn(0f, 1f)).height(8.dp).clip(CircleShape).background(Canone.colors.critical))
                             }
                         }
                     }
@@ -196,31 +202,34 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
     var kind by remember(mode) { mutableStateOf("expense") }
     var categoryOpen by remember(mode) { mutableStateOf(false) }
     var showNote by remember(mode) { mutableStateOf(false) }
-    var banknotes by remember(mode) { mutableStateOf(emptyMap<Int, Int>()) }
+    var banknotes by remember(mode) { mutableStateOf(emptyList<Int>()) }
     val parsed = parseCents(amount)
     val valid = parsed != null && (mode == "balance" || parsed > 0)
-    val title = if (mode == "balance") "Aggiorna saldo" else "Nuovo movimento"
+    val title = if (mode == "balance") "Aggiorna saldo" else if (kind == "income") "Nuova entrata" else "Nuova uscita"
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, style = CanoneType.title3, color = Canone.colors.labelPrimary) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                CField("Importo · EUR", amount, {
-                    banknotes = emptyMap()
+                if (mode != "balance") FinanceKindPicker(kind, onChange = { kind = it })
+                MoneyAmountField(amount, {
+                    banknotes = emptyList()
                     amount = it.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' || ch == '-' }.take(14)
-                }, "0,00", keyboardType = KeyboardType.Decimal)
+                })
                 if (mode != "balance") {
-                    BanknotePicker(banknotes, onClear = { amount = ""; banknotes = emptyMap() }) { denomination ->
+                    BanknotePicker(banknotes, onUndo = {
+                        banknotes.lastOrNull()?.let { denomination ->
+                            amount = moneyInput(((parseCents(amount) ?: 0L) - denomination * 100L).coerceAtLeast(0L))
+                            banknotes = banknotes.dropLast(1)
+                        }
+                    }, onClear = { amount = ""; banknotes = emptyList() }) { denomination ->
                         val next = (parseCents(amount) ?: 0L) + denomination * 100L
                         amount = moneyInput(next)
-                        banknotes = banknotes + (denomination to (banknotes.getOrDefault(denomination, 0) + 1))
+                        banknotes = banknotes + denomination
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        CButton("− Uscita", { kind = "expense" }, Modifier.weight(1f), if (kind == "expense") ButtonKind.Primary else ButtonKind.Secondary)
-                        CButton("+ Entrata", { kind = "income" }, Modifier.weight(1f), if (kind == "income") ButtonKind.Primary else ButtonKind.Secondary)
-                    }
+                    CText("Categoria")
                     Box {
-                        CButton("Categoria · $category", { categoryOpen = true })
+                        CButton("Categoria · $category", { categoryOpen = true }, Modifier.fillMaxWidth())
                         DropdownMenu(expanded = categoryOpen, onDismissRequest = { categoryOpen = false }) {
                             financeCategories.forEach { item -> DropdownMenuItem(text = { Text(item) }, onClick = { category = item; categoryOpen = false })
                             }
@@ -233,7 +242,7 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
             }
         },
         confirmButton = {
-            CButton(if (mode == "balance") "Salva" else "Salva movimento", {
+            CButton(if (mode == "balance") "Salva saldo" else if (kind == "income") "Aggiungi entrata" else "Aggiungi uscita", {
                 if (valid) onSave(parsed!!, if (mode == "balance") "" else "$kind|$category", note)
             }, kind = ButtonKind.Primary, enabled = valid)
         },
@@ -242,23 +251,93 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
 }
 
 @Composable
-private fun BanknotePicker(counts: Map<Int, Int>, onClear: () -> Unit, onAdd: (Int) -> Unit) {
+private fun MoneyAmountField(amount: String, onChange: (String) -> Unit) {
     val c = Canone.colors
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Text("Importo", style = CanoneType.footnote, color = c.labelSecondary)
+        BasicTextField(
+            value = amount,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = CanoneType.figure.copy(fontSize = 30.sp, lineHeight = 38.sp, color = c.labelPrimary),
+            cursorBrush = SolidColor(c.accent),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                Row(
+                    Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(Radius.lg))
+                        .background(c.bgSurface).border(1.5.dp, c.lineStrong, RoundedCornerShape(Radius.lg))
+                        .padding(horizontal = Space.s4),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.s3),
+                ) {
+                    Text("€", style = CanoneType.title2, color = c.accent)
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (amount.isEmpty()) Text("0,00", style = CanoneType.figure.copy(fontSize = 30.sp), color = c.labelTertiary)
+                        inner()
+                    }
+                    Text("EUR", style = CanoneType.footnote, color = c.labelTertiary)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun FinanceKindPicker(kind: String, onChange: (String) -> Unit) {
+    val c = Canone.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.md)).background(c.bgSunken).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FinanceKindOption("Uscita", "expense", kind == "expense", Modifier.weight(1f), onChange)
+        FinanceKindOption("Entrata", "income", kind == "income", Modifier.weight(1f), onChange)
+    }
+}
+
+@Composable
+private fun FinanceKindOption(label: String, value: String, selected: Boolean, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    val c = Canone.colors
+    val (background, foreground) = when {
+        value == "expense" && selected -> c.criticalSubtle to c.criticalOnSubtle
+        value == "income" && selected -> c.positiveSubtle to c.positiveOnSubtle
+        else -> Color.Transparent to c.labelSecondary
+    }
+    Row(
+        modifier.height(46.dp).clip(RoundedCornerShape(Radius.sm)).background(background)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = { onChange(value) }).padding(horizontal = Space.s3),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(if (value == "expense") "−" else "+", style = CanoneType.bodyMedium, color = foreground)
+        Text("  $label", style = CanoneType.bodyMedium, color = foreground)
+    }
+}
+
+@Composable
+private fun BanknotePicker(selected: List<Int>, onUndo: () -> Unit, onClear: () -> Unit, onAdd: (Int) -> Unit) {
+    val c = Canone.colors
+    val counts = selected.groupingBy { it }.eachCount()
+    val total = selected.sumOf { it.toLong() } * 100L
     val palettes = listOf(
         c.bgSunken to c.labelSecondary,
         c.criticalSubtle to c.criticalOnSubtle,
         c.accentSubtle to c.accentOnSubtle,
         c.cautionSubtle to c.cautionOnSubtle,
         c.positiveSubtle to c.positiveOnSubtle,
-        c.bgSunken to c.labelPrimary,
+        c.bgSunken to c.cautionOnSubtle,
     )
     Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Aggiungi banconote", style = CanoneType.footnote, color = c.labelSecondary)
-            Text("Azzera", style = CanoneType.footnote, color = c.accent,
-                modifier = Modifier.clickable(onClick = onClear).padding(horizontal = 8.dp, vertical = 4.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Banconote", style = CanoneType.bodyMedium, color = c.labelPrimary)
+                CText("Tocca un taglio per aggiungerlo")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s1), verticalAlignment = Alignment.CenterVertically) {
+                Text("Indietro", style = CanoneType.footnote, color = if (selected.isEmpty()) c.labelDisabled else c.accent,
+                    modifier = Modifier.clickable(enabled = selected.isNotEmpty(), role = Role.Button, onClick = onUndo).padding(horizontal = 8.dp, vertical = 12.dp))
+                Text("Azzera", style = CanoneType.footnote, color = if (selected.isEmpty()) c.labelDisabled else c.accent,
+                    modifier = Modifier.clickable(enabled = selected.isNotEmpty(), role = Role.Button, onClick = onClear).padding(horizontal = 8.dp, vertical = 12.dp))
+            }
         }
-        financeBanknotes.chunked(3).forEach { row ->
+        financeBanknotes.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 row.forEach { denomination ->
                     val (background, foreground) = palettes[financeBanknotes.indexOf(denomination)]
@@ -267,45 +346,57 @@ private fun BanknotePicker(counts: Map<Int, Int>, onClear: () -> Unit, onAdd: (I
                 }
             }
         }
-        val selected = counts.filterValues { it > 0 }.toSortedMap()
-        CText(if (selected.isEmpty()) "Tocca un taglio per sommarlo" else
-            "Selezionate: " + selected.entries.joinToString(" · ") { "€${it.key} × ${it.value}" }, tertiary = true)
+        if (selected.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.sm)).background(c.bgSunken).padding(horizontal = Space.s3, vertical = Space.s2),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${selected.size} ${if (selected.size == 1) "banconota" else "banconote"}", style = CanoneType.footnote, color = c.labelSecondary)
+                Text(money(total), style = CanoneType.bodyMedium, color = c.labelPrimary)
+            }
+        }
     }
 }
 
 @Composable
-private fun BanknoteButton(
-    denomination: Int,
-    count: Int,
-    background: Color,
-    foreground: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
+private fun BanknoteButton(denomination: Int, count: Int, background: Color, foreground: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Canone.colors
-    val interaction = androidx.compose.runtime.remember { MutableInteractionSource() }
+    val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = androidx.compose.animation.core.spring(stiffness = 600f),
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = 560f),
         label = "banconota-premuta",
     )
+    val shape = RoundedCornerShape(Radius.md)
+    val outlineColor by androidx.compose.animation.animateColorAsState(
+        if (count > 0) foreground else foreground.copy(alpha = 0.24f), label = "contorno-banconota",
+    )
     Box(
-        modifier = modifier.height(58.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(Radius.sm)).background(background)
-            .border(1.dp, foreground.copy(alpha = 0.25f), RoundedCornerShape(Radius.sm))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 5.dp),
+        modifier = modifier.height(76.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape).background(background)
+            .border(if (count > 0) 2.dp else 1.dp, outlineColor, shape)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button,
+                onClickLabel = "Aggiungi una banconota da $denomination euro", onClick = onClick),
     ) {
-        Box(Modifier.align(Alignment.CenterStart).width(3.dp).height(38.dp).clip(CircleShape).background(foreground.copy(alpha = 0.38f)))
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalArrangement = Arrangement.Center) {
-            Text("€$denomination", style = CanoneType.title3.copy(fontSize = 18.sp, lineHeight = 22.sp), color = foreground, maxLines = 1)
-            Text("EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, lineHeight = 12.sp), color = foreground.copy(alpha = 0.75f))
+        Canvas(Modifier.matchParentSize()) {
+            val inset = 5.dp.toPx()
+            drawRoundRect(foreground.copy(alpha = 0.18f), topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            for (line in 0..8) {
+                val x = size.width * 0.58f + line * 6.dp.toPx()
+                drawLine(foreground.copy(alpha = 0.08f), androidx.compose.ui.geometry.Offset(x, size.height),
+                    androidx.compose.ui.geometry.Offset(x + size.height * 0.46f, size.height * 0.42f), 1.dp.toPx())
+            }
+            val center = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.52f)
+            drawCircle(foreground.copy(alpha = 0.13f), radius = 18.dp.toPx(), center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            drawCircle(foreground.copy(alpha = 0.10f), radius = 13.dp.toPx(), center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
         }
-        Box(Modifier.align(Alignment.CenterEnd).padding(end = 2.dp).size(24.dp).clip(CircleShape)
-            .border(1.dp, foreground.copy(alpha = 0.3f), CircleShape))
-        if (count > 0) Text("×$count", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.accentOnSubtle,
-            modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape).background(c.accentSubtle).padding(horizontal = 5.dp, vertical = 1.dp))
+        Column(Modifier.align(Alignment.CenterStart).padding(start = Space.s4), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text("€$denomination", style = CanoneType.title3.copy(fontSize = 23.sp, lineHeight = 26.sp), color = foreground)
+            Text("BANCONOTA · EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, lineHeight = 12.sp), color = foreground.copy(alpha = 0.78f))
+        }
+        if (count > 0) Text("×$count", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.accentOnAccent,
+            modifier = Modifier.align(Alignment.TopEnd).padding(7.dp).clip(CircleShape).background(c.accent).padding(horizontal = 7.dp, vertical = 2.dp))
     }
 }
 
@@ -325,7 +416,7 @@ private fun FinanceHeatmap(entries: List<FinanceEntry>, today: LocalDate) {
                 if (date.isAfter(today)) continue
                 val amount = daily[date] ?: 0L
                 val intensity = if (amount == 0L) 0f else (kotlin.math.ln(1.0 + amount.toDouble()) / kotlin.math.ln(1.0 + maximum.toDouble())).toFloat().coerceIn(0f, 1f)
-                val color = if (amount == 0L) c.bgSunken else androidx.compose.ui.graphics.lerp(c.positiveSubtle, c.positive, 0.2f + 0.8f * intensity)
+                val color = if (amount == 0L) c.bgSunken else androidx.compose.ui.graphics.lerp(c.accentSubtle, c.accent, 0.25f + 0.75f * intensity)
                 drawRoundRect(color, topLeft = androidx.compose.ui.geometry.Offset(week * (cell + gap), day * (cell + gap)),
                     size = androidx.compose.ui.geometry.Size(cell, cell), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
             }
@@ -335,6 +426,14 @@ private fun FinanceHeatmap(entries: List<FinanceEntry>, today: LocalDate) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         CText(first, tertiary = true); CText(last, tertiary = true)
     }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+        CText("Meno", tertiary = true)
+        listOf(c.bgSunken, c.accentSubtle, c.accent).forEach { color ->
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(color))
+        }
+        CText("Più", tertiary = true)
+    }
+    if (daily.isEmpty()) CText("Registra un'uscita per popolare la mappa", tertiary = true)
 }
 
 @Composable
@@ -343,29 +442,41 @@ private fun FinanceFlowChart(entries: List<FinanceEntry>, currentMonth: YearMont
     val months = (5 downTo 0).map { offset ->
         val month = currentMonth.minusMonths(offset.toLong())
         val moves = entries.filter { YearMonth.from(financeDate(it.ts)) == month }
-        month to (moves.filter { it.kind == "income" }.sumOf { it.cents } - moves.filter { it.kind == "expense" }.sumOf { -it.cents })
+        Triple(month, moves.filter { it.kind == "income" }.sumOf { it.cents }, moves.filter { it.kind == "expense" }.sumOf { -it.cents })
     }
-    val maxValue = months.maxOfOrNull { kotlin.math.abs(it.second) }?.coerceAtLeast(1L) ?: 1L
+    val maxValue = months.maxOfOrNull { maxOf(it.second, it.third) }?.coerceAtLeast(1L) ?: 1L
     Canvas(Modifier.fillMaxWidth().height(106.dp)) {
-        val center = size.height * 0.58f
-        val maxHeight = minOf(center - 10.dp.toPx(), size.height - center - 8.dp.toPx())
+        val baseline = size.height - 6.dp.toPx()
+        val maxHeight = size.height - 18.dp.toPx()
         val step = size.width / months.size
-        val barWidth = step * 0.42f
-        drawLine(c.lineSeparator, androidx.compose.ui.geometry.Offset(0f, center), androidx.compose.ui.geometry.Offset(size.width, center), 1.dp.toPx())
-        months.forEachIndexed { index, (_, amount) ->
-            val height = (kotlin.math.abs(amount).toDouble() / maxValue * maxHeight).toFloat().coerceAtLeast(if (amount == 0L) 0f else 3.dp.toPx())
-            val x = index * step + (step - barWidth) / 2f
-            val y = if (amount >= 0) center - height else center
-            val color = when { amount > 0 -> c.positive; amount < 0 -> c.critical; else -> c.bgSunken }
-            drawRoundRect(color, topLeft = androidx.compose.ui.geometry.Offset(x, y), size = androidx.compose.ui.geometry.Size(barWidth, height),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
+        val barWidth = step * 0.22f
+        val barGap = 3.dp.toPx()
+        drawLine(c.lineSeparator, androidx.compose.ui.geometry.Offset(0f, baseline), androidx.compose.ui.geometry.Offset(size.width, baseline), 1.dp.toPx())
+        months.forEachIndexed { index, values ->
+            val groupWidth = barWidth * 2 + barGap
+            val startX = index * step + (step - groupWidth) / 2f
+            listOf(values.second to c.positive, values.third to c.critical).forEachIndexed { barIndex, (amount, color) ->
+                val height = (amount.toDouble() / maxValue * maxHeight).toFloat().let { if (amount > 0) it.coerceAtLeast(3.dp.toPx()) else 0f }
+                val x = startX + barIndex * (barWidth + barGap)
+                drawRoundRect(color, topLeft = androidx.compose.ui.geometry.Offset(x, baseline - height), size = androidx.compose.ui.geometry.Size(barWidth, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()))
+            }
         }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        months.forEach { (month, amount) ->
+        months.forEach { (month, _, _) ->
             val label = month.month.getDisplayName(java.time.format.TextStyle.SHORT, itLocale).replaceFirstChar { it.uppercase(itLocale) }
-            Text(label, style = CanoneType.footnote, color = when { amount > 0 -> c.positive; amount < 0 -> c.critical; else -> c.labelTertiary })
+            Text(label, style = CanoneType.footnote, color = c.labelTertiary)
         }
+    }
+    if (months.all { it.second == 0L && it.third == 0L }) CText("Registra un movimento per vedere il confronto", tertiary = true)
+}
+
+@Composable
+private fun FinanceChartLegend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        Text(label, style = CanoneType.footnote, color = Canone.colors.labelSecondary)
     }
 }
 

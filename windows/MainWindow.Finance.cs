@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
@@ -61,10 +62,15 @@ public sealed partial class MainWindow
         };
         host.Children.Add(new Border { Background = heroBrush, CornerRadius = new CornerRadius(24), Padding = new Thickness(24), Child = heroBody });
 
-        host.Children.Add(Card(Text("Entrate e uscite", "SectionTitle"),
-            Text("Saldo netto per mese · 6 mesi", "Footnote"), MonthlyFlowChart(entries),
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Badge("↑ Entrate superiori", "Positive"), Badge("↓ Uscite superiori", "Critical") } }));
-        host.Children.Add(Card(Text("Spese", "SectionTitle"), Text("Giorno per giorno · più verde = più spese", "Footnote"), Heatmap(entries)));
+        var flowHeader = new Grid { ColumnSpacing = 12 };
+        flowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        flowHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        flowHeader.Children.Add(new StackPanel { Spacing = 3, Children = { Text("Entrate e uscite", "SectionTitle"), Text("Confronto mensile · ultimi 6 mesi", "Footnote") } });
+        var netBadge = Badge((net >= 0 ? "+" : "−") + Euro(Math.Abs(net)), net >= 0 ? "Positive" : "Critical");
+        Grid.SetColumn(netBadge, 1); flowHeader.Children.Add(netBadge);
+        var flowLegend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Children = { FinanceLegend("Entrate", true), FinanceLegend("Uscite", false) } };
+        host.Children.Add(Card(flowHeader, MonthlyFlowChart(entries), flowLegend));
+        host.Children.Add(Card(Text("Spese", "SectionTitle"), Text("Andamento giornaliero · ultimi 6 mesi", "Footnote"), Heatmap(entries)));
 
         var category = new List<UIElement> { Text("Dove spendi", "SectionTitle"), Text(DateTime.Today.ToString("MMMM", Italian), "Footnote") };
         var groups = monthEntries.Where(e => e.Kind == "expense").GroupBy(e => e.Category)
@@ -76,7 +82,7 @@ public sealed partial class MainWindow
             foreach (var (name, cents) in groups.Take(4))
             {
                 category.Add(Row(name, Euro(cents)));
-                category.Add(new ProgressBar { Minimum = 0, Maximum = 1, Value = (double)cents / max, Height = 6 });
+                category.Add(new ProgressBar { Minimum = 0, Maximum = 1, Value = (double)cents / max, Height = 8, Foreground = Canone.Get("CriticalOnSubtle", Dark) });
             }
             var remaining = groups.Skip(4).Sum(group => group.Cents);
             if (remaining > 0) category.Add(Row("Altre categorie", Euro(remaining)));
@@ -147,108 +153,163 @@ public sealed partial class MainWindow
         {
             PlaceholderText = "0,00",
             Text = balanceMode && currentBalance != 0 ? (currentBalance / 100m).ToString("0.00", Italian) : "",
-            MinWidth = 280,
+            MinWidth = 0,
+            FontSize = 30,
+            BorderThickness = new Thickness(0),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            Padding = new Thickness(0),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         var error = new TextBlock { Text = "Inserisci un importo valido in euro.", Style = St("Footnote"), Foreground = Canone.Get("CriticalOnSubtle", Dark), Visibility = Visibility.Collapsed };
+        amount.TextChanged += (_, _) => error.Visibility = Visibility.Collapsed;
         var fields = new StackPanel { Spacing = 10 };
-        fields.Children.Add(Field("Importo · EUR", amount));
         ComboBox? category = null;
-        ComboBox? kind = null;
         TextBox? note = null;
         StackPanel? noteField = null;
+        var selectedKind = "expense";
+        ContentDialog? dialog = null;
         if (!balanceMode)
         {
-            var banknoteCounts = FinanceBanknotes.ToDictionary(value => value, _ => 0);
+            var kindGrid = new Grid { ColumnSpacing = 8 };
+            kindGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            kindGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Button expenseButton = null!;
+            Button incomeButton = null!;
+            void ApplyKindStyles()
+            {
+                expenseButton.Background = Canone.Get(selectedKind == "expense" ? "CriticalSubtle" : "BgSurface", Dark);
+                expenseButton.Foreground = Canone.Get(selectedKind == "expense" ? "CriticalOnSubtle" : "LabelSecondary", Dark);
+                expenseButton.BorderBrush = Canone.Get(selectedKind == "expense" ? "CriticalOnSubtle" : "LineSeparator", Dark);
+                incomeButton.Background = Canone.Get(selectedKind == "income" ? "PositiveSubtle" : "BgSurface", Dark);
+                incomeButton.Foreground = Canone.Get(selectedKind == "income" ? "PositiveOnSubtle" : "LabelSecondary", Dark);
+                incomeButton.BorderBrush = Canone.Get(selectedKind == "income" ? "PositiveOnSubtle" : "LineSeparator", Dark);
+            }
+            expenseButton = Btn("−  Uscita", () => { selectedKind = "expense"; ApplyKindStyles(); UpdateDialogAction(); }, "SecondaryButton");
+            incomeButton = Btn("+  Entrata", () => { selectedKind = "income"; ApplyKindStyles(); UpdateDialogAction(); }, "SecondaryButton");
+            ApplyKindStyles();
+            Grid.SetColumn(incomeButton, 1);
+            kindGrid.Children.Add(expenseButton); kindGrid.Children.Add(incomeButton);
+            fields.Children.Add(new StackPanel { Spacing = 6, Children = { Text("Tipo di movimento", "Footnote"), kindGrid } });
+
+            var banknoteOrder = new List<int>();
             var countLabels = new Dictionary<int, TextBlock>();
-            var banknoteSummary = Text("Tocca un taglio per sommarlo.", "FootnoteTertiary");
+            var countPills = new Dictionary<int, Border>();
+            var noteBorders = new Dictionary<int, Border>();
+            var noteForegrounds = new Dictionary<int, string>();
+            var settingFromBanknote = false;
+            var banknoteSummary = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 0) };
+            banknoteSummary.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            banknoteSummary.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var banknoteSummaryText = Text("Tocca un taglio per aggiungerlo al totale.", "FootnoteTertiary");
+            banknoteSummary.Children.Add(banknoteSummaryText);
+            var banknoteTotal = Text("", "BodyText");
+            Grid.SetColumn(banknoteTotal, 1); banknoteSummary.Children.Add(banknoteTotal);
+            var banknoteGrid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
+            for (var column = 0; column < 3; column++) banknoteGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var row = 0; row < 2; row++) banknoteGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var backgrounds = new[] { "BgSunken", "CriticalSubtle", "AccentSubtle", "CautionSubtle", "PositiveSubtle", "CautionSubtle" };
+            var foregrounds = new[] { "LabelSecondary", "CriticalOnSubtle", "AccentOnSubtle", "CautionOnSubtle", "PositiveOnSubtle", "CautionOnSubtle" };
             var banknoteHeader = new Grid { ColumnSpacing = 8 };
             banknoteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             banknoteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            banknoteHeader.Children.Add(Text("Aggiungi banconote", "BodyText"));
-            var clearBanknotes = Btn("Azzera", () =>
+            banknoteHeader.Children.Add(new StackPanel { Spacing = 2, Children = { Text("Banconote", "BodyText"), Text("Scegli i tagli per comporre l'importo", "Footnote") } });
+            var banknoteActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            Button undoBanknote = null!;
+            Button clearBanknotes = null!;
+            undoBanknote = Btn("Annulla", () =>
             {
-                amount.Text = "";
-                foreach (var denomination in FinanceBanknotes)
-                {
-                    banknoteCounts[denomination] = 0;
-                    countLabels[denomination].Text = "×0";
-                }
-                banknoteSummary.Text = "Tocca un taglio per sommarlo.";
+                if (banknoteOrder.Count == 0 || !TryEuro(amount.Text, out var current)) return;
+                var denomination = banknoteOrder[^1];
+                banknoteOrder.RemoveAt(banknoteOrder.Count - 1);
+                settingFromBanknote = true;
+                amount.Text = (current - denomination).ToString("0.00", Italian);
+                settingFromBanknote = false;
+                RefreshBanknotes();
             }, "ChipButton");
-            Grid.SetColumn(clearBanknotes, 1); banknoteHeader.Children.Add(clearBanknotes);
+            clearBanknotes = Btn("Azzera", () =>
+            {
+                banknoteOrder.Clear();
+                settingFromBanknote = true;
+                amount.Text = "";
+                settingFromBanknote = false;
+                RefreshBanknotes();
+            }, "ChipButton");
+            banknoteActions.Children.Add(undoBanknote); banknoteActions.Children.Add(clearBanknotes);
+            Grid.SetColumn(banknoteActions, 1); banknoteHeader.Children.Add(banknoteActions);
             fields.Children.Add(banknoteHeader);
-
-            var noteGrid = new Grid { ColumnSpacing = 6, RowSpacing = 6 };
-            for (var column = 0; column < 3; column++) noteGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var row = 0; row < 2; row++) noteGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var backgrounds = new[] { "BgSunken", "CriticalSubtle", "AccentSubtle", "CautionSubtle", "PositiveSubtle", "BgSunken" };
-            var foregrounds = new[] { "LabelSecondary", "CriticalOnSubtle", "AccentOnSubtle", "CautionOnSubtle", "PositiveOnSubtle", "LabelPrimary" };
-            var settingFromBanknote = false;
             amount.TextChanged += (_, _) =>
             {
                 if (settingFromBanknote) return;
-                foreach (var denomination in FinanceBanknotes)
-                {
-                    banknoteCounts[denomination] = 0;
-                    countLabels[denomination].Text = "×0";
-                }
-                banknoteSummary.Text = amount.Text.Length == 0 ? "Tocca un taglio per sommarlo." : "Importo inserito manualmente.";
+                banknoteOrder.Clear();
+                RefreshBanknotes(manual: amount.Text.Length > 0);
             };
             for (var index = 0; index < FinanceBanknotes.Length; index++)
             {
                 var denomination = FinanceBanknotes[index];
-                var count = new TextBlock { Text = "×0", FontSize = 11, Foreground = Canone.Get(foregrounds[index], Dark), HorizontalAlignment = HorizontalAlignment.Right };
-                countLabels.Add(denomination, count);
-                var noteContent = new Grid { ColumnSpacing = 4 };
-                noteContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                noteContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 0 };
-                textStack.Children.Add(new TextBlock { Text = "€" + denomination, FontSize = 19, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Canone.Get(foregrounds[index], Dark) });
-                textStack.Children.Add(new TextBlock { Text = "EURO", FontSize = 9, Foreground = Canone.Get(foregrounds[index], Dark), Opacity = 0.8 });
-                noteContent.Children.Add(textStack);
-                var motif = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1), BorderBrush = Canone.Get(foregrounds[index], Dark), Opacity = 0.38, VerticalAlignment = VerticalAlignment.Bottom };
-                var rightStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 2, Children = { count, motif } };
-                Grid.SetColumn(rightStack, 1); noteContent.Children.Add(rightStack);
-                var visual = new Border
-                {
-                    Background = Canone.Get(backgrounds[index], Dark),
-                    BorderBrush = Canone.Get("LineSeparator", Dark),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(9),
-                    Padding = new Thickness(8, 5, 8, 5),
-                    MinHeight = 62,
-                    Child = noteContent,
-                };
+                var foregroundKey = foregrounds[index];
+                var count = new TextBlock { Text = "×0", FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Canone.Get("AccentOnAccent", Dark) };
+                var countPill = new Border { Visibility = Visibility.Collapsed, Background = Canone.Get("AccentDefault", Dark), CornerRadius = new CornerRadius(9), Padding = new Thickness(6, 2, 6, 2), Child = count };
+                countLabels.Add(denomination, count); countPills.Add(denomination, countPill); noteForegrounds.Add(denomination, foregroundKey);
+
+                var art = new Grid();
+                art.Children.Add(new Border { Margin = new Thickness(4), BorderBrush = new SolidColorBrush(Canone.Color(foregroundKey, Dark)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), Opacity = 0.28 });
+                art.Children.Add(new Border { Width = 4, Height = 42, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(11, 0, 0, 0), Background = Canone.Get(foregroundKey, Dark), CornerRadius = new CornerRadius(2), Opacity = 0.42 });
+                var denominationLabel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 0, Margin = new Thickness(22, 0, 48, 0) };
+                denominationLabel.Children.Add(new TextBlock { Text = "€" + denomination, FontSize = 23, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Canone.Get(foregroundKey, Dark) });
+                denominationLabel.Children.Add(new TextBlock { Text = "BANCONOTA · EURO", FontSize = 9, CharacterSpacing = 40, Foreground = Canone.Get(foregroundKey, Dark), Opacity = 0.82 });
+                art.Children.Add(denominationLabel);
+                var sealText = new TextBlock { Text = "€", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Canone.Get(foregroundKey, Dark), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.62 };
+                var seal = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), BorderThickness = new Thickness(1), BorderBrush = Canone.Get(foregroundKey, Dark), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Child = sealText, Opacity = 0.7 };
+                art.Children.Add(seal);
+                countPill.HorizontalAlignment = HorizontalAlignment.Right; countPill.VerticalAlignment = VerticalAlignment.Top; countPill.Margin = new Thickness(0, 8, 8, 0);
+                art.Children.Add(countPill);
+
+                var noteBorder = new Border { Background = Canone.Get(backgrounds[index], Dark), BorderBrush = Canone.Get("LineSeparator", Dark), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13), MinHeight = 78, Child = art };
+                noteBorders.Add(denomination, noteBorder);
                 var button = new Button
                 {
-                    Content = visual,
+                    Content = noteBorder,
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0),
                     Padding = new Thickness(0),
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                 };
+                AutomationProperties.SetName(button, "Aggiungi una banconota da " + denomination + " euro");
                 button.Click += (_, _) =>
                 {
                     if (!TryEuro(amount.Text, out var current)) current = 0;
-                    var next = current + denomination;
+                    banknoteOrder.Add(denomination);
                     settingFromBanknote = true;
-                    amount.Text = next.ToString("0.00", Italian);
+                    amount.Text = (current + denomination).ToString("0.00", Italian);
                     settingFromBanknote = false;
-                    banknoteCounts[denomination]++;
-                    count.Text = "×" + banknoteCounts[denomination];
-                    var selected = FinanceBanknotes.Where(value => banknoteCounts[value] > 0)
-                        .Select(value => "€" + value + " × " + banknoteCounts[value]);
-                    banknoteSummary.Text = "Selezionate: " + string.Join(" · ", selected);
+                    RefreshBanknotes();
                 };
                 var row = index / 3;
                 var column = index % 3;
-                Grid.SetRow(button, row); Grid.SetColumn(button, column); noteGrid.Children.Add(button);
+                Grid.SetRow(button, row); Grid.SetColumn(button, column); banknoteGrid.Children.Add(button);
             }
-            fields.Children.Add(noteGrid);
+            void RefreshBanknotes(bool manual = false)
+            {
+                var counts = banknoteOrder.GroupBy(value => value).ToDictionary(group => group.Key, group => group.Count());
+                foreach (var denomination in FinanceBanknotes)
+                {
+                    var count = counts.GetValueOrDefault(denomination);
+                    countLabels[denomination].Text = "×" + count;
+                    countPills[denomination].Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    noteBorders[denomination].BorderBrush = Canone.Get(count > 0 ? noteForegrounds[denomination] : "LineSeparator", Dark);
+                    noteBorders[denomination].BorderThickness = new Thickness(count > 0 ? 2 : 1);
+                }
+                undoBanknote.IsEnabled = banknoteOrder.Count > 0;
+                clearBanknotes.IsEnabled = banknoteOrder.Count > 0;
+                banknoteTotal.Text = banknoteOrder.Count == 0 ? "" : (banknoteOrder.Count + (banknoteOrder.Count == 1 ? " banconota" : " banconote") + " · " + Euro(banknoteOrder.Sum(value => (long)value * 100)));
+                banknoteSummaryText.Text = banknoteOrder.Count > 0 ? "Importo composto dai tagli" : manual ? "Importo inserito manualmente" : "Tocca un taglio per aggiungerlo al totale.";
+            }
+            fields.Children.Add(banknoteGrid);
             fields.Children.Add(banknoteSummary);
+            RefreshBanknotes();
 
-            kind = new ComboBox { ItemsSource = new[] { "Uscita", "Entrata" }, SelectedIndex = 0, MinWidth = 280 };
             category = new ComboBox { ItemsSource = FinanceCategories, SelectedIndex = 0, MinWidth = 280 };
             note = new TextBox { PlaceholderText = "Facoltativa", MaxLength = 80, MinWidth = 280, Visibility = Visibility.Collapsed };
             noteField = Field("Nota", note);
@@ -260,22 +321,39 @@ public sealed partial class MainWindow
                 note.Visibility = noteField.Visibility;
                 noteToggle.Content = noteField.Visibility == Visibility.Visible ? "Nascondi nota" : "+ Aggiungi una nota";
             };
-            fields.Children.Add(Field("Tipo", kind));
             fields.Children.Add(Field("Categoria", category));
             fields.Children.Add(noteToggle);
             fields.Children.Add(noteField);
         }
+        var amountLine = new Grid { ColumnSpacing = 10, MinHeight = 64 };
+        amountLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        amountLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        amountLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        amountLine.Children.Add(new TextBlock { Text = "€", FontSize = 30, Foreground = Canone.Get("AccentDefault", Dark), VerticalAlignment = VerticalAlignment.Center, FontWeight = Microsoft.UI.Text.FontWeights.Medium });
+        Grid.SetColumn(amount, 1); amountLine.Children.Add(amount);
+        var currency = Text("EUR", "FootnoteTertiary"); currency.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(currency, 2); amountLine.Children.Add(currency);
+        var amountCard = new Border { Background = Canone.Get("BgSurface", Dark), BorderBrush = Canone.Get("LineStrong", Dark), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Padding = new Thickness(16, 8, 16, 8), Child = amountLine };
+        var amountSection = new StackPanel { Spacing = 6, Children = { Text("Importo", "Footnote"), amountCard } };
+        fields.Children.Insert(balanceMode ? 0 : 1, amountSection);
         fields.Children.Add(error);
 
         var dlg = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
-            Title = balanceMode ? "Aggiorna saldo" : "Nuovo movimento",
-            Content = fields,
-            PrimaryButtonText = balanceMode ? "Salva" : "Aggiungi",
+            Title = balanceMode ? "Aggiorna saldo" : selectedKind == "income" ? "Nuova entrata" : "Nuova uscita",
+            Content = new ScrollViewer { Content = fields, MaxHeight = 640, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
+            PrimaryButtonText = balanceMode ? "Salva saldo" : selectedKind == "income" ? "Aggiungi entrata" : "Aggiungi uscita",
             CloseButtonText = "Annulla",
             DefaultButton = ContentDialogButton.Primary,
         };
+        dialog = dlg;
+        void UpdateDialogAction()
+        {
+            if (dialog == null || balanceMode) return;
+            dialog.Title = selectedKind == "income" ? "Nuova entrata" : "Nuova uscita";
+            dialog.PrimaryButtonText = selectedKind == "income" ? "Aggiungi entrata" : "Aggiungi uscita";
+        }
         dlg.PrimaryButtonClick += (_, args) =>
         {
             if (!TryEuro(amount.Text, out var value)
@@ -288,7 +366,7 @@ public sealed partial class MainWindow
             }
             var cents = decimal.ToInt64(decimal.Round(value * 100m, 0, MidpointRounding.AwayFromZero));
             if (balanceMode) FinanceLedger.SetBalance(_r.S, cents);
-            else FinanceLedger.Add(_r.S, kind?.SelectedIndex == 1 ? "income" : "expense", cents, category?.SelectedItem?.ToString() ?? "Altro", note?.Text ?? "");
+            else FinanceLedger.Add(_r.S, selectedKind, cents, category?.SelectedItem?.ToString() ?? "Altro", note?.Text ?? "");
             _r.Raise();
         };
         await dlg.ShowAsync();
@@ -313,10 +391,10 @@ public sealed partial class MainWindow
         var days = entries.Where(e => e.Kind == "expense" && LocalDate(e.Ts) >= start && LocalDate(e.Ts) <= today).GroupBy(e => LocalDate(e.Ts))
             .ToDictionary(g => g.Key, g => g.Sum(e => -e.Cents));
         var max = Math.Max(1, days.Values.DefaultIfEmpty(1).Max());
-        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left, ColumnSpacing = 2, RowSpacing = 2 };
-        for (var i = 0; i < 26; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-        for (var i = 0; i < 7; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12) });
-        var positive = Canone.Color("PositiveOnSubtle", Dark);
+        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left, ColumnSpacing = 3, RowSpacing = 3 };
+        for (var i = 0; i < 26; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+        for (var i = 0; i < 7; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14) });
+        var accent = Canone.Color("AccentOnSubtle", Dark);
         for (var week = 0; week < 26; week++) for (var row = 0; row < 7; row++)
         {
             var date = start.AddDays(week * 7 + row);
@@ -324,19 +402,27 @@ public sealed partial class MainWindow
             var cents = days.GetValueOrDefault(date);
             var ratio = cents <= 0 ? 0 : Math.Log(1 + (double)cents) / Math.Log(1 + (double)max);
             var alpha = cents <= 0 ? (byte)255 : (byte)Math.Clamp(80 + ratio * 175, 0, 255);
-            var brush = cents <= 0 ? Canone.Get("BgSunken", Dark) : new SolidColorBrush(Windows.UI.Color.FromArgb(alpha, positive.R, positive.G, positive.B));
-            var cell = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(2), Background = brush };
+            var brush = cents <= 0 ? Canone.Get("BgSunken", Dark) : new SolidColorBrush(Windows.UI.Color.FromArgb(alpha, accent.R, accent.G, accent.B));
+            var cell = new Border { Width = 14, Height = 12, CornerRadius = new CornerRadius(3), Background = brush };
             ToolTipService.SetToolTip(cell, date.ToString("d MMM", Italian) + " · " + Euro(cents));
             Grid.SetColumn(cell, week); Grid.SetRow(cell, row); grid.Children.Add(cell);
         }
         var weekTotal = entries.Where(e => e.Kind == "expense" && LocalDate(e.Ts) >= today.AddDays(-6)).Sum(e => -e.Cents);
         var halfYear = entries.Where(e => e.Kind == "expense" && LocalDate(e.Ts) >= start).Sum(e => -e.Cents);
+        var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        legend.Children.Add(Text("Meno", "FootnoteTertiary"));
+        foreach (var color in new[] { "BgSunken", "AccentSubtle", "AccentOnSubtle" })
+            legend.Children.Add(new Border { Width = 11, Height = 11, CornerRadius = new CornerRadius(3), Background = Canone.Get(color, Dark) });
+        legend.Children.Add(Text("Più", "FootnoteTertiary"));
         var labels = new StackPanel { Spacing = 4, Children =
         {
             grid,
-            Text(start.ToString("d MMM", Italian) + "     →     " + today.ToString("d MMM", Italian), "FootnoteTertiary"),
+            new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }, new ColumnDefinition { Width = GridLength.Auto } },
+                Children = { Text(start.ToString("d MMM", Italian) + "     →     " + today.ToString("d MMM", Italian), "FootnoteTertiary"), legend } },
             Text("Ultimi 7 giorni " + Euro(weekTotal) + "  ·  periodo " + Euro(halfYear), "Footnote"),
         } };
+        if (days.Count == 0) labels.Children.Add(Text("Registra un'uscita per popolare la mappa", "FootnoteTertiary"));
+        Grid.SetColumn(legend, 1);
         return labels;
     }
 
@@ -347,33 +433,40 @@ public sealed partial class MainWindow
         {
             var date = now.AddDays(1 - now.Day).AddMonths(-offset);
             var moves = entries.Where(e => LocalDate(e.Ts).Year == date.Year && LocalDate(e.Ts).Month == date.Month).ToList();
-            var net = moves.Where(e => e.Kind == "income").Sum(e => e.Cents) - moves.Where(e => e.Kind == "expense").Sum(e => -e.Cents);
-            return (Date: date, Net: net);
+            var income = moves.Where(e => e.Kind == "income").Sum(e => e.Cents);
+            var expense = moves.Where(e => e.Kind == "expense").Sum(e => -e.Cents);
+            return (Date: date, Income: income, Expense: expense);
         }).ToList();
-        var maximum = Math.Max(1, months.Max(p => Math.Abs(p.Net)));
+        var maximum = Math.Max(1, months.Max(p => Math.Max(p.Income, p.Expense)));
         const double chartWidth = 640;
-        const double chartHeight = 112;
-        const double zeroY = 58;
-        const double maxBarHeight = 43;
+        const double chartHeight = 92;
+        const double baseline = 82;
+        const double maxBarHeight = 68;
         var canvas = new Microsoft.UI.Xaml.Controls.Canvas { Width = chartWidth, Height = chartHeight };
         var axis = new Border { Width = chartWidth, Height = 1, Background = Canone.Get("LineSeparator", Dark) };
         Microsoft.UI.Xaml.Controls.Canvas.SetLeft(axis, 0);
-        Microsoft.UI.Xaml.Controls.Canvas.SetTop(axis, zeroY);
+        Microsoft.UI.Xaml.Controls.Canvas.SetTop(axis, baseline);
         canvas.Children.Add(axis);
         for (var i = 0; i < months.Count; i++)
         {
-            var (date, net) = months[i];
-            var height = Math.Abs(net) == 0 ? 4 : Math.Max(4, Math.Abs(net) / (double)maximum * maxBarHeight);
-            var width = 44d;
-            var bar = new Border
+            var (date, income, expense) = months[i];
+            const double width = 19;
+            const double gap = 5;
+            var groupWidth = width * 2 + gap;
+            var startX = i * (chartWidth / months.Count) + (chartWidth / months.Count - groupWidth) / 2;
+            foreach (var (amount, barIndex, kind) in new[] { (income, 0, "Entrate"), (expense, 1, "Uscite") })
             {
-                Width = width, Height = height, CornerRadius = new CornerRadius(5),
-                Background = net > 0 ? Canone.Get("PositiveOnSubtle", Dark) : net < 0 ? Canone.Get("CriticalOnSubtle", Dark) : Canone.Get("BgSunken", Dark),
-            };
-            Microsoft.UI.Xaml.Controls.Canvas.SetLeft(bar, i * (chartWidth / months.Count) + (chartWidth / months.Count - width) / 2);
-            Microsoft.UI.Xaml.Controls.Canvas.SetTop(bar, net >= 0 ? zeroY - height : zeroY + 2);
-            ToolTipService.SetToolTip(bar, date.ToString("MMMM", Italian) + " · " + (net < 0 ? "−" : "+") + Euro(Math.Abs(net)));
-            canvas.Children.Add(bar);
+                var height = amount <= 0 ? 0 : Math.Max(3, amount / (double)maximum * maxBarHeight);
+                var bar = new Border
+                {
+                    Width = width, Height = height, CornerRadius = new CornerRadius(5),
+                    Background = Canone.Get(kind == "Entrate" ? "PositiveOnSubtle" : "CriticalOnSubtle", Dark),
+                };
+                Microsoft.UI.Xaml.Controls.Canvas.SetLeft(bar, startX + barIndex * (width + gap));
+                Microsoft.UI.Xaml.Controls.Canvas.SetTop(bar, baseline - height);
+                ToolTipService.SetToolTip(bar, date.ToString("MMMM", Italian) + " · " + kind + " " + Euro(amount));
+                canvas.Children.Add(bar);
+            }
         }
         var labels = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var _ in months) labels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -382,6 +475,14 @@ public sealed partial class MainWindow
             var label = new TextBlock { Text = months[i].Date.ToString("MMM", Italian), Style = St("FootnoteTertiary"), HorizontalAlignment = HorizontalAlignment.Center };
             Grid.SetColumn(label, i); labels.Children.Add(label);
         }
-        return new StackPanel { Spacing = 2, Children = { new Viewbox { Height = chartHeight, Stretch = Stretch.Fill, Child = canvas }, labels } };
+        var chart = new StackPanel { Spacing = 2, Children = { new Viewbox { Height = chartHeight, Stretch = Stretch.Fill, Child = canvas }, labels } };
+        if (months.All(p => p.Income == 0 && p.Expense == 0)) chart.Children.Add(Text("Registra un movimento per vedere il confronto", "FootnoteTertiary"));
+        return chart;
+    }
+
+    private UIElement FinanceLegend(string label, bool income)
+    {
+        var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Canone.Get(income ? "PositiveOnSubtle" : "CriticalOnSubtle", Dark) };
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { dot, Text(label, "Footnote") } };
     }
 }
