@@ -263,8 +263,9 @@
     <Style x:Key="BarStyle" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource BgSurface}" />
         <Setter Property="BorderBrush" Value="{ThemeResource LineSeparator}" />
-        <Setter Property="BorderThickness" Value="0,1,0,0" />
-        <Setter Property="Padding" Value="8" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="26" />
+        <Setter Property="Padding" Value="5" />
     </Style>
     <Style x:Key="DividerStyle" TargetType="Border">
         <Setter Property="Height" Value="1" />
@@ -359,7 +360,7 @@
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style x:Key="TabButtonSelected" TargetType="Button" BasedOn="{StaticResource TabButton}">
-        <Setter Property="Background" Value="{ThemeResource AccentSubtle}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{ThemeResource AccentOnSubtle}" />
         <Setter Property="FontFamily" Value="{StaticResource FontSansMedium}" />
     </Style>

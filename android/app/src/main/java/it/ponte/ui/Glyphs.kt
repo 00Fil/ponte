@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 
@@ -38,7 +39,7 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
     }
     Canvas(modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }) {
         val u = size.minDimension / 24f
-        val st = Stroke(1.8f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val st = Stroke(2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         fun o(x: Float, y: Float) = Offset(x * u, y * u)
         fun sz(w: Float, h: Float) = Size(w * u, h * u)
         when (index) {
@@ -49,51 +50,61 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
                     moveTo(6f * u, 9.6f * u); lineTo(6f * u, 19f * u); lineTo(10f * u, 19f * u); lineTo(10f * u, 14f * u)
                     lineTo(14f * u, 14f * u); lineTo(14f * u, 19f * u); lineTo(18f * u, 19f * u); lineTo(18f * u, 9.6f * u)
                 }
+                drawPath(body, color.copy(alpha = if (selected) 0.13f else 0.04f), style = androidx.compose.ui.graphics.drawscope.Fill)
                 drawPath(body, color, style = st)
             }
-            1 -> { // schermo e piedistallo
-                drawRoundRect(color, o(4f, 5f), sz(16f, 11f), CornerRadius(2.5f * u), style = st)
-                drawLine(color, o(9f, 20f), o(15f, 20f), 1.8f * u, StrokeCap.Round)
-                drawLine(color, o(12f, 16f), o(12f, 20f), 1.8f * u, StrokeCap.Round)
+            1 -> { // computer e telefono: due schermi, invece di un generico monitor
+                drawRoundRect(color.copy(alpha = if (selected) 0.12f else 0.035f), o(2.5f, 5f), sz(14.5f, 10.5f), CornerRadius(2.2f * u))
+                drawRoundRect(color, o(2.5f, 5f), sz(14.5f, 10.5f), CornerRadius(2.2f * u), style = st)
+                drawLine(color, o(7f, 19f), o(12f, 19f), 2f * u, StrokeCap.Round)
+                drawLine(color, o(9.5f, 15.5f), o(9.5f, 19f), 2f * u, StrokeCap.Round)
+                drawRoundRect(color.copy(alpha = if (selected) 0.18f else 0.04f), o(14.5f, 3.8f), sz(7f, 15.5f), CornerRadius(2.2f * u))
+                drawRoundRect(color, o(14.5f, 3.8f), sz(7f, 15.5f), CornerRadius(2.2f * u), style = st)
+                drawLine(color, o(17f, 16.8f), o(19f, 16.8f), 1.6f * u, StrokeCap.Round)
             }
             2 -> { // cartellina con molletta
+                drawRoundRect(color.copy(alpha = if (selected) 0.11f else 0.035f), o(6f, 5f), sz(12f, 16f), CornerRadius(2.5f * u))
                 drawRoundRect(color, o(6f, 5f), sz(12f, 16f), CornerRadius(2.5f * u), style = st)
                 drawRoundRect(color, o(9f, 2.8f), sz(6f, 4f), CornerRadius(1.6f * u), style = st)
                 drawLine(color, o(9f, 12f), o(15f, 12f), 1.8f * u, StrokeCap.Round)
                 drawLine(color, o(9f, 16f), o(13f, 16f), 1.8f * u, StrokeCap.Round)
+                drawRoundRect(color, o(9f, 2.8f), sz(6f, 4f), CornerRadius(1.6f * u), style = st)
             }
-            3 -> { // fotografia
-                drawRoundRect(color, o(3.5f, 5f), sz(17f, 14f), CornerRadius(3f * u), style = st)
-                val p = Path().apply {
-                    moveTo(3.8f * u, 16.5f * u); lineTo(9f * u, 11.5f * u); lineTo(13f * u, 15.2f * u)
-                    lineTo(15.4f * u, 13f * u); lineTo(20.2f * u, 17.2f * u)
-                }
-                drawPath(p, color, style = st)
-                drawCircle(color, 1.4f * u, o(15.8f, 9.2f), style = st)
+            3 -> { // archivio: scatola e maniglia, distinta dalla galleria immagini
+                drawRoundRect(color.copy(alpha = if (selected) 0.12f else 0.035f), o(3.5f, 8f), sz(17f, 12f), CornerRadius(2.2f * u))
+                drawRoundRect(color, o(3.5f, 8f), sz(17f, 12f), CornerRadius(2.2f * u), style = st)
+                drawRoundRect(color.copy(alpha = if (selected) 0.14f else 0.045f), o(5f, 4f), sz(14f, 5f), CornerRadius(1.8f * u))
+                drawRoundRect(color, o(5f, 4f), sz(14f, 5f), CornerRadius(1.8f * u), style = st)
+                drawLine(color, o(9f, 12.5f), o(15f, 12.5f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(9f, 16f), o(15f, 16f), 1.8f * u, StrokeCap.Round)
             }
             4 -> { // cuffie: le conchiglie scendono al posto con un rimbalzo
                 val dy = if (selected) (1f - gesture.value) * -2.4f * u else 0f
                 val arc = Path().apply { arcTo(androidx.compose.ui.geometry.Rect(o(4.2f, 3.5f), sz(15.6f, 15.6f)), 180f, 180f, true) }
                 drawPath(arc, color, style = st)
+                drawRoundRect(color.copy(alpha = if (selected) 0.16f else 0.04f), Offset(3f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u))
                 drawRoundRect(color, Offset(3f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u), style = st)
+                drawRoundRect(color.copy(alpha = if (selected) 0.16f else 0.04f), Offset(16.8f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u))
                 drawRoundRect(color, Offset(16.8f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u), style = st)
             }
-            5 -> { // saldo
-                drawCircle(color, 9f * u, o(12f, 12f), style = st)
-                drawLine(color, o(12f, 7f), o(12f, 17f), 1.8f * u, StrokeCap.Round)
-                drawLine(color, o(14f, 9f), o(10f, 9f), 1.8f * u, StrokeCap.Round)
-                drawLine(color, o(10f, 15f), o(14f, 15f), 1.8f * u, StrokeCap.Round)
+            5 -> { // portafoglio con saldo
+                drawRoundRect(color.copy(alpha = if (selected) 0.13f else 0.04f), o(3f, 6f), sz(18f, 13f), CornerRadius(3f * u))
+                drawRoundRect(color, o(3f, 6f), sz(18f, 13f), CornerRadius(3f * u), style = st)
+                drawLine(color, o(4f, 9f), o(15f, 9f), 1.6f * u, StrokeCap.Round)
+                drawRoundRect(color, o(13f, 10.5f), sz(8f, 5f), CornerRadius(2f * u), style = st)
+                drawCircle(color, 0.9f * u, o(16f, 13f))
+                drawLine(color, o(7f, 4f), o(17f, 4f), 1.8f * u, StrokeCap.Round)
             }
-            else -> { // cursori: le manopole scorrono al loro posto
-                val k = if (selected) 1f - gesture.value else 0f
-                fun knob(y: Float, x: Float, delta: Float) {
-                    drawLine(color, o(4f, y), o(20f, y), 1.8f * u, StrokeCap.Round)
-                    drawCircle(Color.Black.copy(alpha = 0f), 2.3f * u, o(x + delta * k, y))
-                    drawCircle(color, 2.3f * u, o(x + delta * k, y), style = st)
+            else -> { // impostazioni: ghiera con otto denti e centro aperto
+                val center = o(12f, 12f)
+                for (tooth in 0 until 8) {
+                    rotate(tooth * 45f, center) {
+                        drawLine(color, o(12f, 2f), o(12f, 4.5f), 2f * u, StrokeCap.Round)
+                    }
                 }
-                knob(7f, 15f, -6f)
-                knob(12f, 9f, 6f)
-                knob(17f, 14f, -5f)
+                drawCircle(color, 7.2f * u, center, style = st)
+                drawCircle(color.copy(alpha = if (selected) 0.10f else 0.025f), 3.2f * u, center)
+                drawCircle(color, 3.2f * u, center, style = st)
             }
         }
     }

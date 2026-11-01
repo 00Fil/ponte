@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +27,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -42,9 +45,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import it.ponte.ui.Brand
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxScope
 import it.ponte.ui.UpdateSheet
@@ -65,8 +68,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.luminance
 import androidx.core.content.ContextCompat
 import it.ponte.ui.ArchiveScreen
 import it.ponte.ui.Canone
@@ -210,28 +215,66 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     }
 }
 
-/**
- * Barra in basso: solo icone. Una pillola sfumata scivola sotto l'icona attiva seguendo il dito durante lo swipe,
- * e le icone passano dal grigio al bianco man mano che la pillola ci arriva sopra.
- */
+/** Barra mobile in vetro satinato: la lente segue il gesto e lascia un riflesso morbido sotto l'icona attiva. */
 @Composable
 private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
     val c = Canone.colors
-    Column(Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSeparator))
-        BoxWithConstraints(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.s2)) {
+    val light = c.bgCanvas.luminance() > 0.5f
+    val shape = RoundedCornerShape(26.dp)
+    val glassTop = Color.White.copy(alpha = if (light) 0.72f else 0.16f)
+    val glassEdge = Color.White.copy(alpha = if (light) 0.88f else 0.28f)
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s3, vertical = Space.s2)) {
+        val glass = Modifier.fillMaxWidth().shadow(14.dp, shape).clip(shape)
+            .background(Brush.verticalGradient(listOf(glassTop, c.bgSurface.copy(alpha = 0.88f), c.bgCanvas.copy(alpha = 0.78f))))
+            .border(1.dp, c.lineSeparator.copy(alpha = 0.8f), shape)
+        Column(glass) {
+            Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 32.dp)
+                .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.White.copy(alpha = if (light) 0.42f else 0.12f), Color.Transparent))))
+            BoxWithConstraints(Modifier.fillMaxWidth().height(54.dp).padding(horizontal = Space.s2, vertical = 3.dp)) {
             val itemW = maxWidth / TABS.size
-            val pillW = 56.dp
-            Box(
-                Modifier.align(Alignment.CenterStart).size(pillW, 36.dp)
-                    .graphicsLayer { translationX = (pos() * itemW.toPx()) + (itemW - pillW).toPx() / 2f }
-                    .clip(CircleShape).background(Brand.gradient),
+            val pillW = minOf(44.dp, itemW * 0.9f)
+            val pillH = 38.dp
+            val density = LocalDensity.current
+            val itemPx = with(density) { itemW.toPx() }
+            val pillPx = with(density) { pillW.toPx() }
+            val indicatorX = (pos() * itemPx) + (itemPx - pillPx) / 2f
+            val glide by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = pos(),
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 250f),
+                label = "riflesso-liquido",
             )
+            val reflectionX = (glide * itemPx) + (itemPx - pillPx) / 2f
+            val stretch = 1f + (kotlin.math.abs(pos() - current) * 0.16f).coerceIn(0f, 0.1f)
+
+            // Un riflesso rallentato resta appena dietro alla lente, come luce rifratta sul bordo inferiore.
+            Box(
+                Modifier.align(Alignment.BottomStart).graphicsLayer {
+                    translationX = reflectionX + pillW.toPx() * 0.17f
+                    translationY = 3.dp.toPx()
+                    alpha = 0.38f
+                }.size(pillW * 0.66f, 3.dp).background(
+                    Brush.horizontalGradient(listOf(Color.Transparent, c.accent.copy(alpha = 0.42f), Color.Transparent)), CircleShape,
+                ),
+            )
+
+            val pillShape = RoundedCornerShape(18.dp)
+            Box(
+                Modifier.align(Alignment.CenterStart).graphicsLayer {
+                    translationX = indicatorX
+                    scaleX = stretch
+                }.size(pillW, pillH).clip(pillShape)
+                    .background(Brush.verticalGradient(listOf(glassEdge, c.accentSubtle.copy(alpha = if (light) 0.86f else 0.9f), c.accent.copy(alpha = if (light) 0.10f else 0.18f))))
+                    .border(1.dp, glassEdge.copy(alpha = if (light) 0.88f else 0.55f), pillShape),
+            ) {
+                Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 12.dp).align(Alignment.TopCenter)
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.Transparent))))
+            }
+
             Row(Modifier.fillMaxSize()) {
                 TABS.forEachIndexed { i, label ->
                     Box(
                         Modifier.weight(1f).fillMaxHeight()
-                            .semantics { contentDescription = label }
+                            .semantics { contentDescription = label; selected = current == i }
                             .clickable(
                                 role = Role.Tab, onClick = { onSelect(i) }, indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
@@ -239,9 +282,11 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
                         contentAlignment = Alignment.Center,
                     ) {
                         val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
-                        TabGlyph(i, androidx.compose.ui.graphics.lerp(c.labelSecondary, Color.White, near), current == i, Modifier.size(24.dp))
+                        val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.accentOnSubtle, near)
+                        TabGlyph(i, iconColor, current == i, Modifier.size(24.dp))
                     }
                 }
+            }
             }
         }
     }

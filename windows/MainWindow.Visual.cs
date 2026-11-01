@@ -139,6 +139,44 @@ public sealed partial class MainWindow
         v.StartAnimation("Translation", spring);
     }
 
+    /// <summary>Indicatore della barra compatta: scivola sotto l'icona attiva e trascina la luce riflessa.</summary>
+    private void MoveBottomIndicator(int index, bool animate)
+    {
+        if (index < 0 || index >= _bottomNav.Count || _bottomNav[index].ActualWidth < 1) return;
+        try
+        {
+            var button = _bottomNav[index];
+            var x = (float)button.TransformToVisual(BottomTabs).TransformPoint(new Windows.Foundation.Point(0, 0)).X
+                + (float)((button.ActualWidth - BottomIndicator.Width) / 2);
+            MoveGlassElement(BottomIndicator, new Vector3(x, 0, 0), animate, 48);
+            MoveGlassElement(BottomReflection, new Vector3(x + 9, 0, 0), animate, 66);
+            BottomIndicator.Opacity = 1;
+            BottomReflection.Opacity = Dark ? 0.68 : 0.5;
+        }
+        catch (Exception e) { Crash.Log(e, "Vetro barra compatta"); }
+    }
+
+    private static void MoveGlassElement(UIElement element, Vector3 target, bool animate, int periodMs)
+    {
+        var visual = ElementCompositionPreview.GetElementVisual(element);
+        var compositor = visual.Compositor;
+        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
+        if (!animate)
+        {
+            visual.StopAnimation("Translation");
+            var snap = compositor.CreateVector3KeyFrameAnimation();
+            snap.InsertKeyFrame(1f, target);
+            snap.Duration = TimeSpan.FromMilliseconds(1);
+            visual.StartAnimation("Translation", snap);
+            return;
+        }
+        var spring = compositor.CreateSpringVector3Animation();
+        spring.FinalValue = target;
+        spring.DampingRatio = 0.88f;
+        spring.Period = TimeSpan.FromMilliseconds(periodMs);
+        visual.StartAnimation("Translation", spring);
+    }
+
     private static void FadeTo(UIElement el, double to, int ms)
     {
         var a = new DoubleAnimation { To = to, Duration = TimeSpan.FromMilliseconds(ms), EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 4 } };

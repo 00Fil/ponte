@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -24,6 +25,7 @@ internal sealed class Cmd : ICommand
 public sealed partial class MainWindow : Window
 {
     private static readonly string[] Tabs = { "Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Finanze", "Impostazioni" };
+    private static readonly string[] BottomTabLabels = { "Home", "Dispos.", "Appunti", "Archivio", "Audio", "Finanze", "Impost." };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -55,8 +57,15 @@ public sealed partial class MainWindow : Window
         };
         _ = InitWebAsync(HeaderWeb, "shape=band&cell=10");
         Root.ActualThemeChanged += (_, _) => OnThemeChanged();
+        Root.ActualThemeChanged += (_, _) => UpdateBottomNavigationColors();
+        UpdateBottomNavigationColors();
         UpdateFades();
         Root.SizeChanged += (_, _) => ApplyLayout();
+        BottomTabs.SizeChanged += (_, _) =>
+        {
+            UpdateBottomNavigationDensity();
+            MoveBottomIndicator(_tab, animate: false);
+        };
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
@@ -150,9 +159,12 @@ public sealed partial class MainWindow : Window
         SideCol.Width = new GridLength(wide ? 232 : 0);
         Side.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
         Bottom.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
+        if (!wide) MoveBottomIndicator(_tab, animate: false);
     }
 
     private readonly List<Button> _nav = new();
+    private readonly List<Button> _bottomNav = new();
+    private readonly TextBlock[] _bottomLabels = new TextBlock[7];
 
     private void Select(int i)
     {
@@ -185,19 +197,105 @@ public sealed partial class MainWindow : Window
         MoveIndicator(i, animate: !first);
         if (first) NavLayer.SizeChanged += (_, _) => MoveIndicator(_tab, animate: false);
 
-        BottomTabs.Children.Clear();
-        BottomTabs.ColumnDefinitions.Clear();
-        for (var t = 0; t < Tabs.Length; t++)
+        if (_bottomNav.Count == 0)
         {
-            var idx = t;
-            var b = Btn(Tabs[t], () => Select(idx), t == i ? "TabButtonSelected" : "TabButton");
-            BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            Grid.SetColumn(b, t);
-            BottomTabs.Children.Add(b);
+            for (var t = 0; t < Tabs.Length; t++)
+            {
+                var idx = t;
+                var label = new TextBlock
+                {
+                    Text = BottomTabLabels[t],
+                    FontSize = 10,
+                    CharacterSpacing = 15,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                var content = new StackPanel
+                {
+                    Spacing = 2,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        new FontIcon { Glyph = Glyphs[t], FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") },
+                        label,
+                    },
+                };
+                var b = new Button { Style = St("TabButton"), Content = content, Padding = new Thickness(2, 2, 2, 2), MinHeight = 50 };
+                AutomationProperties.SetName(b, Tabs[t]);
+                b.Click += (_, _) => Select(idx);
+                _bottomLabels[t] = label;
+                _bottomNav.Add(b);
+                BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                Grid.SetColumn(b, t);
+                BottomTabs.Children.Add(b);
+            }
+            UpdateBottomNavigationDensity();
         }
+        for (var t = 0; t < _bottomNav.Count; t++)
+            _bottomNav[t].Foreground = Canone.Get(t == i ? "AccentOnSubtle" : "LabelSecondary", Dark);
+        MoveBottomIndicator(i, animate: !first);
         ApplyLayout();
         UpdateSideStatus();
         if (i == 6) RenderSettings(); else Refresh();
+    }
+
+    private void UpdateBottomNavigationDensity()
+    {
+        var compact = BottomTabs.ActualWidth / Math.Max(1, Tabs.Length) < 76;
+        foreach (var label in _bottomLabels)
+            if (label != null) label.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var button in _bottomNav) button.MinHeight = compact ? 44 : 50;
+        BottomTabs.Height = compact ? 50 : 58;
+    }
+
+    private void UpdateBottomNavigationColors()
+    {
+        if (Bottom == null) return;
+        for (var t = 0; t < _bottomNav.Count; t++)
+            _bottomNav[t].Foreground = Canone.Get(t == _tab ? "AccentOnSubtle" : "LabelSecondary", Dark);
+
+        var surface = Canone.Color("BgSurface", Dark);
+        try
+        {
+            Bottom.Background = new AcrylicBrush
+            {
+                TintColor = surface,
+                FallbackColor = surface,
+                TintOpacity = Dark ? 0.72 : 0.82,
+            };
+        }
+        catch
+        {
+            Bottom.Background = Canone.Get("BgSurface", Dark);
+        }
+
+        var accent = Canone.Color("AccentDefault", Dark);
+        BottomIndicator.Background = new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0, 0),
+            EndPoint = new Windows.Foundation.Point(0, 1),
+            GradientStops =
+            {
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)54 : (byte)110, 255, 255, 255), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)42 : (byte)30, accent.R, accent.G, accent.B), Offset = 0.55 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)62 : (byte)18, accent.R, accent.G, accent.B), Offset = 1 },
+            },
+        };
+        BottomIndicator.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)80 : (byte)120, 255, 255, 255));
+        BottomIndicatorGloss.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)150 : (byte)210, 255, 255, 255));
+        BottomReflection.Background = new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0, 0),
+            EndPoint = new Windows.Foundation.Point(1, 0),
+            GradientStops =
+            {
+                new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)150 : (byte)185, accent.R, accent.G, accent.B), Offset = 0.5 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 1 },
+            },
+        };
     }
 
     private static readonly string[] Glyphs = { "\uE80F", "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE8C7", "\uE713" };
