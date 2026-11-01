@@ -149,9 +149,9 @@ public sealed partial class MainWindow
             var x = (float)button.TransformToVisual(BottomTabs).TransformPoint(new Windows.Foundation.Point(0, 0)).X
                 + (float)((button.ActualWidth - BottomIndicator.Width) / 2);
             MoveGlassElement(BottomIndicator, new Vector3(x, 0, 0), animate, 48);
-            MoveGlassElement(BottomReflection, new Vector3(x + 5, 0, 0), animate, 66);
+            MoveGlassElement(BottomReflection, new Vector3(x + 11, 0, 0), animate, 66);
             BottomIndicator.Opacity = 1;
-            BottomReflection.Opacity = Dark ? 0.46 : 0.34;
+            BottomReflection.Opacity = Dark ? 0.28 : 0.22;
         }
         catch (Exception e) { Crash.Log(e, "Vetro barra compatta"); }
     }

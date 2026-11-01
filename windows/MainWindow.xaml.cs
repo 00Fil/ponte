@@ -25,7 +25,6 @@ internal sealed class Cmd : ICommand
 public sealed partial class MainWindow : Window
 {
     private static readonly string[] Tabs = { "Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Finanze", "Impostazioni" };
-    private static readonly string[] BottomTabLabels = { "Home", "Dispos.", "Appunti", "Archivio", "Audio", "Finanze", "Impost." };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -164,7 +163,6 @@ public sealed partial class MainWindow : Window
 
     private readonly List<Button> _nav = new();
     private readonly List<Button> _bottomNav = new();
-    private readonly TextBlock[] _bottomLabels = new TextBlock[7];
 
     private void Select(int i)
     {
@@ -202,30 +200,17 @@ public sealed partial class MainWindow : Window
             for (var t = 0; t < Tabs.Length; t++)
             {
                 var idx = t;
-                var label = new TextBlock
+                var icon = new FontIcon
                 {
-                    Text = BottomTabLabels[t],
-                    FontSize = 9,
-                    CharacterSpacing = 15,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Glyph = Glyphs[t],
+                    FontSize = 18,
+                    FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-                var content = new StackPanel
-                {
-                    Spacing = 1,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Children =
-                    {
-                        new FontIcon { Glyph = Glyphs[t], FontSize = 15, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") },
-                        label,
-                    },
-                };
-                var b = new Button { Style = St("TabButton"), Content = content, Padding = new Thickness(2), MinHeight = 42 };
+                var b = new Button { Style = St("TabButton"), Content = icon, Padding = new Thickness(2), MinHeight = 44 };
                 AutomationProperties.SetName(b, Tabs[t]);
                 b.Click += (_, _) => Select(idx);
-                _bottomLabels[t] = label;
                 _bottomNav.Add(b);
                 BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 Grid.SetColumn(b, t);
@@ -234,7 +219,7 @@ public sealed partial class MainWindow : Window
             UpdateBottomNavigationDensity();
         }
         for (var t = 0; t < _bottomNav.Count; t++)
-            _bottomNav[t].Foreground = Canone.Get(t == i ? "AccentOnSubtle" : "LabelSecondary", Dark);
+            _bottomNav[t].Foreground = Canone.Get(t == i ? "LabelPrimary" : "LabelTertiary", Dark);
         MoveBottomIndicator(i, animate: !first);
         ApplyLayout();
         UpdateSideStatus();
@@ -243,17 +228,15 @@ public sealed partial class MainWindow : Window
 
     private void UpdateBottomNavigationDensity()
     {
-        foreach (var label in _bottomLabels)
-            if (label != null) label.Visibility = Visibility.Collapsed;
-        foreach (var button in _bottomNav) button.MinHeight = 42;
-        BottomTabs.Height = 48;
+        foreach (var button in _bottomNav) button.MinHeight = 44;
+        BottomTabs.Height = 52;
     }
 
     private void UpdateBottomNavigationColors()
     {
         if (Bottom == null) return;
         for (var t = 0; t < _bottomNav.Count; t++)
-            _bottomNav[t].Foreground = Canone.Get(t == _tab ? "AccentOnSubtle" : "LabelSecondary", Dark);
+            _bottomNav[t].Foreground = Canone.Get(t == _tab ? "LabelPrimary" : "LabelTertiary", Dark);
 
         var surface = Canone.Color("BgSurface", Dark);
         try
@@ -262,7 +245,7 @@ public sealed partial class MainWindow : Window
             {
                 TintColor = surface,
                 FallbackColor = surface,
-                TintOpacity = Dark ? 0.58 : 0.68,
+                TintOpacity = Dark ? 0.46 : 0.56,
             };
         }
         catch
@@ -270,29 +253,29 @@ public sealed partial class MainWindow : Window
             Bottom.Background = Canone.Get("BgSurface", Dark);
         }
 
-        var accent = Canone.Color("AccentDefault", Dark);
+        var sunken = Canone.Color("BgSunken", Dark);
         BottomIndicator.Background = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0),
             EndPoint = new Windows.Foundation.Point(0, 1),
             GradientStops =
             {
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)42 : (byte)76, 255, 255, 255), Offset = 0 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)30 : (byte)20, accent.R, accent.G, accent.B), Offset = 0.55 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)46 : (byte)14, accent.R, accent.G, accent.B), Offset = 1 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)58 : (byte)250, 255, 255, 255), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)210 : (byte)238, surface.R, surface.G, surface.B), Offset = 0.5 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)235 : (byte)228, sunken.R, sunken.G, sunken.B), Offset = 1 },
             },
         };
-        BottomIndicator.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)58 : (byte)86, 255, 255, 255));
-        BottomIndicatorGloss.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)102 : (byte)145, 255, 255, 255));
+        BottomIndicator.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)76 : (byte)140, 255, 255, 255));
+        BottomIndicatorGloss.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)126 : (byte)225, 255, 255, 255));
         BottomReflection.Background = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0),
             EndPoint = new Windows.Foundation.Point(1, 0),
             GradientStops =
             {
-                new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 0 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)94 : (byte)125, accent.R, accent.G, accent.B), Offset = 0.5 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 1 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(0, sunken.R, sunken.G, sunken.B), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)82 : (byte)112, sunken.R, sunken.G, sunken.B), Offset = 0.5 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(0, sunken.R, sunken.G, sunken.B), Offset = 1 },
             },
         };
     }

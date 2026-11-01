@@ -215,57 +215,64 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     }
 }
 
-/** Barra mobile in vetro satinato: una lente compatta segue il gesto e lascia un riflesso sotto l'icona attiva. */
+/** Barra mobile: binario di vetro minimale e lente circolare che segue la pagina attiva. */
 @Composable
 private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
     val c = Canone.colors
     val light = c.bgCanvas.luminance() > 0.5f
-    val shape = RoundedCornerShape(22.dp)
-    val glassTop = Color.White.copy(alpha = if (light) 0.58f else 0.13f)
-    val glassEdge = Color.White.copy(alpha = if (light) 0.72f else 0.22f)
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s3, vertical = 6.dp)) {
-        val glass = Modifier.fillMaxWidth().shadow(9.dp, shape).clip(shape)
-            .background(Brush.verticalGradient(listOf(glassTop, c.bgSurface.copy(alpha = 0.76f), c.bgCanvas.copy(alpha = 0.68f))))
-            .border(0.75.dp, c.lineSeparator.copy(alpha = 0.72f), shape)
-        Column(glass) {
-            Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 32.dp)
-                .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.Transparent))))
-            BoxWithConstraints(Modifier.fillMaxWidth().height(47.dp).padding(horizontal = Space.s2, vertical = 3.dp)) {
+    val railShape = RoundedCornerShape(26.dp)
+    val railFill = if (light) {
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.96f), c.bgSurface.copy(alpha = 0.84f)))
+    } else {
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), c.bgSurface.copy(alpha = 0.82f), c.bgCanvas.copy(alpha = 0.74f)))
+    }
+    val lensFill = if (light) {
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.98f), c.bgSunken.copy(alpha = 0.9f)))
+    } else {
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), c.bgSurface.copy(alpha = 0.95f), c.bgCanvas.copy(alpha = 0.9f)))
+    }
+
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s4, vertical = Space.s2)) {
+        BoxWithConstraints(
+            Modifier.fillMaxWidth().height(50.dp).shadow(12.dp, railShape).clip(railShape)
+                .background(railFill).border(0.75.dp, Color.White.copy(alpha = if (light) 0.88f else 0.2f), railShape),
+        ) {
             val itemW = maxWidth / TABS.size
-            val pillW = minOf(34.dp, itemW * 0.76f)
-            val pillH = 34.dp
+            val lens = minOf(44.dp, itemW * 0.88f)
             val density = LocalDensity.current
             val itemPx = with(density) { itemW.toPx() }
-            val pillPx = with(density) { pillW.toPx() }
-            val indicatorX = (pos() * itemPx) + (itemPx - pillPx) / 2f
+            val lensPx = with(density) { lens.toPx() }
+            val indicatorX = (pos() * itemPx) + (itemPx - lensPx) / 2f
             val glide by androidx.compose.animation.core.animateFloatAsState(
                 targetValue = pos(),
-                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 250f),
-                label = "riflesso-liquido",
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 310f),
+                label = "lente-vetro",
             )
-            val reflectionX = (glide * itemPx) + (itemPx - pillPx) / 2f
-            val stretch = 1f + (kotlin.math.abs(pos() - current) * 0.08f).coerceIn(0f, 0.045f)
+            val reflectionX = (glide * itemPx) + (itemPx - lensPx) / 2f
 
-            // Un riflesso rallentato resta appena dietro alla lente, come luce rifratta sul bordo inferiore.
+            // Riflesso minimo, ritardato rispetto alla lente: suggerisce lo spessore del vetro senza aggiungere peso visivo.
             Box(
                 Modifier.align(Alignment.BottomStart).graphicsLayer {
-                    translationX = reflectionX + pillW.toPx() * 0.2f
-                    translationY = 1.dp.toPx()
-                    alpha = 0.28f
-                }.size(pillW * 0.58f, 2.dp).background(
-                    Brush.horizontalGradient(listOf(Color.Transparent, c.accent.copy(alpha = 0.36f), Color.Transparent)), CircleShape,
+                    translationX = reflectionX + lensPx * 0.27f
+                    translationY = (-2).dp.toPx()
+                    alpha = if (light) 0.13f else 0.19f
+                }.size(lens * 0.46f, 1.dp).background(
+                    Brush.horizontalGradient(listOf(Color.Transparent, if (light) c.labelPrimary.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.7f), Color.Transparent)), CircleShape,
                 ),
             )
 
-            val pillShape = CircleShape
             Box(
                 Modifier.align(Alignment.CenterStart).graphicsLayer {
                     translationX = indicatorX
-                    scaleX = stretch
-                }.size(pillW, pillH).shadow(5.dp, pillShape).clip(pillShape)
-                    .background(Brush.verticalGradient(listOf(glassEdge, c.accentSubtle.copy(alpha = if (light) 0.7f else 0.78f), c.accent.copy(alpha = if (light) 0.06f else 0.12f))))
-                    .border(0.75.dp, glassEdge.copy(alpha = if (light) 0.8f else 0.48f), pillShape),
-            )
+                }.size(lens).shadow(8.dp, CircleShape).clip(CircleShape)
+                    .background(lensFill)
+                    .border(0.9.dp, Color.White.copy(alpha = if (light) 0.96f else 0.32f), CircleShape),
+            ) {
+                Box(
+                    Modifier.fillMaxSize().padding(3.dp).clip(CircleShape)
+                        .border(0.6.dp, c.lineStrong.copy(alpha = if (light) 0.42f else 0.26f), CircleShape),
+                )
+            }
 
             Row(Modifier.fillMaxSize()) {
                 TABS.forEachIndexed { i, label ->
@@ -279,11 +286,10 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
                         contentAlignment = Alignment.Center,
                     ) {
                         val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
-                        val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.accentOnSubtle, near)
-                        TabGlyph(i, iconColor, current == i, Modifier.size(21.dp))
+                        val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, near)
+                        TabGlyph(i, iconColor, current == i, Modifier.size(20.dp))
                     }
                 }
-            }
             }
         }
     }
