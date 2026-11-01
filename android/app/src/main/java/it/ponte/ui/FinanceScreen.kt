@@ -2,14 +2,22 @@ package it.ponte.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -25,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +53,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val financeCategories = listOf("Altro", "Casa", "Cibo", "Trasporti", "Tempo libero", "Salute")
+private val financeBanknotes = listOf(5, 10, 20, 50, 100, 200)
 private val itLocale = Locale.ITALY
 private val financeZone get() = ZoneId.systemDefault()
 private fun financeDate(ts: Long) = Instant.ofEpochMilli(ts).atZone(financeZone).toLocalDate()
@@ -186,6 +196,7 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
     var kind by remember(mode) { mutableStateOf("expense") }
     var categoryOpen by remember(mode) { mutableStateOf(false) }
     var showNote by remember(mode) { mutableStateOf(false) }
+    var banknotes by remember(mode) { mutableStateOf(emptyMap<Int, Int>()) }
     val parsed = parseCents(amount)
     val valid = parsed != null && (mode == "balance" || parsed > 0)
     val title = if (mode == "balance") "Aggiorna saldo" else "Nuovo movimento"
@@ -193,9 +204,17 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
         onDismissRequest = onDismiss,
         title = { Text(title, style = CanoneType.title3, color = Canone.colors.labelPrimary) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                CField("Importo · EUR", amount, { amount = it.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' || ch == '-' }.take(14) }, "0,00", keyboardType = KeyboardType.Decimal)
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                CField("Importo · EUR", amount, {
+                    banknotes = emptyMap()
+                    amount = it.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' || ch == '-' }.take(14)
+                }, "0,00", keyboardType = KeyboardType.Decimal)
                 if (mode != "balance") {
+                    BanknotePicker(banknotes, onClear = { amount = ""; banknotes = emptyMap() }) { denomination ->
+                        val next = (parseCents(amount) ?: 0L) + denomination * 100L
+                        amount = moneyInput(next)
+                        banknotes = banknotes + (denomination to (banknotes.getOrDefault(denomination, 0) + 1))
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                         CButton("− Uscita", { kind = "expense" }, Modifier.weight(1f), if (kind == "expense") ButtonKind.Primary else ButtonKind.Secondary)
                         CButton("+ Entrata", { kind = "income" }, Modifier.weight(1f), if (kind == "income") ButtonKind.Primary else ButtonKind.Secondary)
@@ -220,6 +239,74 @@ private fun FinanceDialog(mode: String, balance: Long, onDismiss: () -> Unit, on
         },
         dismissButton = { CButton("Annulla", onDismiss) },
     )
+}
+
+@Composable
+private fun BanknotePicker(counts: Map<Int, Int>, onClear: () -> Unit, onAdd: (Int) -> Unit) {
+    val c = Canone.colors
+    val palettes = listOf(
+        c.bgSunken to c.labelSecondary,
+        c.criticalSubtle to c.criticalOnSubtle,
+        c.accentSubtle to c.accentOnSubtle,
+        c.cautionSubtle to c.cautionOnSubtle,
+        c.positiveSubtle to c.positiveOnSubtle,
+        c.bgSunken to c.labelPrimary,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Aggiungi banconote", style = CanoneType.footnote, color = c.labelSecondary)
+            Text("Azzera", style = CanoneType.footnote, color = c.accent,
+                modifier = Modifier.clickable(onClick = onClear).padding(horizontal = 8.dp, vertical = 4.dp))
+        }
+        financeBanknotes.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                row.forEach { denomination ->
+                    val (background, foreground) = palettes[financeBanknotes.indexOf(denomination)]
+                    BanknoteButton(denomination, counts.getOrDefault(denomination, 0), background, foreground,
+                        Modifier.weight(1f), onClick = { onAdd(denomination) })
+                }
+            }
+        }
+        val selected = counts.filterValues { it > 0 }.toSortedMap()
+        CText(if (selected.isEmpty()) "Tocca un taglio per sommarlo" else
+            "Selezionate: " + selected.entries.joinToString(" · ") { "€${it.key} × ${it.value}" }, tertiary = true)
+    }
+}
+
+@Composable
+private fun BanknoteButton(
+    denomination: Int,
+    count: Int,
+    background: Color,
+    foreground: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val c = Canone.colors
+    val interaction = androidx.compose.runtime.remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = 600f),
+        label = "banconota-premuta",
+    )
+    Box(
+        modifier = modifier.height(58.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(Radius.sm)).background(background)
+            .border(1.dp, foreground.copy(alpha = 0.25f), RoundedCornerShape(Radius.sm))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    ) {
+        Box(Modifier.align(Alignment.CenterStart).width(3.dp).height(38.dp).clip(CircleShape).background(foreground.copy(alpha = 0.38f)))
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 8.dp), verticalArrangement = Arrangement.Center) {
+            Text("€$denomination", style = CanoneType.title3.copy(fontSize = 18.sp, lineHeight = 22.sp), color = foreground, maxLines = 1)
+            Text("EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, lineHeight = 12.sp), color = foreground.copy(alpha = 0.75f))
+        }
+        Box(Modifier.align(Alignment.CenterEnd).padding(end = 2.dp).size(24.dp).clip(CircleShape)
+            .border(1.dp, foreground.copy(alpha = 0.3f), CircleShape))
+        if (count > 0) Text("×$count", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.accentOnSubtle,
+            modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape).background(c.accentSubtle).padding(horizontal = 5.dp, vertical = 1.dp))
+    }
 }
 
 @Composable

@@ -8,6 +8,7 @@ namespace Ponte;
 public sealed partial class MainWindow
 {
     private static readonly string[] FinanceCategories = { "Altro", "Casa", "Cibo", "Trasporti", "Tempo libero", "Salute" };
+    private static readonly int[] FinanceBanknotes = { 5, 10, 20, 50, 100, 200 };
     private static readonly CultureInfo Italian = CultureInfo.GetCultureInfo("it-IT");
     private bool _showAllFinance;
 
@@ -157,6 +158,96 @@ public sealed partial class MainWindow
         StackPanel? noteField = null;
         if (!balanceMode)
         {
+            var banknoteCounts = FinanceBanknotes.ToDictionary(value => value, _ => 0);
+            var countLabels = new Dictionary<int, TextBlock>();
+            var banknoteSummary = Text("Tocca un taglio per sommarlo.", "FootnoteTertiary");
+            var banknoteHeader = new Grid { ColumnSpacing = 8 };
+            banknoteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            banknoteHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            banknoteHeader.Children.Add(Text("Aggiungi banconote", "BodyText"));
+            var clearBanknotes = Btn("Azzera", () =>
+            {
+                amount.Text = "";
+                foreach (var denomination in FinanceBanknotes)
+                {
+                    banknoteCounts[denomination] = 0;
+                    countLabels[denomination].Text = "×0";
+                }
+                banknoteSummary.Text = "Tocca un taglio per sommarlo.";
+            }, "ChipButton");
+            Grid.SetColumn(clearBanknotes, 1); banknoteHeader.Children.Add(clearBanknotes);
+            fields.Children.Add(banknoteHeader);
+
+            var noteGrid = new Grid { ColumnSpacing = 6, RowSpacing = 6 };
+            for (var column = 0; column < 3; column++) noteGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var row = 0; row < 2; row++) noteGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var backgrounds = new[] { "BgSunken", "CriticalSubtle", "AccentSubtle", "CautionSubtle", "PositiveSubtle", "BgSunken" };
+            var foregrounds = new[] { "LabelSecondary", "CriticalOnSubtle", "AccentOnSubtle", "CautionOnSubtle", "PositiveOnSubtle", "LabelPrimary" };
+            var settingFromBanknote = false;
+            amount.TextChanged += (_, _) =>
+            {
+                if (settingFromBanknote) return;
+                foreach (var denomination in FinanceBanknotes)
+                {
+                    banknoteCounts[denomination] = 0;
+                    countLabels[denomination].Text = "×0";
+                }
+                banknoteSummary.Text = amount.Text.Length == 0 ? "Tocca un taglio per sommarlo." : "Importo inserito manualmente.";
+            };
+            for (var index = 0; index < FinanceBanknotes.Length; index++)
+            {
+                var denomination = FinanceBanknotes[index];
+                var count = new TextBlock { Text = "×0", FontSize = 11, Foreground = Canone.Get(foregrounds[index], Dark), HorizontalAlignment = HorizontalAlignment.Right };
+                countLabels.Add(denomination, count);
+                var noteContent = new Grid { ColumnSpacing = 4 };
+                noteContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                noteContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 0 };
+                textStack.Children.Add(new TextBlock { Text = "€" + denomination, FontSize = 19, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Canone.Get(foregrounds[index], Dark) });
+                textStack.Children.Add(new TextBlock { Text = "EURO", FontSize = 9, Foreground = Canone.Get(foregrounds[index], Dark), Opacity = 0.8 });
+                noteContent.Children.Add(textStack);
+                var motif = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1), BorderBrush = Canone.Get(foregrounds[index], Dark), Opacity = 0.38, VerticalAlignment = VerticalAlignment.Bottom };
+                var rightStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 2, Children = { count, motif } };
+                Grid.SetColumn(rightStack, 1); noteContent.Children.Add(rightStack);
+                var visual = new Border
+                {
+                    Background = Canone.Get(backgrounds[index], Dark),
+                    BorderBrush = Canone.Get("LineSeparator", Dark),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(9),
+                    Padding = new Thickness(8, 5, 8, 5),
+                    MinHeight = 62,
+                    Child = noteContent,
+                };
+                var button = new Button
+                {
+                    Content = visual,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(0),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                };
+                button.Click += (_, _) =>
+                {
+                    if (!TryEuro(amount.Text, out var current)) current = 0;
+                    var next = current + denomination;
+                    settingFromBanknote = true;
+                    amount.Text = next.ToString("0.00", Italian);
+                    settingFromBanknote = false;
+                    banknoteCounts[denomination]++;
+                    count.Text = "×" + banknoteCounts[denomination];
+                    var selected = FinanceBanknotes.Where(value => banknoteCounts[value] > 0)
+                        .Select(value => "€" + value + " × " + banknoteCounts[value]);
+                    banknoteSummary.Text = "Selezionate: " + string.Join(" · ", selected);
+                };
+                var row = index / 3;
+                var column = index % 3;
+                Grid.SetRow(button, row); Grid.SetColumn(button, column); noteGrid.Children.Add(button);
+            }
+            fields.Children.Add(noteGrid);
+            fields.Children.Add(banknoteSummary);
+
             kind = new ComboBox { ItemsSource = new[] { "Uscita", "Entrata" }, SelectedIndex = 0, MinWidth = 280 };
             category = new ComboBox { ItemsSource = FinanceCategories, SelectedIndex = 0, MinWidth = 280 };
             note = new TextBox { PlaceholderText = "Facoltativa", MaxLength = 80, MinWidth = 280, Visibility = Visibility.Collapsed };
