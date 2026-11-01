@@ -34,7 +34,7 @@ import java.util.Calendar
 
 /**
  * Home: in alto la fibra ottica con il saluto; poi una griglia ordinata 2×2 (stesse misure, stesso ritmo)
- * dove il colore sta solo nei bollini a gradiente blu; in fondo l'ultimo appunto. Ogni riquadro apre la sua scheda.
+ * con i colori riservati ai bollini; in fondo l'ultimo appunto. Ogni riquadro apre la sua scheda.
  */
 @Composable
 fun HomeScreen(r: Router, go: (Int) -> Unit) {
@@ -44,6 +44,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
     val clips by r.clipboard.history.collectAsState()
     val files by r.files.items.collectAsState()
     val holder by r.headphones.holder.collectAsState()
+    val financeEntries by r.finances.entries.collectAsState()
 
     val hello = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) { in 5..12 -> "Buongiorno"; in 13..17 -> "Buon pomeriggio"; else -> "Buonasera" }
     val audio = when (holder) {
@@ -84,6 +85,15 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
                         listOf(Color(0xFF3F86FF), Color(0xFF7DB4FF)), Modifier.weight(1f)) { go(3) }
                     Tile(4, "Cuffie", audio, "dove suonano ora",
                         listOf(Color(0xFF5B7BFF), Color(0xFF2F5FFF)), Modifier.weight(1f)) { go(4) }
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    val balance = financeEntries.sumOf { it.cents }
+                    val balanceText = if (financeEntries.isEmpty()) "Da impostare" else java.text.NumberFormat.getCurrencyInstance(java.util.Locale.ITALY).format(balance / 100.0)
+                    Tile(5, "Finanze", balanceText, "saldo su questo dispositivo",
+                        listOf(Color(0xFF1F7A4D), Color(0xFF4CC38A)), Modifier.weight(1f)) { go(5) }
+                    Box(Modifier.weight(1f))
                 }
             }
             item {

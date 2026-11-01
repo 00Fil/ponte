@@ -6,7 +6,7 @@ using Microsoft.UI.Xaml.Shapes;
 namespace Ponte;
 
 /// <summary>
-/// Home: scheda grande con MicroSlats dietro il saluto, quattro riquadri uguali (il colore sta solo nei bollini a gradiente
+/// Home: scheda grande con MicroSlats dietro il saluto, riquadri uguali (il colore sta solo nei bollini a gradiente
 /// blu) che portano alle sezioni, e l'ultimo appunto. Stessa struttura della Home di Android.
 /// </summary>
 public sealed partial class MainWindow
@@ -57,6 +57,7 @@ public sealed partial class MainWindow
             HomeTile(2, "Appunti", _r.Clip.History.Count.ToString(), "in cronologia", "#1B34D6", "#3F86FF"),
             HomeTile(3, "Archivio", _r.Files.Items.Count.ToString(), shots > 0 ? $"{shots} screenshot" : "file condivisi", "#3F86FF", "#7DB4FF"),
             HomeTile(4, "Cuffie", audio, "dove suonano ora", "#5B7BFF", "#2F5FFF"),
+            HomeTile(5, "Finanze", _r.S.FinanceEntries.Count == 0 ? "Da impostare" : FinanceLedger.Balance(_r.S.FinanceEntries).ToString("C2", CultureInfo.GetCultureInfo("it-IT")), "saldo su questo PC", "#1F7A4D", "#4CC38A"),
         };
         for (var i = 0; i < tiles.Length; i++)
         {

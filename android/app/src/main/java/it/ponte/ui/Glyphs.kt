@@ -19,8 +19,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 
 /**
- * Icone delle schede, disegnate a mano su una griglia di 24: Dispositivi, Appunti, Archivio, Audio, Impostazioni.
- * Quando la scheda si seleziona l'icona fa un piccolo rimbalzo elastico; Audio e Impostazioni hanno anche un gesto proprio.
+ * Icone delle schede, disegnate a mano su una griglia di 24: Dispositivi, Appunti, Archivio, Audio, Finanze, Impostazioni.
+ * Quando la scheda si seleziona l'icona fa un piccolo rimbalzo elastico; alcune icone hanno anche un gesto proprio.
  */
 @Composable
 fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = Modifier) {
@@ -77,6 +77,12 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
                 drawPath(arc, color, style = st)
                 drawRoundRect(color, Offset(3f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u), style = st)
                 drawRoundRect(color, Offset(16.8f * u, 12.5f * u + dy), sz(4.2f, 7.5f), CornerRadius(2f * u), style = st)
+            }
+            5 -> { // saldo
+                drawCircle(color, 9f * u, o(12f, 12f), style = st)
+                drawLine(color, o(12f, 7f), o(12f, 17f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(14f, 9f), o(10f, 9f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(10f, 15f), o(14f, 15f), 1.8f * u, StrokeCap.Round)
             }
             else -> { // cursori: le manopole scorrono al loro posto
                 val k = if (selected) 1f - gesture.value else 0f

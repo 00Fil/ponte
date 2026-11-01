@@ -30,6 +30,10 @@ public sealed class Settings
     public bool Onboarded { get; set; }
     /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>
     public Dictionary<string, List<string>> Peers { get; set; } = new();
+    /// <summary>Movimenti finanziari cifrati per l'utente Windows corrente.</summary>
+    public string FinanceEntriesProtected { get; set; } = "";
+    [JsonIgnore]
+    public List<FinanceEntry> FinanceEntries { get; set; } = new();
 
     /// <summary>Il token sta su disco cifrato con DPAPI: si decifra solo con questo account Windows.</summary>
     [JsonIgnore]
@@ -52,7 +56,21 @@ public sealed class Settings
     {
         try
         {
-            if (File.Exists(FilePath)) return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
+            if (File.Exists(FilePath))
+            {
+                var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
+                if (!string.IsNullOrEmpty(loaded.FinanceEntriesProtected))
+                {
+                    try
+                    {
+                        var clear = ProtectedData.Unprotect(Convert.FromBase64String(loaded.FinanceEntriesProtected), null, DataProtectionScope.CurrentUser);
+                        loaded.FinanceEntries = JsonSerializer.Deserialize<List<FinanceEntry>>(clear) ?? new();
+                    }
+                    catch (Exception) { loaded.FinanceEntries = new(); }
+                }
+                else loaded.FinanceEntries = new();
+                return loaded;
+            }
         }
         catch (Exception) { /* file rovinato: si riparte da zero */ }
         var s = new Settings();
@@ -63,6 +81,8 @@ public sealed class Settings
     public void Save()
     {
         Directory.CreateDirectory(Dir);
+        var clearFinance = JsonSerializer.SerializeToUtf8Bytes(FinanceEntries);
+        FinanceEntriesProtected = Convert.ToBase64String(ProtectedData.Protect(clearFinance, null, DataProtectionScope.CurrentUser));
         File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
     }
 

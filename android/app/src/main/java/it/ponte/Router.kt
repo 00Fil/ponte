@@ -45,6 +45,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     val clipboard = ClipboardSync(ctx, this)
     val files = FileStore(ctx, this)
+    val finances = FinanceStore(ctx)
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
     val media = MediaSwitch(ctx, this)

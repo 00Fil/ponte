@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Finanze", "Impostazioni")
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -135,6 +135,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             2 -> ClipScreen(r)
             3 -> ArchiveScreen(r)
             4 -> AudioScreen(r)
+            5 -> FinanceScreen(r)
             else -> SettingsScreen(r, replayOnboarding, onBackup)
         }
     }
