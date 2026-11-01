@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,11 +27,25 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import com.skydoves.cloudy.Sky
+import com.skydoves.cloudy.cloudy
+import com.skydoves.cloudy.liquidGlass
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
@@ -42,6 +57,68 @@ import androidx.compose.ui.unit.dp
 
 enum class ButtonKind { Primary, Secondary, Tertiary, Destructive }
 enum class Tone { Neutral, Positive, Caution, Critical, Accent }
+
+/**
+ * Superficie Liquid Glass condivisa. Cloudy cattura il fondale Compose e applica blur e
+ * rifrazione AGSL (Android 13+); sui sistemi meno recenti usa il fallback nativo.
+ */
+val LocalPonteSky = staticCompositionLocalOf<Sky?> { null }
+
+@Composable
+fun LiquidGlassSurface(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(Radius.xl),
+    cornerRadius: Dp = Radius.xl,
+    tint: Color,
+    blurRadius: Int = 22,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val sky = LocalPonteSky.current
+    val density = LocalDensity.current
+    val c = Canone.colors
+    var bounds by remember { mutableStateOf(IntSize.Zero) }
+
+    Box(modifier.clip(shape).onSizeChanged { bounds = it }) {
+        if (sky != null && bounds.width > 0 && bounds.height > 0) {
+            Box(
+                Modifier.matchParentSize()
+                    .background(tint.copy(alpha = 0.18f), shape)
+                    .cloudy(sky = sky, radius = blurRadius, tint = tint, shape = shape)
+                    .liquidGlass(
+                        lensCenter = Offset(bounds.width / 2f, bounds.height / 2f),
+                        lensSize = Size(bounds.width.toFloat(), bounds.height.toFloat()),
+                        cornerRadius = with(density) { cornerRadius.toPx() },
+                        refraction = 0.18f,
+                        curve = 0.22f,
+                        dispersion = 0.035f,
+                        saturation = 1.035f,
+                        contrast = 1.015f,
+                        edge = 0.28f,
+                    ),
+            )
+        } else {
+            Box(Modifier.matchParentSize().background(tint, shape))
+        }
+
+        // Riflesso perimetrale minimo: separa il vetro dal fondale senza usare ombre.
+        Box(
+            Modifier.matchParentSize().border(
+                BorderStroke(
+                    0.5.dp,
+                    Brush.linearGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.07f),
+                            c.lineSeparator.copy(alpha = 0.14f),
+                        ),
+                    ),
+                ),
+                shape,
+            ),
+        )
+        content()
+    }
+}
 
 /** Scheda: Card di Canone. Raggio 28, margine interno 24, filetto a riposo. */
 @Composable

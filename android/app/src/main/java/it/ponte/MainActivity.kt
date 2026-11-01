@@ -36,7 +36,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.skydoves.cloudy.rememberSky
+import com.skydoves.cloudy.sky
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,7 +57,8 @@ import it.ponte.ui.UpdateSheet
 import it.ponte.ui.FiberField
 import it.ponte.ui.HomeScreen
 import kotlinx.coroutines.launch
-import it.ponte.ui.TabGlyph
+import it.ponte.ui.LiquidGlassSurface
+import it.ponte.ui.LocalPonteSky
 import androidx.compose.runtime.collectAsState
 import it.ponte.ui.Onboarding
 import it.ponte.ui.UpdateDone
@@ -94,7 +102,13 @@ class MainActivity : ComponentActivity() {
 }
 
 private val TABS = listOf("Home", "Appunti", "Archivio", "Finanze", "Impostazioni")
-private val TAB_GLYPHS = listOf(0, 2, 3, 5, 6)
+private val TAB_ICONS = listOf(
+    Icons.Rounded.Home,
+    Icons.Rounded.ContentCopy,
+    Icons.Rounded.FolderOpen,
+    Icons.Rounded.AccountBalanceWallet,
+    Icons.Rounded.Settings,
+)
 private val MOBILE_TAB_LABELS = listOf("Home", "Appunti", "Archivio", "Finanze", "Impost.")
 
 private fun settingsTitle(page: String): String = when (page) {
@@ -134,6 +148,7 @@ private fun PonteApp(r: Router) {
 @Composable
 private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> Unit) {
     val c = Canone.colors
+    val sky = rememberSky()
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var settingsPage by remember { mutableStateOf("home") }
@@ -201,7 +216,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
+    CompositionLocalProvider(LocalPonteSky provides sky) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas).sky(sky)) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 Column(Modifier.width(240.dp).fillMaxHeight().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
@@ -209,7 +225,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         it.ponte.ui.RelayMark(32.dp)
                         Text("Relay", style = CanoneType.title3, color = c.labelPrimary)
                     }
-                    TABS.forEachIndexed { i, t -> SideItem(t, TAB_GLYPHS[i], pager.currentPage == i) { selectTab(i) } }
+                    TABS.forEachIndexed { i, t -> SideItem(t, TAB_ICONS[i], pager.currentPage == i) { selectTab(i) } }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.fillMaxSize()) {
@@ -231,64 +247,74 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         }
     }
 }
+}
 
 /** Barra mobile: una superficie leggera, cinque destinazioni e stato selezionato morbido. */
+/** Barra mobile con materiale Liquid Glass e icone Material Rounded. */
 @Composable
 private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
     val c = Canone.colors
-    val light = c.bgCanvas.luminance() > 0.5f
-    val barColor = if (light) c.bgSurface.copy(alpha = 0.97f) else c.bgSurface.copy(alpha = 0.96f)
-
     Box(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s4, vertical = Space.s2),
     ) {
-        BoxWithConstraints(
-            Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(26.dp)).background(barColor),
+        LiquidGlassSurface(
+            modifier = Modifier.fillMaxWidth().height(76.dp),
+            shape = RoundedCornerShape(28.dp),
+            cornerRadius = 28.dp,
+            tint = c.bgSurface.copy(alpha = 0.34f),
+            blurRadius = 24,
         ) {
-            val itemWidth = maxWidth / TABS.size
-            val density = LocalDensity.current
-            val itemPx = with(density) { itemWidth.toPx() }
-            val glide by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = pos().coerceIn(0f, (TABS.size - 1).toFloat()),
-                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 230f),
-                label = "tab-smooth",
-            )
-            val indicatorWidth = itemWidth - 6.dp
-            val indicatorPx = with(density) { indicatorWidth.toPx() }
-            Box(
-                Modifier.align(Alignment.CenterStart).graphicsLayer {
-                    translationX = glide * itemPx + (itemPx - indicatorPx) / 2f
-                }.size(width = indicatorWidth, height = 60.dp)
-                    .clip(RoundedCornerShape(21.dp))
-                    .background(if (light) c.bgSunken.copy(alpha = 0.86f) else c.bgSunken.copy(alpha = 0.94f)),
-            )
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val itemWidth = maxWidth / TABS.size
+                val density = LocalDensity.current
+                val itemPx = with(density) { itemWidth.toPx() }
+                val glide by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = pos().coerceIn(0f, (TABS.size - 1).toFloat()),
+                    animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.88f, stiffness = 220f),
+                    label = "tab-liquid-glass",
+                )
+                val indicatorWidth = itemWidth - 8.dp
+                val indicatorPx = with(density) { indicatorWidth.toPx() }
+                Box(
+                    Modifier.align(Alignment.CenterStart).graphicsLayer {
+                        translationX = glide * itemPx + (itemPx - indicatorPx) / 2f
+                    }.size(width = indicatorWidth, height = 60.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(c.accentSubtle.copy(alpha = 0.34f)),
+                )
 
-            Row(Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 6.dp)) {
-                TABS.forEachIndexed { i, label ->
-                    val proximity = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
-                    val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
-                    val textColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
-                    Column(
-                        Modifier.weight(1f).fillMaxHeight()
-                            .semantics { contentDescription = label; selected = current == i }
-                            .clickable(
-                                role = Role.Tab, onClick = { onSelect(i) }, indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        TabGlyph(TAB_GLYPHS[i], iconColor, current == i, Modifier.size(21.dp))
-                        Text(
-                            MOBILE_TAB_LABELS[i],
-                            style = CanoneType.footnote.copy(
-                                fontSize = 10.sp,
-                                lineHeight = 12.sp,
-                                fontWeight = if (current == i) FontWeight.Medium else FontWeight.Normal,
-                            ),
-                            color = textColor,
-                            maxLines = 1,
-                        )
+                Row(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp)) {
+                    TABS.forEachIndexed { i, label ->
+                        val proximity = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
+                        val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
+                        val textColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.labelPrimary, proximity)
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .semantics { contentDescription = label; selected = current == i }
+                                .clickable(
+                                    role = Role.Tab, onClick = { onSelect(i) }, indication = null,
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                ),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                imageVector = TAB_ICONS[i],
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Text(
+                                MOBILE_TAB_LABELS[i],
+                                style = CanoneType.footnote.copy(
+                                    fontSize = 10.sp,
+                                    lineHeight = 13.sp,
+                                    fontWeight = if (current == i) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                                color = textColor,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
@@ -298,7 +324,7 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
 
 /** Voce della barra laterale (finestre larghe): icona e testo, sfondo tenue quando è attiva. */
 @Composable
-private fun SideItem(label: String, index: Int, selected: Boolean, onClick: () -> Unit) {
+private fun SideItem(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
     val c = Canone.colors
     val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(220), label = "fondo")
     val fg by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(220), label = "testo")
@@ -306,7 +332,7 @@ private fun SideItem(label: String, index: Int, selected: Boolean, onClick: () -
         Modifier.fillMaxWidth().height(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Tab, onClick = onClick).padding(horizontal = Space.s4),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
-        TabGlyph(index, fg, selected, Modifier.size(22.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = fg, modifier = Modifier.size(22.dp))
         Text(label, maxLines = 1, style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote, color = fg)
     }
 }

@@ -48,7 +48,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -63,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -513,27 +517,42 @@ private fun SettingsHomeScreen(onNavigate: (String) -> Unit, replayOnboarding: (
     val c = Canone.colors
     ScreenList("Impostazioni") {
         item {
-            Column(Modifier.fillMaxWidth().padding(top = Space.s1, bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                Text("Tutto al suo posto.", style = CanoneType.title3, color = c.labelPrimary)
-                CText("Configura Ponte, gestisci i collegamenti e personalizza il comportamento dei dispositivi.")
+            Column(
+                Modifier.fillMaxWidth().padding(top = Space.s2, bottom = Space.s2),
+                verticalArrangement = Arrangement.spacedBy(Space.s2),
+            ) {
+                Text("Ponte, come lo vuoi tu.", style = CanoneType.title3, color = c.labelPrimary)
+                CText("Connessioni, audio e impostazioni del dispositivo in un unico posto.")
             }
         }
         item {
-            SettingsGroup("CONNESSIONI") {
-                SettingsLinkRow(1, "Dispositivi collegati", "Stato del server, rete locale e dispositivi", onClick = { onNavigate("devices") })
+            SettingsGroup("DISPOSITIVI") {
+                SettingsLinkRow(Icons.Rounded.Devices, "Dispositivi collegati", "PC, telefono e connessioni attive") {
+                    onNavigate("devices")
+                }
                 SettingsDivider()
-                SettingsLinkRow(4, "Audio e cuffie", "Passaggio automatico e ascolto remoto", onClick = { onNavigate("audio") })
+                SettingsLinkRow(Icons.Rounded.Headphones, "Audio e cuffie", "Uscita audio, cuffie e passaggio automatico") {
+                    onNavigate("audio")
+                }
                 SettingsDivider()
-                SettingsLinkRow(6, "Questo dispositivo", "Nome, server e credenziali di connessione", onClick = { onNavigate("device") })
+                SettingsLinkRow(Icons.Rounded.Smartphone, "Questo dispositivo", "Nome, server e credenziali di connessione") {
+                    onNavigate("device")
+                }
             }
         }
         item {
-            SettingsGroup("SISTEMA") {
-                SettingsLinkRow(6, "Permessi", "Accessi richiesti per le funzioni di Ponte", onClick = { onNavigate("permissions") })
+            SettingsGroup("APP E SISTEMA") {
+                SettingsLinkRow(Icons.Rounded.Security, "Permessi", "Controlla gli accessi richiesti da Ponte") {
+                    onNavigate("permissions")
+                }
                 SettingsDivider()
-                SettingsLinkRow(6, "Aggiornamenti", "Versione installata e controllo manuale", onClick = { onNavigate("updates") })
+                SettingsLinkRow(Icons.Rounded.SystemUpdate, "Aggiornamenti", "Versione installata e controllo manuale") {
+                    onNavigate("updates")
+                }
                 SettingsDivider()
-                SettingsLinkRow(3, "Backup", "Copia dei dati del telefono sul tuo server", onClick = { onNavigate("backup") })
+                SettingsLinkRow(Icons.Rounded.Backup, "Backup", "Copia dei dati del telefono sul tuo server") {
+                    onNavigate("backup")
+                }
             }
         }
         item {
@@ -545,46 +564,76 @@ private fun SettingsHomeScreen(onNavigate: (String) -> Unit, replayOnboarding: (
 @Composable
 private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     val c = Canone.colors
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface)
-            .padding(horizontal = Space.s4),
-        verticalArrangement = Arrangement.spacedBy(Space.s1),
+    LiquidGlassSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        cornerRadius = 26.dp,
+        tint = c.bgSurface.copy(alpha = 0.34f),
+        blurRadius = 23,
     ) {
-        Text(
-            title,
-            style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-            color = c.labelTertiary,
-            modifier = Modifier.padding(top = Space.s4, bottom = Space.s1),
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s3),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            content = {
+                Text(
+                    title,
+                    style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                    color = c.labelTertiary,
+                    modifier = Modifier.padding(start = 4.dp, top = Space.s2, bottom = Space.s1),
+                )
+                content()
+                Spacer(Modifier.height(Space.s2))
+            },
         )
-        content()
     }
 }
 
 @Composable
-private fun SettingsLinkRow(icon: Int, title: String, note: String, onClick: () -> Unit) {
+private fun SettingsLinkRow(icon: ImageVector, title: String, note: String, onClick: () -> Unit) {
     val c = Canone.colors
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = Space.s3),
+        Modifier.fillMaxWidth()
+            .heightIn(min = 76.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 2.dp, vertical = Space.s3),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(c.accentSubtle),
+            Modifier.size(44.dp)
+                .clip(RoundedCornerShape(15.dp))
+                .background(Brush.linearGradient(listOf(c.accentSubtle, c.accentSubtle.copy(alpha = 0.58f)))),
             contentAlignment = Alignment.Center,
         ) {
-            TabGlyph(icon, c.accentOnSubtle, false, Modifier.size(21.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = c.accent,
+                modifier = Modifier.size(23.dp),
+            )
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, style = CanoneType.bodyMedium, color = c.labelPrimary)
             Text(note, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Text("›", style = CanoneType.title2, color = c.labelTertiary)
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = c.labelTertiary.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
 @Composable
 private fun SettingsDivider() {
-    Box(Modifier.fillMaxWidth().padding(start = 52.dp).height(1.dp).background(Canone.colors.lineSeparator.copy(alpha = 0.7f)))
+    Box(
+        Modifier.fillMaxWidth()
+            .padding(start = 58.dp)
+            .height(0.5.dp)
+            .background(Canone.colors.lineSeparator.copy(alpha = 0.48f)),
+    )
 }
 
 @Composable
@@ -592,12 +641,22 @@ private fun SettingsPageIntro(note: String, onBack: () -> Unit) {
     val c = Canone.colors
     Column(Modifier.fillMaxWidth().padding(bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Row(
-            Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onBack).padding(vertical = Space.s1, horizontal = Space.s1),
+            Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onBack)
+                .padding(vertical = Space.s1, horizontal = Space.s1),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s1),
+            horizontalArrangement = Arrangement.spacedBy(Space.s2),
         ) {
-            Text("‹", style = CanoneType.title2, color = c.accent)
-            Text("Impostazioni", style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.accent)
+            Icon(
+                imageVector = Icons.Rounded.ArrowBack,
+                contentDescription = "Indietro",
+                tint = c.accent,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                "Impostazioni",
+                style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                color = c.accent,
+            )
         }
         CText(note)
     }
