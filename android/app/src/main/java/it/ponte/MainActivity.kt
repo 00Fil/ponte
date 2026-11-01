@@ -215,25 +215,25 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     }
 }
 
-/** Barra mobile in vetro satinato: la lente segue il gesto e lascia un riflesso morbido sotto l'icona attiva. */
+/** Barra mobile in vetro satinato: una lente compatta segue il gesto e lascia un riflesso sotto l'icona attiva. */
 @Composable
 private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
     val c = Canone.colors
     val light = c.bgCanvas.luminance() > 0.5f
-    val shape = RoundedCornerShape(26.dp)
-    val glassTop = Color.White.copy(alpha = if (light) 0.72f else 0.16f)
-    val glassEdge = Color.White.copy(alpha = if (light) 0.88f else 0.28f)
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s3, vertical = Space.s2)) {
-        val glass = Modifier.fillMaxWidth().shadow(14.dp, shape).clip(shape)
-            .background(Brush.verticalGradient(listOf(glassTop, c.bgSurface.copy(alpha = 0.88f), c.bgCanvas.copy(alpha = 0.78f))))
-            .border(1.dp, c.lineSeparator.copy(alpha = 0.8f), shape)
+    val shape = RoundedCornerShape(22.dp)
+    val glassTop = Color.White.copy(alpha = if (light) 0.58f else 0.13f)
+    val glassEdge = Color.White.copy(alpha = if (light) 0.72f else 0.22f)
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s3, vertical = 6.dp)) {
+        val glass = Modifier.fillMaxWidth().shadow(9.dp, shape).clip(shape)
+            .background(Brush.verticalGradient(listOf(glassTop, c.bgSurface.copy(alpha = 0.76f), c.bgCanvas.copy(alpha = 0.68f))))
+            .border(0.75.dp, c.lineSeparator.copy(alpha = 0.72f), shape)
         Column(glass) {
             Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 32.dp)
-                .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.White.copy(alpha = if (light) 0.42f else 0.12f), Color.Transparent))))
-            BoxWithConstraints(Modifier.fillMaxWidth().height(54.dp).padding(horizontal = Space.s2, vertical = 3.dp)) {
+                .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.Transparent))))
+            BoxWithConstraints(Modifier.fillMaxWidth().height(47.dp).padding(horizontal = Space.s2, vertical = 3.dp)) {
             val itemW = maxWidth / TABS.size
-            val pillW = minOf(44.dp, itemW * 0.9f)
-            val pillH = 38.dp
+            val pillW = minOf(34.dp, itemW * 0.76f)
+            val pillH = 34.dp
             val density = LocalDensity.current
             val itemPx = with(density) { itemW.toPx() }
             val pillPx = with(density) { pillW.toPx() }
@@ -244,31 +244,28 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
                 label = "riflesso-liquido",
             )
             val reflectionX = (glide * itemPx) + (itemPx - pillPx) / 2f
-            val stretch = 1f + (kotlin.math.abs(pos() - current) * 0.16f).coerceIn(0f, 0.1f)
+            val stretch = 1f + (kotlin.math.abs(pos() - current) * 0.08f).coerceIn(0f, 0.045f)
 
             // Un riflesso rallentato resta appena dietro alla lente, come luce rifratta sul bordo inferiore.
             Box(
                 Modifier.align(Alignment.BottomStart).graphicsLayer {
-                    translationX = reflectionX + pillW.toPx() * 0.17f
-                    translationY = 3.dp.toPx()
-                    alpha = 0.38f
-                }.size(pillW * 0.66f, 3.dp).background(
-                    Brush.horizontalGradient(listOf(Color.Transparent, c.accent.copy(alpha = 0.42f), Color.Transparent)), CircleShape,
+                    translationX = reflectionX + pillW.toPx() * 0.2f
+                    translationY = 1.dp.toPx()
+                    alpha = 0.28f
+                }.size(pillW * 0.58f, 2.dp).background(
+                    Brush.horizontalGradient(listOf(Color.Transparent, c.accent.copy(alpha = 0.36f), Color.Transparent)), CircleShape,
                 ),
             )
 
-            val pillShape = RoundedCornerShape(18.dp)
+            val pillShape = CircleShape
             Box(
                 Modifier.align(Alignment.CenterStart).graphicsLayer {
                     translationX = indicatorX
                     scaleX = stretch
-                }.size(pillW, pillH).clip(pillShape)
-                    .background(Brush.verticalGradient(listOf(glassEdge, c.accentSubtle.copy(alpha = if (light) 0.86f else 0.9f), c.accent.copy(alpha = if (light) 0.10f else 0.18f))))
-                    .border(1.dp, glassEdge.copy(alpha = if (light) 0.88f else 0.55f), pillShape),
-            ) {
-                Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 12.dp).align(Alignment.TopCenter)
-                    .background(Brush.horizontalGradient(listOf(Color.Transparent, glassEdge, Color.Transparent))))
-            }
+                }.size(pillW, pillH).shadow(5.dp, pillShape).clip(pillShape)
+                    .background(Brush.verticalGradient(listOf(glassEdge, c.accentSubtle.copy(alpha = if (light) 0.7f else 0.78f), c.accent.copy(alpha = if (light) 0.06f else 0.12f))))
+                    .border(0.75.dp, glassEdge.copy(alpha = if (light) 0.8f else 0.48f), pillShape),
+            )
 
             Row(Modifier.fillMaxSize()) {
                 TABS.forEachIndexed { i, label ->
@@ -283,7 +280,7 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
                     ) {
                         val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
                         val iconColor = androidx.compose.ui.graphics.lerp(c.labelTertiary, c.accentOnSubtle, near)
-                        TabGlyph(i, iconColor, current == i, Modifier.size(24.dp))
+                        TabGlyph(i, iconColor, current == i, Modifier.size(21.dp))
                     }
                 }
             }

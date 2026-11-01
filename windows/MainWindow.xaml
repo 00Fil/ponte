@@ -112,11 +112,11 @@
         </Grid>
 
         <!-- Barra in basso, sotto i 1024. -->
-        <Border x:Name="Bottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource BarStyle}" Margin="16,0,16,10" Visibility="Collapsed">
-            <Grid x:Name="BottomTabs" Height="58" ColumnSpacing="2">
-                <Border x:Name="BottomReflection" Width="40" Height="3" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,4" IsHitTestVisible="False" Opacity="0" />
-                <Border x:Name="BottomIndicator" Width="58" Height="42" CornerRadius="21" HorizontalAlignment="Left" VerticalAlignment="Center" BorderThickness="1" IsHitTestVisible="False" Opacity="0">
-                    <Border x:Name="BottomIndicatorGloss" Height="1" Margin="12,0" VerticalAlignment="Top" CornerRadius="1" />
+        <Border x:Name="Bottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource BarStyle}" Margin="16,0,16,8" Visibility="Collapsed">
+            <Grid x:Name="BottomTabs" Height="48" ColumnSpacing="2">
+                <Border x:Name="BottomReflection" Width="24" Height="2" CornerRadius="1" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,3" IsHitTestVisible="False" Opacity="0" />
+                <Border x:Name="BottomIndicator" Width="34" Height="34" CornerRadius="17" HorizontalAlignment="Left" VerticalAlignment="Center" BorderThickness="1" IsHitTestVisible="False" Opacity="0">
+                    <Border x:Name="BottomIndicatorGloss" Height="1" Margin="10,0" VerticalAlignment="Top" CornerRadius="1" />
                 </Border>
             </Grid>
         </Border>

@@ -39,7 +39,7 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
     }
     Canvas(modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }) {
         val u = size.minDimension / 24f
-        val st = Stroke(2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val st = Stroke(1.55f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         fun o(x: Float, y: Float) = Offset(x * u, y * u)
         fun sz(w: Float, h: Float) = Size(w * u, h * u)
         when (index) {
@@ -56,18 +56,18 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
             1 -> { // computer e telefono: due schermi, invece di un generico monitor
                 drawRoundRect(color.copy(alpha = if (selected) 0.12f else 0.035f), o(2.5f, 5f), sz(14.5f, 10.5f), CornerRadius(2.2f * u))
                 drawRoundRect(color, o(2.5f, 5f), sz(14.5f, 10.5f), CornerRadius(2.2f * u), style = st)
-                drawLine(color, o(7f, 19f), o(12f, 19f), 2f * u, StrokeCap.Round)
-                drawLine(color, o(9.5f, 15.5f), o(9.5f, 19f), 2f * u, StrokeCap.Round)
+                drawLine(color, o(7f, 19f), o(12f, 19f), 1.55f * u, StrokeCap.Round)
+                drawLine(color, o(9.5f, 15.5f), o(9.5f, 19f), 1.55f * u, StrokeCap.Round)
                 drawRoundRect(color.copy(alpha = if (selected) 0.18f else 0.04f), o(14.5f, 3.8f), sz(7f, 15.5f), CornerRadius(2.2f * u))
                 drawRoundRect(color, o(14.5f, 3.8f), sz(7f, 15.5f), CornerRadius(2.2f * u), style = st)
-                drawLine(color, o(17f, 16.8f), o(19f, 16.8f), 1.6f * u, StrokeCap.Round)
+                drawLine(color, o(17f, 16.8f), o(19f, 16.8f), 1.35f * u, StrokeCap.Round)
             }
             2 -> { // cartellina con molletta
                 drawRoundRect(color.copy(alpha = if (selected) 0.11f else 0.035f), o(6f, 5f), sz(12f, 16f), CornerRadius(2.5f * u))
                 drawRoundRect(color, o(6f, 5f), sz(12f, 16f), CornerRadius(2.5f * u), style = st)
                 drawRoundRect(color, o(9f, 2.8f), sz(6f, 4f), CornerRadius(1.6f * u), style = st)
-                drawLine(color, o(9f, 12f), o(15f, 12f), 1.8f * u, StrokeCap.Round)
-                drawLine(color, o(9f, 16f), o(13f, 16f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(9f, 12f), o(15f, 12f), 1.45f * u, StrokeCap.Round)
+                drawLine(color, o(9f, 16f), o(13f, 16f), 1.45f * u, StrokeCap.Round)
                 drawRoundRect(color, o(9f, 2.8f), sz(6f, 4f), CornerRadius(1.6f * u), style = st)
             }
             3 -> { // archivio: scatola e maniglia, distinta dalla galleria immagini
@@ -75,8 +75,8 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
                 drawRoundRect(color, o(3.5f, 8f), sz(17f, 12f), CornerRadius(2.2f * u), style = st)
                 drawRoundRect(color.copy(alpha = if (selected) 0.14f else 0.045f), o(5f, 4f), sz(14f, 5f), CornerRadius(1.8f * u))
                 drawRoundRect(color, o(5f, 4f), sz(14f, 5f), CornerRadius(1.8f * u), style = st)
-                drawLine(color, o(9f, 12.5f), o(15f, 12.5f), 1.8f * u, StrokeCap.Round)
-                drawLine(color, o(9f, 16f), o(15f, 16f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(9f, 12.5f), o(15f, 12.5f), 1.45f * u, StrokeCap.Round)
+                drawLine(color, o(9f, 16f), o(15f, 16f), 1.45f * u, StrokeCap.Round)
             }
             4 -> { // cuffie: le conchiglie scendono al posto con un rimbalzo
                 val dy = if (selected) (1f - gesture.value) * -2.4f * u else 0f
@@ -90,16 +90,16 @@ fun TabGlyph(index: Int, color: Color, selected: Boolean, modifier: Modifier = M
             5 -> { // portafoglio con saldo
                 drawRoundRect(color.copy(alpha = if (selected) 0.13f else 0.04f), o(3f, 6f), sz(18f, 13f), CornerRadius(3f * u))
                 drawRoundRect(color, o(3f, 6f), sz(18f, 13f), CornerRadius(3f * u), style = st)
-                drawLine(color, o(4f, 9f), o(15f, 9f), 1.6f * u, StrokeCap.Round)
+                drawLine(color, o(4f, 9f), o(15f, 9f), 1.35f * u, StrokeCap.Round)
                 drawRoundRect(color, o(13f, 10.5f), sz(8f, 5f), CornerRadius(2f * u), style = st)
                 drawCircle(color, 0.9f * u, o(16f, 13f))
-                drawLine(color, o(7f, 4f), o(17f, 4f), 1.8f * u, StrokeCap.Round)
+                drawLine(color, o(7f, 4f), o(17f, 4f), 1.45f * u, StrokeCap.Round)
             }
             else -> { // impostazioni: ghiera con otto denti e centro aperto
                 val center = o(12f, 12f)
                 for (tooth in 0 until 8) {
                     rotate(tooth * 45f, center) {
-                        drawLine(color, o(12f, 2f), o(12f, 4.5f), 2f * u, StrokeCap.Round)
+                        drawLine(color, o(12f, 2f), o(12f, 4.5f), 1.55f * u, StrokeCap.Round)
                     }
                 }
                 drawCircle(color, 7.2f * u, center, style = st)

@@ -205,7 +205,7 @@ public sealed partial class MainWindow : Window
                 var label = new TextBlock
                 {
                     Text = BottomTabLabels[t],
-                    FontSize = 10,
+                    FontSize = 9,
                     CharacterSpacing = 15,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -213,16 +213,16 @@ public sealed partial class MainWindow : Window
                 };
                 var content = new StackPanel
                 {
-                    Spacing = 2,
+                    Spacing = 1,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     Children =
                     {
-                        new FontIcon { Glyph = Glyphs[t], FontSize = 16, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") },
+                        new FontIcon { Glyph = Glyphs[t], FontSize = 15, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") },
                         label,
                     },
                 };
-                var b = new Button { Style = St("TabButton"), Content = content, Padding = new Thickness(2, 2, 2, 2), MinHeight = 50 };
+                var b = new Button { Style = St("TabButton"), Content = content, Padding = new Thickness(2), MinHeight = 42 };
                 AutomationProperties.SetName(b, Tabs[t]);
                 b.Click += (_, _) => Select(idx);
                 _bottomLabels[t] = label;
@@ -243,11 +243,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateBottomNavigationDensity()
     {
-        var compact = BottomTabs.ActualWidth / Math.Max(1, Tabs.Length) < 76;
         foreach (var label in _bottomLabels)
-            if (label != null) label.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var button in _bottomNav) button.MinHeight = compact ? 44 : 50;
-        BottomTabs.Height = compact ? 50 : 58;
+            if (label != null) label.Visibility = Visibility.Collapsed;
+        foreach (var button in _bottomNav) button.MinHeight = 42;
+        BottomTabs.Height = 48;
     }
 
     private void UpdateBottomNavigationColors()
@@ -263,7 +262,7 @@ public sealed partial class MainWindow : Window
             {
                 TintColor = surface,
                 FallbackColor = surface,
-                TintOpacity = Dark ? 0.72 : 0.82,
+                TintOpacity = Dark ? 0.58 : 0.68,
             };
         }
         catch
@@ -278,13 +277,13 @@ public sealed partial class MainWindow : Window
             EndPoint = new Windows.Foundation.Point(0, 1),
             GradientStops =
             {
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)54 : (byte)110, 255, 255, 255), Offset = 0 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)42 : (byte)30, accent.R, accent.G, accent.B), Offset = 0.55 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)62 : (byte)18, accent.R, accent.G, accent.B), Offset = 1 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)42 : (byte)76, 255, 255, 255), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)30 : (byte)20, accent.R, accent.G, accent.B), Offset = 0.55 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)46 : (byte)14, accent.R, accent.G, accent.B), Offset = 1 },
             },
         };
-        BottomIndicator.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)80 : (byte)120, 255, 255, 255));
-        BottomIndicatorGloss.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)150 : (byte)210, 255, 255, 255));
+        BottomIndicator.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)58 : (byte)86, 255, 255, 255));
+        BottomIndicatorGloss.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(Dark ? (byte)102 : (byte)145, 255, 255, 255));
         BottomReflection.Background = new LinearGradientBrush
         {
             StartPoint = new Windows.Foundation.Point(0, 0),
@@ -292,7 +291,7 @@ public sealed partial class MainWindow : Window
             GradientStops =
             {
                 new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 0 },
-                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)150 : (byte)185, accent.R, accent.G, accent.B), Offset = 0.5 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(Dark ? (byte)94 : (byte)125, accent.R, accent.G, accent.B), Offset = 0.5 },
                 new GradientStop { Color = Windows.UI.Color.FromArgb(0, accent.R, accent.G, accent.B), Offset = 1 },
             },
         };
