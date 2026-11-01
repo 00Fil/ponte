@@ -2,15 +2,14 @@ using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Shapes;
-using Windows.Foundation;
 
 namespace Ponte;
 
 public sealed partial class MainWindow
 {
-    private static readonly string[] FinanceCategories = { "Casa", "Cibo", "Trasporti", "Tempo libero", "Salute", "Altro" };
+    private static readonly string[] FinanceCategories = { "Altro", "Casa", "Cibo", "Trasporti", "Tempo libero", "Salute" };
     private static readonly CultureInfo Italian = CultureInfo.GetCultureInfo("it-IT");
+    private bool _showAllFinance;
 
     private static string Euro(long cents) => (cents / 100m).ToString("C2", Italian);
 
@@ -26,61 +25,75 @@ public sealed partial class MainWindow
         var income = monthEntries.Where(e => e.Kind == "income").Sum(e => e.Cents);
         var expenses = monthEntries.Where(e => e.Kind == "expense").Sum(e => -e.Cents);
 
-        var wallet = new List<UIElement>
+        var net = income - expenses;
+        var heroBody = new StackPanel { Spacing = 8 };
+        var heroLabel = Text("SALDO ATTUALE", "Footnote");
+        heroLabel.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        heroBody.Children.Add(heroLabel);
+        heroBody.Children.Add(new TextBlock
         {
-            Text("SALDO DISPONIBILE", "FootnoteTertiary"),
-            new TextBlock { Text = entries.Count == 0 ? "Saldo non impostato" : Euro(balance), Style = St("Title1"), Foreground = Canone.Get("LabelPrimary", Dark), TextTrimming = TextTrimming.CharacterEllipsis },
-            Row("Entrate", "Questo mese", Badge(Euro(income), "Positive")),
-            Row("Uscite", "Questo mese", Badge(Euro(expenses), "Critical")),
-            Btn("Aggiorna saldo", async () => await FinanceDialogAsync("balance", balance), "PrimaryButton"),
-        };
+            Text = entries.Count == 0 ? "Da impostare" : Euro(balance),
+            FontSize = 38, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White), TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        var flow = Text((net >= 0 ? "↑ " : "↓ ") + Euro(Math.Abs(net)) + " questo mese", "BodyText");
+        flow.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        heroBody.Children.Add(flow);
+        var totals = Text("Entrate " + Euro(income) + "   ·   Uscite " + Euro(expenses), "Footnote");
+        totals.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(220, 255, 255, 255));
+        heroBody.Children.Add(totals);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        actions.Children.Add(Btn("− Uscita", async () => await FinanceDialogAsync("expense", 0)));
-        actions.Children.Add(Btn("+ Entrata", async () => await FinanceDialogAsync("income", 0)));
-        wallet.Add(actions);
-        wallet.Add(Text("I dati sono salvati solo su questo PC.", "FootnoteTertiary"));
-        host.Children.Add(Card(wallet.ToArray()));
-
-        host.Children.Add(Card(Text("Spese giornaliere", "SectionTitle"),
-            Text("Heatmap · ultime 26 settimane · più verde = più spese", "Footnote"), Heatmap(entries)));
-
-        var trend = new List<UIElement> { Text("Andamento del saldo", "SectionTitle"), Text("Chiusura mensile · ultimi 6 mesi", "Footnote") };
-        if (entries.Count == 0) trend.Add(Text("Aggiorna il saldo per iniziare a vedere l'andamento.", "Footnote"));
-        else
+        actions.Children.Add(Btn("Saldo", async () => await FinanceDialogAsync("balance", balance), "SecondaryButton"));
+        actions.Children.Add(Btn("+ Movimento", async () => await FinanceDialogAsync("entry", 0), "PrimaryButton"));
+        heroBody.Children.Add(actions);
+        var privacy = Text("Dati salvati solo su questo PC", "Footnote");
+        privacy.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 255, 255, 255));
+        heroBody.Children.Add(privacy);
+        var heroBrush = new LinearGradientBrush
         {
-            trend.Add(BalanceChart(entries));
-            var months = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
-            for (var i = 0; i < 6; i++) months.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            foreach (var (offset, index) in Enumerable.Range(0, 6).Reverse().Select((offset, index) => (offset, index)))
+            StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1),
+            GradientStops =
             {
-                var label = new TextBlock
-                {
-                    Text = DateTime.Today.AddMonths(-offset).ToString("MMM", Italian), Style = St("FootnoteTertiary"),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                };
-                Grid.SetColumn(label, index); months.Children.Add(label);
-            }
-            trend.Add(months);
-        }
-        host.Children.Add(Card(trend.ToArray()));
+                new GradientStop { Color = Canone.Color("AccentDefault", Dark), Offset = 0 },
+                new GradientStop { Color = Windows.UI.Color.FromArgb(255, 30, 63, 216), Offset = 1 },
+            },
+        };
+        host.Children.Add(new Border { Background = heroBrush, CornerRadius = new CornerRadius(24), Padding = new Thickness(24), Child = heroBody });
 
-        var category = new List<UIElement> { Text("Uscite per categoria", "SectionTitle"), Text(DateTime.Today.ToString("MMMM yyyy", Italian), "Footnote") };
+        host.Children.Add(Card(Text("Entrate e uscite", "SectionTitle"),
+            Text("Saldo netto per mese · 6 mesi", "Footnote"), MonthlyFlowChart(entries),
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Badge("↑ Entrate superiori", "Positive"), Badge("↓ Uscite superiori", "Critical") } }));
+        host.Children.Add(Card(Text("Spese", "SectionTitle"), Text("Giorno per giorno · più verde = più spese", "Footnote"), Heatmap(entries)));
+
+        var category = new List<UIElement> { Text("Dove spendi", "SectionTitle"), Text(DateTime.Today.ToString("MMMM", Italian), "Footnote") };
         var groups = monthEntries.Where(e => e.Kind == "expense").GroupBy(e => e.Category)
             .Select(g => (Name: g.Key, Cents: g.Sum(e => -e.Cents))).OrderByDescending(g => g.Cents).ToList();
         if (groups.Count == 0) category.Add(Text("Nessuna uscita registrata questo mese.", "Footnote"));
         else
         {
             var max = Math.Max(1, groups[0].Cents);
-            foreach (var (name, cents) in groups)
+            foreach (var (name, cents) in groups.Take(4))
             {
                 category.Add(Row(name, Euro(cents)));
                 category.Add(new ProgressBar { Minimum = 0, Maximum = 1, Value = (double)cents / max, Height = 6 });
             }
+            var remaining = groups.Skip(4).Sum(group => group.Cents);
+            if (remaining > 0) category.Add(Row("Altre categorie", Euro(remaining)));
         }
         host.Children.Add(Card(category.ToArray()));
 
-        var recent = new List<UIElement> { Text("Movimenti recenti", "SectionTitle") };
-        var latest = entries.OrderByDescending(e => e.Ts).Take(12).ToList();
+        var recent = new List<UIElement>();
+        var recentHeader = new Grid { ColumnSpacing = 12 };
+        recentHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recentHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        recentHeader.Children.Add(Text("Movimenti", "SectionTitle"));
+        if (entries.Count > 4)
+        {
+            var toggle = Btn(_showAllFinance ? "Meno" : "Tutti", () => { _showAllFinance = !_showAllFinance; RenderFinances(); }, "ChipButton");
+            Grid.SetColumn(toggle, 1); recentHeader.Children.Add(toggle);
+        }
+        recent.Add(recentHeader);
+        var latest = entries.OrderByDescending(e => e.Ts).Take(_showAllFinance ? entries.Count : 4).ToList();
         if (latest.Count == 0) recent.Add(Text("Registra la prima entrata o uscita per popolare il riepilogo.", "Footnote"));
         else
         {
@@ -100,7 +113,7 @@ public sealed partial class MainWindow
                 movement.Children.Add(description);
                 value.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetColumn(value, 1); movement.Children.Add(value);
-                var remove = Btn("Elimina", async () => await ConfirmFinanceDeleteAsync(entry));
+                var remove = Btn("×", async () => await ConfirmFinanceDeleteAsync(entry), "ChipButton");
                 Grid.SetColumn(remove, 2); movement.Children.Add(remove);
                 recent.Add(movement);
             }
@@ -139,22 +152,36 @@ public sealed partial class MainWindow
         var fields = new StackPanel { Spacing = 10 };
         fields.Children.Add(Field("Importo · EUR", amount));
         ComboBox? category = null;
+        ComboBox? kind = null;
         TextBox? note = null;
+        StackPanel? noteField = null;
         if (!balanceMode)
         {
+            kind = new ComboBox { ItemsSource = new[] { "Uscita", "Entrata" }, SelectedIndex = 0, MinWidth = 280 };
             category = new ComboBox { ItemsSource = FinanceCategories, SelectedIndex = 0, MinWidth = 280 };
-            note = new TextBox { PlaceholderText = "Facoltativa", MaxLength = 80, MinWidth = 280 };
+            note = new TextBox { PlaceholderText = "Facoltativa", MaxLength = 80, MinWidth = 280, Visibility = Visibility.Collapsed };
+            noteField = Field("Nota", note);
+            noteField.Visibility = Visibility.Collapsed;
+            var noteToggle = new Button { Content = "+ Aggiungi una nota", Style = St("ChipButton"), HorizontalAlignment = HorizontalAlignment.Left };
+            noteToggle.Click += (_, _) =>
+            {
+                noteField.Visibility = noteField.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+                note.Visibility = noteField.Visibility;
+                noteToggle.Content = noteField.Visibility == Visibility.Visible ? "Nascondi nota" : "+ Aggiungi una nota";
+            };
+            fields.Children.Add(Field("Tipo", kind));
             fields.Children.Add(Field("Categoria", category));
-            fields.Children.Add(Field("Nota", note));
+            fields.Children.Add(noteToggle);
+            fields.Children.Add(noteField);
         }
         fields.Children.Add(error);
 
         var dlg = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
-            Title = balanceMode ? "Aggiorna saldo" : mode == "income" ? "Nuova entrata" : "Nuova uscita",
+            Title = balanceMode ? "Aggiorna saldo" : "Nuovo movimento",
             Content = fields,
-            PrimaryButtonText = balanceMode ? "Salva saldo" : "Registra",
+            PrimaryButtonText = balanceMode ? "Salva" : "Aggiungi",
             CloseButtonText = "Annulla",
             DefaultButton = ContentDialogButton.Primary,
         };
@@ -170,7 +197,7 @@ public sealed partial class MainWindow
             }
             var cents = decimal.ToInt64(decimal.Round(value * 100m, 0, MidpointRounding.AwayFromZero));
             if (balanceMode) FinanceLedger.SetBalance(_r.S, cents);
-            else FinanceLedger.Add(_r.S, mode, cents, category?.SelectedItem?.ToString() ?? "Altro", note?.Text ?? "");
+            else FinanceLedger.Add(_r.S, kind?.SelectedIndex == 1 ? "income" : "expense", cents, category?.SelectedItem?.ToString() ?? "Altro", note?.Text ?? "");
             _r.Raise();
         };
         await dlg.ShowAsync();
@@ -222,35 +249,48 @@ public sealed partial class MainWindow
         return labels;
     }
 
-    private UIElement BalanceChart(IReadOnlyList<FinanceEntry> entries)
+    private UIElement MonthlyFlowChart(IReadOnlyList<FinanceEntry> entries)
     {
         var now = DateOnly.FromDateTime(DateTime.Today);
-        var balances = Enumerable.Range(0, 6).Reverse().Select(offset =>
+        var months = Enumerable.Range(0, 6).Reverse().Select(offset =>
         {
-            var close = now.AddMonths(-offset).AddDays(1 - now.Day).AddMonths(1).ToDateTime(TimeOnly.MinValue).AddTicks(-1);
-            var cutoff = new DateTimeOffset(close, TimeZoneInfo.Local.GetUtcOffset(close)).ToUnixTimeMilliseconds();
-            return entries.Where(e => e.Ts <= cutoff).Sum(e => e.Cents);
+            var date = now.AddDays(1 - now.Day).AddMonths(-offset);
+            var moves = entries.Where(e => LocalDate(e.Ts).Year == date.Year && LocalDate(e.Ts).Month == date.Month).ToList();
+            var net = moves.Where(e => e.Kind == "income").Sum(e => e.Cents) - moves.Where(e => e.Kind == "expense").Sum(e => -e.Cents);
+            return (Date: date, Net: net);
         }).ToList();
-        var min = balances.Min(); var max = balances.Max();
-        if (min == max) { min -= 100; max += 100; }
-        var canvas = new Microsoft.UI.Xaml.Controls.Canvas { Width = 640, Height = 132, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var line = new Polyline { Stroke = Canone.Get("AccentDefault", Dark), StrokeThickness = 3, StrokeLineJoin = PenLineJoin.Round };
-        var positions = new List<Point>();
-        for (var i = 0; i < balances.Count; i++)
+        var maximum = Math.Max(1, months.Max(p => Math.Abs(p.Net)));
+        const double chartWidth = 640;
+        const double chartHeight = 112;
+        const double zeroY = 58;
+        const double maxBarHeight = 43;
+        var canvas = new Microsoft.UI.Xaml.Controls.Canvas { Width = chartWidth, Height = chartHeight };
+        var axis = new Border { Width = chartWidth, Height = 1, Background = Canone.Get("LineSeparator", Dark) };
+        Microsoft.UI.Xaml.Controls.Canvas.SetLeft(axis, 0);
+        Microsoft.UI.Xaml.Controls.Canvas.SetTop(axis, zeroY);
+        canvas.Children.Add(axis);
+        for (var i = 0; i < months.Count; i++)
         {
-            var x = 16 + i * (608.0 / (balances.Count - 1));
-            var y = 112 - (balances[i] - min) / (double)(max - min) * 92;
-            var point = new Point(x, y);
-            line.Points.Add(point); positions.Add(point);
+            var (date, net) = months[i];
+            var height = Math.Abs(net) == 0 ? 4 : Math.Max(4, Math.Abs(net) / (double)maximum * maxBarHeight);
+            var width = 44d;
+            var bar = new Border
+            {
+                Width = width, Height = height, CornerRadius = new CornerRadius(5),
+                Background = net > 0 ? Canone.Get("PositiveOnSubtle", Dark) : net < 0 ? Canone.Get("CriticalOnSubtle", Dark) : Canone.Get("BgSunken", Dark),
+            };
+            Microsoft.UI.Xaml.Controls.Canvas.SetLeft(bar, i * (chartWidth / months.Count) + (chartWidth / months.Count - width) / 2);
+            Microsoft.UI.Xaml.Controls.Canvas.SetTop(bar, net >= 0 ? zeroY - height : zeroY + 2);
+            ToolTipService.SetToolTip(bar, date.ToString("MMMM", Italian) + " · " + (net < 0 ? "−" : "+") + Euro(Math.Abs(net)));
+            canvas.Children.Add(bar);
         }
-        canvas.Children.Add(line);
-        foreach (var point in positions)
+        var labels = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var _ in months) labels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < months.Count; i++)
         {
-            var dot = new Ellipse { Width = 8, Height = 8, Fill = Canone.Get("AccentDefault", Dark) };
-            Microsoft.UI.Xaml.Controls.Canvas.SetLeft(dot, point.X - 4);
-            Microsoft.UI.Xaml.Controls.Canvas.SetTop(dot, point.Y - 4);
-            canvas.Children.Add(dot);
+            var label = new TextBlock { Text = months[i].Date.ToString("MMM", Italian), Style = St("FootnoteTertiary"), HorizontalAlignment = HorizontalAlignment.Center };
+            Grid.SetColumn(label, i); labels.Children.Add(label);
         }
-        return new Viewbox { Height = 132, Stretch = Stretch.Fill, Child = canvas };
+        return new StackPanel { Spacing = 2, Children = { new Viewbox { Height = chartHeight, Stretch = Stretch.Fill, Child = canvas }, labels } };
     }
 }
