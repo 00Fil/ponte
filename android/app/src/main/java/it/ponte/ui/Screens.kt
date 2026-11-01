@@ -424,7 +424,7 @@ fun AudioScreen(r: Router, onBack: (() -> Unit)? = null) {
                 val rootError by Root.lastError.collectAsState()
                 if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
                 if (!android.provider.Settings.canDrawOverlays(ctx)) {
-                    CText("Per capire quando usi questo dispositivo serve il permesso "Mostra sopra altre app" (in Impostazioni).", tertiary = true)
+                    CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
                 }
             }
         }
@@ -456,7 +456,7 @@ fun AudioScreen(r: Router, onBack: (() -> Unit)? = null) {
                 }
                 if (cannot) {
                     CText(
-                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto "Cuffie preferite qui".",
+                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto \"Cuffie preferite qui\".",
                         tertiary = true,
                     )
                 }
