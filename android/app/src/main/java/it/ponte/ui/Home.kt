@@ -88,7 +88,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
             }
             item {
                 val last = clips.firstOrNull()
-                CCard(Modifier.clickable { go(2) }) {
+                CCard(Modifier.dropClickable({ go(2) })) {
                     Text("Ultimo appunto", style = CanoneType.title3, color = c.labelPrimary)
                     if (last == null) {
                         CText("Niente di copiato per ora. Copia un testo e compare qui e sugli altri dispositivi.")
@@ -113,7 +113,7 @@ private fun Tile(icon: Int, title: String, value: String, note: String, tint: Li
         modifier.height(132.dp).clip(shape)
             .background(Brush.verticalGradient(listOf(tint[0].copy(alpha = 0.10f), c.bgSurface), endY = 300f))
             .border(BorderStroke(1.dp, c.lineSeparator), shape)
-            .clickable(onClick = onClick).padding(Space.s4),
+            .dropClickable(onClick).padding(Space.s4),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {

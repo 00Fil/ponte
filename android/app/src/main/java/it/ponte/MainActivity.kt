@@ -132,7 +132,20 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    fun select(i: Int) { scope.launch { pager.animateScrollToPage(i, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 320f)) } }
+    fun select(i: Int) {
+        scope.launch {
+            // Un tocco su una scheda lontana non attraversa le pagine in mezzo (comporle tutte bloccava lo schermo): salta a quella accanto e scorre l'ultima.
+            val cur = pager.currentPage
+            if (kotlin.math.abs(i - cur) > 1) pager.scrollToPage(if (i > cur) i - 1 else i + 1)
+            pager.animateScrollToPage(i, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 360f))
+        }
+    }
+    // Le pagine si preparano una alla volta a riposo, così il primo passaggio su ognuna non compone nulla al volo.
+    var warm by remember { mutableIntStateOf(1) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1800)
+        for (k in 2..TABS.size - 1) { warm = k; kotlinx.coroutines.delay(700) }
+    }
     // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
     val pos = { pager.currentPage + pager.currentPageOffsetFraction }
 
@@ -151,7 +164,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(132.dp)) {
             FiberField(Modifier.matchParentSize(), band = true, centerY = 0.42f, spread = 0.9f)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.bgCanvas)))
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.30f to Color.Transparent, 0.92f to c.bgCanvas, 1f to c.bgCanvas)))
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
                 TABS.forEachIndexed { i, t ->
                     Text(
@@ -168,7 +181,17 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     }
 
     val pages: @Composable (Modifier) -> Unit = { m ->
-        androidx.compose.foundation.pager.HorizontalPager(pager, m, beyondViewportPageCount = 1) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
+        androidx.compose.foundation.pager.HorizontalPager(pager, m, beyondViewportPageCount = warm) { t ->
+            // profondità: la pagina che esce si attenua e si rimpicciolisce appena (solo fase di disegno)
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    val off = kotlin.math.abs((pager.currentPage - t) + pager.currentPageOffsetFraction)
+                    alpha = 1f - (off * 0.45f).coerceIn(0f, 0.6f)
+                    val sc = 1f - (off * 0.05f).coerceIn(0f, 0.06f)
+                    scaleX = sc; scaleY = sc
+                },
+            ) { content(t) }
+        }
     }
 
     // Scheda dell'aggiornamento: galleggia in basso, non sposta il contenuto.
@@ -213,6 +236,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
                     androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
                         pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })
                     }
+                    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(c.bgCanvas, Color.Transparent))))
                     Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
                     it.ponte.ui.GlassTabBar(
                         layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },

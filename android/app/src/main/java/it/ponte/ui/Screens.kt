@@ -116,21 +116,6 @@ internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.un
 @Composable
 internal fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, color = Canone.colors.labelPrimary)
 
-@Composable
-private fun CChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val c = Canone.colors
-    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val grow = androidx.compose.animation.core.animateFloatAsState(
-        if (pressed) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 520f), label = "chip",
-    )
-    Box(
-        Modifier.graphicsLayer { scaleX = 1f + 0.07f * grow.value; scaleY = 1f + 0.02f * grow.value }
-            .glassControl(isDark(), tint = if (selected) c.accent.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Unspecified, press = { grow.value })
-            .clickable(interactionSource = src, indication = null, onClick = onClick).padding(horizontal = Space.s4, vertical = Space.s2),
-    ) { Text(label, style = CanoneType.footnote, color = if (selected) c.accentOnSubtle else c.labelPrimary) }
-}
-
 internal fun toast(ctx: Context, s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
 internal fun imagesPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
 internal fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
@@ -304,11 +289,8 @@ fun ArchiveScreen(r: Router) {
                 CButton("Invia file", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    CChip("Tutto", filter == "") { filter = "" }
-                    CChip("Screenshot", filter == "screenshot") { filter = "screenshot" }
-                    CChip("File", filter == "file") { filter = "file" }
-                }
+                val kinds = listOf("", "screenshot", "file")
+                GlassSegmented(listOf("Tutto", "Screenshot", "File"), kinds.indexOf(filter).coerceAtLeast(0), { filter = kinds[it] })
             }
             if (list.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -319,7 +301,7 @@ fun ArchiveScreen(r: Router) {
                 Column(
                     Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
                         .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
-                        .combinedClickable(onClick = { open(e) }, onLongClick = { toDelete = e }).padding(Space.s2),
+                        .dropClickable({ open(e) }, { toDelete = e }).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
                 ) {
                     val bmp by produceState<Bitmap?>(null, e.path) {

@@ -265,25 +265,8 @@ fun GlassTabBar(
                     shape,
                 ),
             )
-            // 3) bordo con riflesso speculare: luce forte in alto a sinistra e in basso a destra, buio in mezzo
-            Box(
-                Modifier.fillMaxSize()
-                    .border(
-                        3.dp,
-                        Brush.linearGradient(listOf(white.copy(alpha = if (dark) 0.10f else 0.20f), Color.Transparent, white.copy(alpha = if (dark) 0.06f else 0.12f))),
-                        shape,
-                    )
-                    .border(
-                        1.dp,
-                        Brush.linearGradient(
-                            0f to white.copy(alpha = if (dark) 0.70f else 1f),
-                            0.35f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                            0.65f to white.copy(alpha = if (dark) 0.06f else 0.16f),
-                            1f to white.copy(alpha = if (dark) 0.55f else 0.95f),
-                        ),
-                        shape,
-                    ),
-            )
+            // 3) contorno tonale (niente bordi bianchi) e riflesso morbido in alto a sinistra
+            Box(Modifier.fillMaxSize().drop(dark, tint = Color.Transparent))
             // 4) icone ed etichette. Il dito che tiene premuto sposta la bolla; al rilascio la scheda sotto la bolla diventa attiva.
             Row(
                 Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY).pointerInput(n) {
@@ -353,23 +336,7 @@ fun GlassTabBar(
                     pillW, pillH,
                     edge = 10.dp, amount = 8.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp,
                 )
-                Box(
-                    Modifier.size(pillW, pillH)
-                        .background(
-                            Brush.verticalGradient(listOf(white.copy(alpha = if (dark) 0.14f else 0.22f), white.copy(alpha = if (dark) 0.03f else 0.04f))),
-                            shape,
-                        )
-                        .border(
-                            1.2.dp,
-                            Brush.linearGradient(
-                                0f to white.copy(alpha = if (dark) 0.75f else 1f),
-                                0.4f to white.copy(alpha = if (dark) 0.14f else 0.30f),
-                                0.7f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                                1f to white.copy(alpha = if (dark) 0.60f else 0.95f),
-                            ),
-                            shape,
-                        ),
-                )
+                Box(Modifier.size(pillW, pillH).drop(dark, tint = Color.Transparent))
             }
         }
     }

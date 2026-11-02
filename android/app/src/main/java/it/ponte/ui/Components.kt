@@ -83,22 +83,16 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Destructive -> c.criticalOnCritical
     }
     val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val grow = androidx.compose.animation.core.animateFloatAsState(
-        if (pressed) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 520f), label = "pressione",
-    )
+    val grow = rememberDropPress(src)
     val glass = when (kind) {
-        ButtonKind.Primary -> Modifier.glassControl(dark, fill = Brand.gradient, press = { grow.value })
-        ButtonKind.Secondary -> Modifier.glassControl(dark, press = { grow.value })
-        ButtonKind.Destructive -> Modifier.glassControl(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { grow.value })
+        ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { grow.value })
+        ButtonKind.Secondary -> Modifier.drop(dark, press = { grow.value })
+        ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { grow.value })
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * grow.value)) }
     }
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp)
-            .graphicsLayer {
-                val g = grow.value
-                scaleX = 1f + 0.07f * g; scaleY = 1f + 0.02f * g
-            }
+            .dropScale(grow)
             .then(glass).alpha(if (enabled) 1f else 0.4f)
             .clickable(interactionSource = src, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -146,9 +140,9 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
     val pos = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
     var held by remember { androidx.compose.runtime.mutableStateOf(false) }
     val grow = androidx.compose.animation.core.animateFloatAsState(
-        if (held) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.75f, stiffness = 480f), label = "pomello",
+        if (held) 1f else 0f, Goccia.press, label = "pomello",
     )
-    val settle = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.8f, stiffness = 420f)
+    val settle = Goccia.settle
     androidx.compose.runtime.LaunchedEffect(checked) { if (!held) pos.animateTo(if (checked) 1f else 0f, settle) }
     val now by androidx.compose.runtime.rememberUpdatedState(checked)
     val change by androidx.compose.runtime.rememberUpdatedState(onChange)
@@ -181,9 +175,9 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
             },
     ) {
         // pista: grigio di vetro quando è spenta, azzurro lucido quando è accesa, con dissolvenza tra i due
-        Box(Modifier.matchParentSize().glassControl(dark, tint = c.fillControl.copy(alpha = if (dark) 0.55f else 0.65f)))
+        Box(Modifier.matchParentSize().drop(dark, tint = c.fillControl.copy(alpha = if (dark) 0.55f else 0.65f)))
         Box(
-            Modifier.matchParentSize().graphicsLayer { alpha = pos.value }.glassControl(dark, fill = on),
+            Modifier.matchParentSize().graphicsLayer { alpha = pos.value }.drop(dark, fill = on),
         )
         // pomello: vetro chiaro, si gonfia e si allunga quando lo tieni premuto
         Box(
@@ -195,7 +189,7 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                     scaleX = 1f + 0.38f * g
                     scaleY = 1f + 0.10f * g
                 }
-                .glassControl(dark, tint = Color.White.copy(alpha = if (dark) 0.85f else 0.95f)),
+                .drop(dark, tint = Color.White.copy(alpha = if (dark) 0.88f else 0.97f)),
         )
     }
 }
