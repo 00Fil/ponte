@@ -71,12 +71,11 @@ private fun noteColor(d: Int) = when (d) {
 }
 
 @Composable
-fun FinanceScreen(r: Router) {
+fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val m by r.finance.state.collectAsState()
     val now = remember { Calendar.getInstance() }
-    var sub by remember { mutableStateOf<String?>(null) }
     var year by remember { mutableIntStateOf(now.get(Calendar.YEAR)) }
     var month by remember { mutableIntStateOf(now.get(Calendar.MONTH)) }   // -1 = tutto l'anno
     var amount by remember { mutableStateOf("") }
@@ -84,7 +83,6 @@ fun FinanceScreen(r: Router) {
     var cat by remember { mutableStateOf("") }
     var income by remember { mutableStateOf(false) }
     var revInput by remember { mutableStateOf("") }
-    androidx.activity.compose.BackHandler(enabled = sub != null) { sub = null }
 
     fun range(y: Int, mo: Int): Pair<Long, Long> {
         val a = Calendar.getInstance().apply { clear(); set(y, if (mo < 0) 0 else mo, 1) }
@@ -127,12 +125,7 @@ fun FinanceScreen(r: Router) {
     }
 
     @Composable
-    fun Back(label: String) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            CButton("‹  Finanze", { sub = null }, kind = ButtonKind.Tertiary)
-            Text(label, style = CanoneType.title3, color = c.labelPrimary)
-        }
-    }
+    fun Back(label: String) = BackRow("Finanze", label) { onSub(null) }
 
     androidx.compose.animation.AnimatedContent(
         sub,
@@ -160,11 +153,11 @@ fun FinanceScreen(r: Router) {
                     }
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            Action("−", "Spesa", true, Modifier) { income = false; sub = "add" }
-                            Action("+", "Entrata", false, Modifier) { income = true; sub = "add" }
-                            Action("€", "Contanti", false, Modifier) { sub = "cash" }
-                            Action("R", "Revolut", false, Modifier) { sub = "revolut" }
-                            Action("≡", "Movimenti", false, Modifier) { sub = "moves" }
+                            Action("−", "Spesa", true) { income = false; onSub("add") }
+                            Action("+", "Entrata", false) { income = true; onSub("add") }
+                            Action("€", "Contanti", false) { onSub("cash") }
+                            Action("R", "Revolut", false) { onSub("revolut") }
+                            Action("≡", "Movimenti", false) { onSub("moves") }
                         }
                     }
                     item {
@@ -268,7 +261,7 @@ fun FinanceScreen(r: Router) {
                                 if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
                                 val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
                                 r.finance.add(if (income) v else -v, k, note.trim())
-                                amount = ""; note = ""; cat = ""; sub = null
+                                amount = ""; note = ""; cat = ""; onSub(null)
                             }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                         }
                     }
@@ -483,17 +476,3 @@ private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
     }
 }
 
-/** Tasto tondo della dashboard: una goccia con simbolo e nome sotto, stessa fisica dei controlli. */
-@Composable
-private fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val c = Canone.colors
-    val dark = isDark()
-    val t = rememberDropTouch()
-    Column(modifier.dropGestures(t, onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        Box(
-            Modifier.size(58.dp).dropDeform(t).drop(dark, tint = if (accent) c.accent.copy(alpha = if (dark) 0.38f else 0.26f) else Color.Unspecified, press = { t.press.value }),
-            contentAlignment = Alignment.Center,
-        ) { Text(symbol, style = CanoneType.title2, color = if (accent) c.accentOnSubtle else c.labelPrimary) }
-        Text(label, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
-    }
-}

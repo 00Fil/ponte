@@ -37,7 +37,7 @@ import java.util.Calendar
  * dove il colore sta solo nei bollini a gradiente blu; in fondo l'ultimo appunto. Ogni riquadro apre la sua scheda.
  */
 @Composable
-fun HomeScreen(r: Router, go: (Int) -> Unit) {
+fun HomeScreen(r: Router, go: (String) -> Unit) {
     val c = Canone.colors
     val devices by r.devices.collectAsState()
     val hub by r.hubState.collectAsState()
@@ -72,23 +72,28 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    Tile(1, "Dispositivi", "${devices.size + 1}", if (hub == "Connesso") "server attivo" else hub.lowercase(),
-                        listOf(Color(0xFF2F5FFF), Color(0xFF6FB4FF)), Modifier.weight(1f)) { go(1) }
-                    Tile(2, "Appunti", "${clips.size}", "in cronologia",
-                        listOf(Color(0xFF1B34D6), Color(0xFF3F86FF)), Modifier.weight(1f)) { go(2) }
+                    NavTile(1, "Dispositivi", "${devices.size + 1}", if (hub == "Connesso") "server attivo" else hub.lowercase(), TINT_A, Modifier.weight(1f)) { go("devices") }
+                    NavTile(2, "Appunti", "${clips.size}", "in cronologia", TINT_B, Modifier.weight(1f)) { go("clips") }
                 }
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    Tile(3, "Immagini e file", "${files.size}", if (shots > 0) "$shots screenshot" else "condivisi",
-                        listOf(Color(0xFF3F86FF), Color(0xFF7DB4FF)), Modifier.weight(1f)) { go(3) }
-                    Tile(4, "Cuffie", audio, "dove suonano ora",
-                        listOf(Color(0xFF5B7BFF), Color(0xFF2F5FFF)), Modifier.weight(1f)) { go(4) }
+                    NavTile(3, "Immagini e file", "${files.size}", if (shots > 0) "$shots screenshot" else "condivisi", TINT_C, Modifier.weight(1f)) { go("images") }
+                    NavTile(4, "Cuffie", audio, "dove suonano ora", TINT_D, Modifier.weight(1f)) { go("audio") }
+                }
+            }
+            item {
+                val money by r.finance.state.collectAsState()
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val missing = missingPerms(ctx)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    NavTile(6, "Finanze", eur(money.cashCents + money.revolutCents), "contanti e Revolut", TINT_B, Modifier.weight(1f)) { go("finance") }
+                    NavTile(5, "Impostazioni", if (missing == 0) "Tutto ok" else "$missing", if (missing == 0) "permessi concessi" else "permessi da concedere", TINT_A, Modifier.weight(1f)) { go(if (missing == 0) "settings" else "perm") }
                 }
             }
             item {
                 val last = clips.firstOrNull()
-                CCard(Modifier.dropClickable({ go(2) })) {
+                CCard(Modifier.dropClickable({ go("clips") })) {
                     Text("Ultimo appunto", style = CanoneType.title3, color = c.labelPrimary)
                     if (last == null) {
                         CText("Niente di copiato per ora. Copia un testo e compare qui e sugli altri dispositivi.")
@@ -101,30 +106,6 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun Tile(icon: Int, title: String, value: String, note: String, tint: List<Color>, modifier: Modifier, onClick: () -> Unit) {
-    val c = Canone.colors
-    val shape = RoundedCornerShape(Radius.xl)
-    Column(
-        modifier.height(132.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(tint[0].copy(alpha = 0.10f), c.bgSurface), endY = 300f))
-            .border(BorderStroke(1.dp, c.lineSeparator), shape)
-            .dropClickable(onClick).padding(Space.s4),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(tint)), contentAlignment = Alignment.Center) {
-                TabGlyph(icon, Color.White, false, Modifier.size(18.dp))
-            }
-            Text(title, style = CanoneType.footnote, color = c.labelSecondary)
-        }
-        Column {
-            Text(value, style = CanoneType.title2.copy(fontFeatureSettings = "tnum"), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

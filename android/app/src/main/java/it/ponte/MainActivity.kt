@@ -117,9 +117,8 @@ private fun PonteApp(r: Router) {
             else -> {
                 var page by remember { mutableIntStateOf(0) } // 0 nessuna, 1 backup, 2 dispositivi
                 Box(Modifier.fillMaxSize()) {
-                    MainShell(r, onBackup = { page = 1 }, onDevices = { page = 2 }) { r.prefs.onboarded = false; mode = 0 }
+                    MainShell(r, onBackup = { page = 1 }) { r.prefs.onboarded = false; mode = 0 }
                     if (page == 1) it.ponte.ui.BackupScreen(r) { page = 0 }
-                    if (page == 2) it.ponte.ui.DevicesPage(r) { page = 0 }
                 }
             }
         }
@@ -127,7 +126,7 @@ private fun PonteApp(r: Router) {
 }
 
 @Composable
-private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, replayOnboarding: () -> Unit) {
+private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> Unit) {
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -148,15 +147,30 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
     val pos = { pager.currentPage + pager.currentPageOffsetFraction }
 
-    var shareTab by remember { mutableIntStateOf(0) }
+    // Pagina aperta in ogni modulo (null = la sua dashboard). Sta qui così la Home può aprire direttamente una funzione e "indietro" torna alla dashboard.
+    var shareSub by remember { mutableStateOf<String?>(null) }
+    var finSub by remember { mutableStateOf<String?>(null) }
+    var setSub by remember { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(
+        enabled = (pager.currentPage == 1 && shareSub != null) || (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 4 && setSub != null),
+    ) {
+        when (pager.currentPage) { 1 -> shareSub = null; 2 -> finSub = null; else -> setSub = null }
+    }
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
-            // Home usa la vecchia numerazione: 1 Dispositivi (pagina a parte), 2 Appunti, 3 Archivio, 4 Audio
-            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> { shareTab = 0; select(1) }; 3 -> { shareTab = 1; select(1) }; 4 -> select(3); else -> select(0) } }
-            1 -> ShareScreen(r, shareTab) { shareTab = it }
-            2 -> it.ponte.ui.FinanceScreen(r)
-            3 -> AudioScreen(r) { select(4) }
-            else -> SettingsScreen(r, replayOnboarding, onBackup)
+            0 -> HomeScreen(r) { to ->
+                when (to) {
+                    "devices", "clips", "images" -> { shareSub = to; select(1) }
+                    "finance" -> { finSub = null; select(2) }
+                    "audio" -> select(3)
+                    "perm" -> { setSub = "perm"; select(4) }
+                    else -> { setSub = null; select(4) }
+                }
+            }
+            1 -> ShareScreen(r, shareSub, { shareSub = it }, onBackup)
+            2 -> it.ponte.ui.FinanceScreen(r, finSub) { finSub = it }
+            3 -> AudioScreen(r) { setSub = "audio"; select(4) }
+            else -> SettingsScreen(r, setSub, { setSub = it }, replayOnboarding)
         }
     }
 
