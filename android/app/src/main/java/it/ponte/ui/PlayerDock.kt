@@ -1,5 +1,7 @@
 package it.ponte.ui
 
+import androidx.compose.ui.input.pointer.positionChange
+
 import android.media.session.PlaybackState
 import androidx.compose.foundation.Image
 import androidx.compose.ui.unit.sp

@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -452,7 +453,7 @@ private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSu
     Box(modifier.aspectRatio(2.05f).dropGestures(touch, onAdd)) {
         Box(Modifier.fillMaxSize().dropDeform(touch).clip(RoundedCornerShape(10.dp))) {
             if (res != 0) androidx.compose.foundation.Image(
-                androidx.compose.ui.res.painterResource(res), null, Modifier.fillMaxSize().graphicsLayer { alpha = if (count > 0) 1f else 0.55f },
+                androidx.compose.ui.res.painterResource(res), null, Modifier.fillMaxSize().alpha(if (count > 0) 1f else 0.55f),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             ) else Canvas(Modifier.fillMaxSize()) {
                 val a = if (count > 0) 1f else 0.62f
