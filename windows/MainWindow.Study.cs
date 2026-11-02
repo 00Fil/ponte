@@ -100,21 +100,24 @@ public sealed partial class MainWindow
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(T(t.Phase switch { "short" => "Pausa", "long" => "Pausa lunga", _ => "Concentrazione" }, 15, tint, true));
+        head.Children.Add(T("Studio", 15, "LabelSecondary", true));
         var dur = Btn("Durate", () => AgGo("set"));
         Grid.SetColumn(dur, 1); head.Children.Add(dur);
         c.Children.Add(head);
 
         // anello
-        const double Size = 232, W = 14, R = (Size - W) / 2;
+        const double Size = 264, W = 10, R = (Size - W) / 2;
         var ring = new Grid { Width = Size, Height = Size, HorizontalAlignment = HorizontalAlignment.Center };
-        ring.Children.Add(new Ellipse { Width = Size - W, Height = Size - W, Stroke = B("BgSunken"), StrokeThickness = W });
+        ring.Children.Add(new Ellipse { Width = Size - W, Height = Size - W, Stroke = Sb(WithA(C("LabelPrimary"), 18)), StrokeThickness = W });
+        var glow = new Microsoft.UI.Xaml.Shapes.Path { Stroke = Sb(WithA(C(tint), 56)), StrokeThickness = W + 10, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = Size, Height = Size };
+        ring.Children.Add(glow);
         var arc = new Microsoft.UI.Xaml.Shapes.Path { Stroke = B(tint), StrokeThickness = W, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = Size, Height = Size };
         ring.Children.Add(arc);
         var inner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        var clock = T("00:00", 52, "LabelPrimary", true);
+        var clock = T("00:00", 64, "LabelPrimary", false);
         clock.HorizontalAlignment = HorizontalAlignment.Center;
-        var sub = T(t.Running && !mine ? "su un altro dispositivo" : "Studio", 12, "LabelTertiary");
+        var sub = T(t.Running && !mine ? "su un altro dispositivo" : t.Phase switch { "short" => "Pausa", "long" => "Pausa lunga", _ => "Concentrazione" }, 12, tint);
+        sub.CharacterSpacing = 120;
         sub.HorizontalAlignment = HorizontalAlignment.Center;
         inner.Children.Add(clock); inner.Children.Add(sub);
         ring.Children.Add(inner);
@@ -128,7 +131,7 @@ public sealed partial class MainWindow
             var secs = (int)((left + 999) / 1000);
             clock.Text = $"{secs / 60:00}:{secs % 60:00}";
             var frac = st.Running ? 1.0 - (double)left / total : 0;
-            if (frac < 0.002) { arc.Data = null; return; }
+            if (frac < 0.002) { arc.Data = null; glow.Data = null; return; }
             frac = Math.Min(frac, 0.9999);
             var ang = frac * Math.PI * 2;
             var cx = Size / 2; var cy = Size / 2;
@@ -136,6 +139,7 @@ public sealed partial class MainWindow
             fig.Segments.Add(new ArcSegment { Point = new Windows.Foundation.Point(cx + R * Math.Sin(ang), cy - R * Math.Cos(ang)), Size = new Windows.Foundation.Size(R, R), SweepDirection = SweepDirection.Clockwise, IsLargeArc = frac > 0.5 });
             var geo = new PathGeometry(); geo.Figures.Add(fig);
             arc.Data = geo;
+            glow.Data = geo;
         }
         Update();
         EnsureTicks();
@@ -151,9 +155,9 @@ public sealed partial class MainWindow
         btns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         btns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var main = t.Running ? Btn("Ferma", () => _r.Plan.TimerStop()) : Btn("Avvia", () => _r.Plan.TimerStart(""), "PrimaryButton");
-        main.HorizontalAlignment = HorizontalAlignment.Stretch;
+        main.HorizontalAlignment = HorizontalAlignment.Stretch; main.Height = 52;
         var skip = Btn("Salta", () => _r.Plan.TimerPhase(focus ? ((t.Cycle + 1) % rounds == 0 ? "long" : "short") : "focus"));
-        skip.HorizontalAlignment = HorizontalAlignment.Stretch;
+        skip.HorizontalAlignment = HorizontalAlignment.Stretch; skip.Height = 52;
         Grid.SetColumn(skip, 1);
         btns.Children.Add(main); btns.Children.Add(skip);
         c.Children.Add(btns);
@@ -163,7 +167,9 @@ public sealed partial class MainWindow
             song.HorizontalAlignment = HorizontalAlignment.Center;
             c.Children.Add(song);
         }
-        return Widget(c, null, new Thickness(20));
+        var card = Widget(c, null, new Thickness(24));
+        card.CornerRadius = new CornerRadius(36);
+        return card;
     }
 
     // ---------------------------------------------------------------- moduli comuni
