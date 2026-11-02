@@ -36,8 +36,11 @@ jobs:
           PONTE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: gradle assembleDebug --no-daemon -PponteBuild=${{ github.run_number }}
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk Ponte-Android.apk
-      - uses: actions/upload-artifact@v4
-        with: { name: android, path: Ponte-Android.apk, retention-days: 1 }
+      - name: Deposito temporaneo (niente quota artifact)
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: |
+          gh release create stage-${{ github.run_number }} --prerelease --title stage --notes stage || true
+          gh release upload stage-${{ github.run_number }} Ponte-Android.apk --clobber
 
   windows:
     runs-on: windows-latest
@@ -57,20 +60,20 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
           & $iscc /Qp "/DAppVersion=1.0.${{ github.run_number }}" windows\installer\ponte.iss
           if (-not (Test-Path Ponte-Setup.exe)) { throw "Installer non creato" }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          retention-days: 1
-          path: |
-            Ponte-Windows-x64.zip
-            Ponte-Setup.exe
+      - name: Deposito temporaneo (niente quota artifact)
+        shell: bash
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: |
+          gh release create stage-${{ github.run_number }} --prerelease --title stage --notes stage || true
+          gh release upload stage-${{ github.run_number }} Ponte-Windows-x64.zip Ponte-Setup.exe --clobber
 
   release:
     needs: [android, windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with: { path: dist, merge-multiple: true }
+      - name: Prendo i file dal deposito temporaneo
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: gh release download stage-${{ github.run_number }} --dir dist
       - name: Numero di build per gli aggiornamenti automatici
         run: |
           echo "{\"build\": ${{ github.run_number }}, \"commit\": \"${GITHUB_SHA::7}\"}" > dist/version.json
@@ -80,4 +83,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete latest --cleanup-tag -y || true
+          gh release delete stage-${{ github.run_number }} --cleanup-tag -y || true
           gh release create latest dist/* --title "Relay 1.0.${{ github.run_number }}" --notes "Build automatica ${{ github.run_number }}. Le app installate si aggiornano da sole. Prima installazione: Android, installa l'APK; Windows, esegui Ponte-Setup.exe (poi si aggiorna da sola)."
