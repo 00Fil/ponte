@@ -490,6 +490,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
     var token by remember { mutableStateOf(r.prefs.token) }
     var tick by remember { mutableIntStateOf(0) }
     val hubState by r.hubState.collectAsState()
+    val rootState by r.headphones.rooted.collectAsState()
 
     DisposableEffect(ctx) {
         val lc = (ctx as? ComponentActivity)?.lifecycle
@@ -525,7 +526,6 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
             when (page) {
                 null -> {
                     val missing = missingPerms(ctx)
-                    val rooted by r.headphones.rooted.collectAsState()
                     item {
                         CCard {
                             Text("Relay 1.0.${r.updater.current}", style = CanoneType.title2, color = c.labelPrimary)
@@ -544,7 +544,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                             NavTile(1, "Condividi", if (r.prefs.lanEnabled) "Diretto" else "Server", "collegamento, screenshot, notifiche", TINT_C, Modifier.weight(1f)) { onSub("share") }
-                            NavTile(4, "Audio", when (rooted) { true -> "Root"; false -> "No root"; null -> "…" }, "cuffie e passaggio", TINT_D, Modifier.weight(1f)) { onSub("audio") }
+                            NavTile(4, "Audio", when (rootState) { true -> "Root"; false -> "No root"; null -> "…" }, "cuffie e passaggio", TINT_D, Modifier.weight(1f)) { onSub("audio") }
                         }
                     }
                 }
