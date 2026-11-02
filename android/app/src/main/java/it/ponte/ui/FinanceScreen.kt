@@ -153,6 +153,24 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         PaceData(curCum, prevCum, buckets, proj)
     }
 
+    // La barra delle schede, in questa pagina, diventa il tasto che conferma: tutto il necessario passa da CashBar.
+    val tallyAll = tally.entries.sumOf { it.key.toLong() * it.value }
+    val spendNow = cashMode != 2
+    androidx.compose.runtime.SideEffect {
+        CashBar.on = sub == "cash"
+        CashBar.enabled = tallyAll != 0L
+        CashBar.label = (if (spendNow) "Scorri per registrare −" else "Scorri per registrare +") + eur(tallyAll)
+        CashBar.onBack = { tally = emptyMap(); cat = ""; onSub(null) }
+        CashBar.onConfirm = {
+            val before = m.totalCents
+            tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (spendNow) -n else n) }
+            r.finance.add(if (spendNow) -tallyAll else tallyAll, if (spendNow) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
+            Flash.show(before, r.finance.state.value.totalCents - before)
+            tally = emptyMap(); cat = ""; onSub(null)
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { CashBar.on = false } }
+
     @Composable
     fun Back(label: String) = BackRow("Finanze", label) { onSub(null) }
 
@@ -294,7 +312,6 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                 "cash" -> {
                     val tallyCents = tally.entries.sumOf { it.key.toLong() * it.value }
                     val spend = cashMode != 2
-                    item { Back("Contanti") }
                     item { GlassSegmented(listOf("Ho speso", "Ho ricevuto"), if (spend) 0 else 1, { cashMode = if (it == 0) 1 else 2; tally = emptyMap() }) }
                     item {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -328,16 +345,6 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 }
                             }
                         }
-                    }
-                    item {
-                        CButton(if (spend) "Registra spesa" else "Registra entrata", {
-                            if (tallyCents == 0L) { toast(ctx, "Tocca almeno una banconota"); return@CButton }
-                            val before = m.totalCents
-                            tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (spend) -n else n) }
-                            r.finance.add(if (spend) -tallyCents else tallyCents, if (spend) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
-                            Flash.show(before, r.finance.state.value.totalCents - before)
-                            tally = emptyMap(); cat = ""; onSub(null)
-                        }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                     }
                 }
 

@@ -286,10 +286,19 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     }
                     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(c.bgCanvas, Color.Transparent))))
                     Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
-                    it.ponte.ui.GlassTabBar(
-                        layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
-                        Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom),
-                    )
+                    // Nei contanti la barra diventa il tasto di conferma (indietro + scorri per registrare).
+                    val cashOn = it.ponte.ui.CashBar.on && pager.currentPage == 2
+                    androidx.compose.animation.AnimatedContent(
+                        cashOn, Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter,
+                        transitionSpec = { (fadeIn(tween(260)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.85f, 380f), initialScale = 0.92f)) togetherWith (fadeOut(tween(160)) + androidx.compose.animation.scaleOut(targetScale = 0.96f)) },
+                        label = "barra",
+                    ) { cash ->
+                        if (cash) it.ponte.ui.CashConfirmBar(layer, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
+                        else it.ponte.ui.GlassTabBar(
+                            layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
+                            Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom),
+                        )
+                    }
                 }
             }
         }

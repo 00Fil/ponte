@@ -57,6 +57,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.lerp
 import kotlin.math.roundToInt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -649,8 +650,9 @@ private fun Category(icon: Int, title: String, note: String, tint: Color, onClic
             Modifier.fillMaxWidth().dropDeform(t).drop(dark, corner = Radius.xl, press = { t.press.value }, touch = t).padding(Space.s3),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
-            Box(Modifier.size(46.dp).drop(dark, tint = tint.copy(alpha = if (dark) 0.42f else 0.30f)), contentAlignment = Alignment.Center) {
-                TabGlyph(icon, if (dark) Color.White else tint, false, Modifier.size(22.dp))
+            // la goccia come la pillola della barra: vetro limpido con bordo di luce; il colore sta solo nell'icona, smorzato
+            Box(Modifier.size(46.dp).drop(dark, tint = Color.Transparent), contentAlignment = Alignment.Center) {
+                TabGlyph(icon, lerp(tint, c.labelPrimary, 0.35f), false, Modifier.size(22.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text(title, style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary)

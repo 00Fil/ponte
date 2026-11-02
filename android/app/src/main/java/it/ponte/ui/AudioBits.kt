@@ -13,6 +13,13 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxSize
@@ -114,36 +121,127 @@ fun headphonesBattery(ctx: Context, address: String): Int? = try {
     (dev.javaClass.getMethod("getBatteryLevel").invoke(dev) as Int).takeIf { it in 0..100 }
 } catch (_: Exception) { null }
 
-/** Cursore a sola linea (niente pallino): la pista si ispessisce mentre la tocchi o trascini, come su iOS. */
+/**
+ * Cursore a sola linea (niente pallino): la pista si ispessisce mentre la tocchi o trascini, come su iOS.
+ * Mentre trascini segue il dito senza aspettare nessuno (valore locale, nessun ritorno indietro); [onFinish] scatta al rilascio.
+ * Fuori dal trascinamento il valore esterno scorre in modo continuo invece di saltare ad ogni aggiornamento.
+ */
 @Composable
-fun DropSlider(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
+fun DropSlider(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier, onFinish: ((Float) -> Unit)? = null) {
     val c = Canone.colors
     var active by remember { mutableStateOf(false) }
+    var local by remember { androidx.compose.runtime.mutableFloatStateOf(value) }
+    val anim = remember { androidx.compose.animation.core.Animatable(value) }
     val change by androidx.compose.runtime.rememberUpdatedState(onChange)
+    val finish by androidx.compose.runtime.rememberUpdatedState(onFinish)
+    androidx.compose.runtime.LaunchedEffect(value) { if (!active) anim.animateTo(value, androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.LinearEasing)) }
+    androidx.compose.runtime.LaunchedEffect(active) { if (!active) anim.snapTo(local) }
     val thick by androidx.compose.animation.core.animateDpAsState(if (active) 12.dp else 6.dp, androidx.compose.animation.core.spring(0.7f, 420f), label = "pista")
+    val track = c.labelPrimary.copy(alpha = 0.12f)
+    val fill = if (active) c.labelPrimary else c.labelSecondary
     Box(
         modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
             awaitEachGesture {
                 val down = awaitFirstDown()
                 active = true
-                change((down.position.x / size.width).coerceIn(0f, 1f))
+                local = (down.position.x / size.width).coerceIn(0f, 1f)
+                change(local)
                 while (true) {
                     val ev = awaitPointerEvent()
                     val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
                     if (!ch.pressed) break
                     ch.consume()
-                    change((ch.position.x / size.width).coerceIn(0f, 1f))
+                    local = (ch.position.x / size.width).coerceIn(0f, 1f)
+                    change(local)
                 }
                 active = false
+                finish?.invoke(local)
             }
         },
         contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().height(thick).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.12f))) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(value.coerceIn(0f, 1f)).background(if (active) c.labelPrimary else c.labelSecondary))
+        // il riempimento si disegna in fase di disegno: niente ricomposizione ad ogni pixel
+        Box(
+            Modifier.fillMaxWidth().height(thick).clip(CircleShape).drawBehind {
+                drawRect(track)
+                val f = (if (active) local else anim.value).coerceIn(0f, 1f)
+                drawRect(fill, size = androidx.compose.ui.geometry.Size(size.width * f, size.height))
+            },
+        )
+    }
+}
+
+/**
+ * Comandi del player come la barra delle schede: una capsula di vetro con le icone dentro e una lente (la bolla) che compare sotto il dito,
+ * si gonfia con una molla, ti segue se trascini e rifrange le icone. Al rilascio scatta il comando sotto la bolla.
+ */
+@Composable
+fun GlassTransport(kinds: List<Int>, onClick: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val c = Canone.colors
+    val dark = isDark()
+    val n = kinds.size
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val follow = remember { androidx.compose.animation.core.Animatable(1f) }
+    val bubble = remember { androidx.compose.animation.core.Animatable(0f) }
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val dens = LocalDensity.current
+    val onC by androidx.compose.runtime.rememberUpdatedState(onClick)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.androidx_widthIn(300.dp).fillMaxWidth().height(64.dp)) {
+        val pad = 4.dp
+        val itemW = (maxWidth - pad * 2) / n
+        val h = maxHeight - pad * 2
+        Box(
+            Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
+                .clip(CircleShape).background(c.bgSunken).drop(dark),
+        ) {
+            Row(
+                Modifier.fillMaxSize().padding(pad).pointerInput(n) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val itemPx = size.width / n
+                        fun toTab(x: Float) = (x / itemPx - 0.5f).coerceIn(0f, (n - 1).toFloat())
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        scope.launch { follow.snapTo(toTab(down.position.x)); bubble.animateTo(1f, androidx.compose.animation.core.spring(0.62f, 380f)) }
+                        var lastX = down.position.x
+                        var lastTab = Math.round(toTab(lastX))
+                        drag(down.id) { ch ->
+                            ch.consume()
+                            lastX = ch.position.x
+                            val t = Math.round(toTab(lastX))
+                            if (t != lastTab) { lastTab = t; haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove) }
+                            scope.launch { follow.animateTo(toTab(lastX), Goccia.follow) }
+                        }
+                        val idx = Math.round(toTab(lastX)).coerceIn(0, n - 1)
+                        scope.launch { follow.animateTo(idx.toFloat(), Goccia.settle); bubble.animateTo(0f, androidx.compose.animation.core.spring(0.8f, 240f)) }
+                        onC(idx)
+                    }
+                },
+            ) {
+                kinds.forEach { k -> Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { MediaIcon(k, c.labelPrimary, Modifier.size(24.dp)) } }
+            }
+        }
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            Box(
+                Modifier.graphicsLayer {
+                    translationX = follow.value * itemW.toPx()
+                    val b = bubble.value
+                    val sc = 0.8f + 0.44f * b.coerceIn(0f, 1.2f)
+                    scaleX = sc; scaleY = 0.9f + 0.18f * b.coerceIn(0f, 1.2f)
+                    alpha = b.coerceIn(0f, 1f)
+                },
+            ) {
+                Glass(
+                    layer, { Offset(with(dens) { pad.toPx() + follow.value * itemW.toPx() }, with(dens) { pad.toPx() }) },
+                    itemW, h, edge = 9.dp, amount = 7.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp,
+                )
+                Box(Modifier.size(itemW, h).drop(dark, tint = Color.Transparent))
+            }
         }
     }
 }
+
+private fun Modifier.androidx_widthIn(max: androidx.compose.ui.unit.Dp) = this.then(Modifier.widthIn(max = max))
 
 /** Icone dei controlli multimediali, disegnate. kind: 0 indietro, 1 play, 2 pausa, 3 avanti. */
 @Composable
@@ -187,10 +285,12 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
     androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1200); vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) } }
     val dur = np.controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
     var pos by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var seeking by remember { mutableStateOf(false) }
+    val scopeP = androidx.compose.runtime.rememberCoroutineScope()
     androidx.compose.runtime.LaunchedEffect(np.controller, np.title, np.playing) {
         while (true) {
             val st = np.controller.playbackState
-            pos = when {
+            if (!seeking) pos = when {
                 st == null -> 0L
                 st.state == android.media.session.PlaybackState.STATE_PLAYING -> st.position + ((android.os.SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
                 else -> st.position
@@ -222,16 +322,19 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
                 }
             }
             if (dur > 0) Column {
-                DropSlider(pos.toFloat() / dur, { f -> pos = (f * dur).toLong(); tc.seekTo(pos) })
+                DropSlider(pos.toFloat() / dur, { f -> seeking = true; pos = (f * dur).toLong() }, onFinish = { f ->
+                    pos = (f * dur).toLong(); tc.seekTo(pos)
+                    scopeP.launch { kotlinx.coroutines.delay(900); seeking = false }
+                })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     androidx.compose.material3.Text(clock(pos), style = CanoneType.footnote, color = c.labelTertiary)
                     androidx.compose.material3.Text("−" + clock(dur - pos), style = CanoneType.footnote, color = c.labelTertiary)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                listOf(0 to { tc.skipToPrevious() }, (if (np.playing) 2 else 1) to { if (np.playing) tc.pause() else tc.play() }, 3 to { tc.skipToNext() }).forEach { (k, act) ->
-                    GlassGlyph(k, if (k == 1 || k == 2) 64.dp else 50.dp, act)
-                }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                GlassTransport(listOf(0, if (np.playing) 2 else 1, 3), { i ->
+                    when (i) { 0 -> tc.skipToPrevious(); 1 -> if (np.playing) tc.pause() else tc.play(); else -> tc.skipToNext() }
+                })
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))

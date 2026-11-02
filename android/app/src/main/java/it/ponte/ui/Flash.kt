@@ -23,6 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.composed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,19 +84,34 @@ fun FlashHost() {
 
 
 /**
- * Importi nascosti: sfocatura animata (si dissolve dentro e fuori) con bordi morbidi: la sfocatura esce oltre il testo e sfuma, niente taglio netto.
- * Con Android < 12 (niente blur) il testo sfuma fin quasi a sparire.
+ * Importi nascosti: la sfocatura è proporzionata all'altezza del dato (cifre grandi = più sfocatura) e si dissolve piano piano
+ * dentro e fuori. Il contenuto viene registrato su un livello PIÙ GRANDE del testo, così la sfocatura esce oltre le cifre
+ * e sfuma verso il nulla: nessun bordo, nessun taglio. Dalla sfocatura si passa gradualmente alla vista nitida.
  */
 fun Modifier.blurIf(on: Boolean): Modifier = composed {
     val v by androidx.compose.animation.core.animateFloatAsState(
-        if (on) 1f else 0f, androidx.compose.animation.core.tween(480, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "censura",
+        if (on) 1f else 0f, androidx.compose.animation.core.tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "censura",
     )
-    if (v < 0.001f) this else this.graphicsLayer {
-        clip = false
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
-            val r = (v * MoneyPrivacy.BLUR.dp.toPx()).coerceAtLeast(0.01f)
-            renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal)
-            alpha = 1f - 0.25f * v
-        } else alpha = 1f - 0.9f * v
+    val blurLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val sharpLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    if (v < 0.001f) this else this.drawWithContent {
+        if (android.os.Build.VERSION.SDK_INT < 31) {
+            drawContent()
+            return@drawWithContent
+        }
+        val r = (size.height * 0.30f).coerceIn(5.dp.toPx(), 16.dp.toPx())
+        val m = (r * 3.2f).toInt()
+        val w = size.width.toInt(); val h = size.height.toInt()
+        blurLayer.record(size = androidx.compose.ui.unit.IntSize(w + 2 * m, h + 2 * m)) {
+            translate(m.toFloat(), m.toFloat()) { this@drawWithContent.drawContent() }
+        }
+        blurLayer.renderEffect = androidx.compose.ui.graphics.BlurEffect(r * v + 0.01f, r * v + 0.01f, androidx.compose.ui.graphics.TileMode.Decal)
+        blurLayer.alpha = v.coerceIn(0f, 1f)
+        if (v < 1f) {
+            sharpLayer.record { this@drawWithContent.drawContent() }
+            sharpLayer.alpha = (1f - v * 1.15f).coerceIn(0f, 1f)
+            drawLayer(sharpLayer)
+        }
+        translate(-m.toFloat(), -m.toFloat()) { drawLayer(blurLayer) }
     }
 }

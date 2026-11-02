@@ -88,7 +88,7 @@ object Goccia {
     /** Corpo opaco e colorato del vetro: stesso azzurro del tocco su un dispositivo (accentSubtle), non bianco. */
     fun body(dark: Boolean) = if (dark) Color(0xFF1A2F63) else Color(0xFFD3E2FF)
     /** Velo trasparente dei controlli: azzurrato, mai bianco latte. */
-    fun veil(dark: Boolean) = if (dark) Color(0xFF6FA0FF).copy(alpha = 0.12f) else Color(0xFF2F5FFF).copy(alpha = 0.07f)
+    fun veil(dark: Boolean) = if (dark) Color(0xFF9DB6F0).copy(alpha = 0.09f) else Color(0xFF3A5BC0).copy(alpha = 0.045f)
     /** Rilascio "liquido": rimbalza oltre lo zero e si assesta, la goccia ondeggia. */
     val release = spring<Float>(dampingRatio = 0.38f, stiffness = 170f)
 
@@ -280,30 +280,34 @@ fun Modifier.dropClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = nul
     this.pressGlow(t, dark, corner).dropGestures(t, onClick, onLongClick)
 }
 
-/** Un tocco e doppio tocco distinti (il primo copia, il secondo apre), con lo stesso bagliore. */
+/**
+ * Un tocco e doppio tocco: il primo tocco agisce SUBITO (nessuna attesa per capire se ne arriva un secondo); se un secondo tocco
+ * segue entro 320 ms scatta anche [onDouble]. Stesso bagliore di [dropClickable].
+ */
 fun Modifier.dropTaps(onTap: () -> Unit, onDouble: () -> Unit, corner: Dp = Radius.xl): Modifier = composed {
     val t = rememberDropTouch()
     val dark = isDark()
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
     val view = androidx.compose.ui.platform.LocalView.current
     val tap by rememberUpdatedState(onTap)
     val dbl by rememberUpdatedState(onDouble)
+    var lastTap by remember { mutableStateOf(0L) }
     this.pressGlow(t, dark, corner).pointerInput(Unit) {
-        detectTapGestures(
-            onPress = { o ->
-                t.pos = o
-                view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
-                scope.launch { t.press.animateTo(1f, Goccia.press) }
-                tryAwaitRelease()
-                scope.launch {
-                    if (t.press.value < 0.9f) t.press.animateTo(1f, androidx.compose.animation.core.tween(140))
-                    t.press.animateTo(0f, Goccia.release)
-                }
-            },
-            onTap = { tap() },
-            onDoubleTap = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); dbl() },
-        )
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            t.pos = down.position
+            view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+            scope.launch { t.press.animateTo(1f, Goccia.press) }
+            val up = waitForUpOrCancellation()
+            scope.launch {
+                if (t.press.value < 0.9f) t.press.animateTo(1f, androidx.compose.animation.core.tween(140))
+                t.press.animateTo(0f, Goccia.release)
+            }
+            if (up != null) {
+                val now = System.currentTimeMillis()
+                if (now - lastTap < 320L) { lastTap = 0L; dbl() } else { lastTap = now; tap() }
+            }
+        }
     }
 }
 

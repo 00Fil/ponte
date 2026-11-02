@@ -150,7 +150,7 @@ private fun MoneyWidget(r: Router, total: Long, txs: List<Tx>, onClick: () -> Un
                 Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
                 EyeToggle(r)
             }
-            Box(Modifier.clip(RoundedCornerShape(Radius.md)).dropClickable(onClick, corner = Radius.md)) {
+            Box(Modifier.dropClickable(onClick, corner = Radius.md).padding(vertical = 2.dp)) {
                 CountUp(total, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
             }
             // entrate e uscite del mese nello stesso riquadro, da sfogliare
