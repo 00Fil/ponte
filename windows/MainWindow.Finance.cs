@@ -82,11 +82,11 @@ public sealed partial class MainWindow
         hero.Children.Add(MoneyText("fin.total", m.TotalCents, 38));
         hero.Children.Add(PaceChart(m));
         var split = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
-        foreach (var (k, n) in Sources)
+        foreach (var (sk0, sn0) in Sources)
         {
             var lg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            lg.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(SrcColor(k)), VerticalAlignment = VerticalAlignment.Center });
-            lg.Children.Add(T(n, 12, "LabelSecondary"));
+            lg.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(SrcColor(sk0)), VerticalAlignment = VerticalAlignment.Center });
+            lg.Children.Add(T(sn0, 12, "LabelSecondary"));
             split.Children.Add(lg);
         }
         hero.Children.Add(split);
