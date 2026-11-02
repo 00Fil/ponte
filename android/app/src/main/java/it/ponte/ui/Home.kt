@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.drawscope.drawLayer
 import kotlinx.coroutines.Job
 /** Home a widget: impegni e studio, saldo, ultimo screenshot e ultimo copiato in un cubetto, cuffie e audio dei PC. */
 @Composable
