@@ -86,7 +86,7 @@ internal fun ScreenList(title: String, content: LazyListScope.() -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             Modifier.widthIn(max = 720.dp).fillMaxHeight(),
-            contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
+            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s5, bottom = Space.s5 + LocalBarInset.current),
             verticalArrangement = Arrangement.spacedBy(Space.s4),
         ) {
             // Il titolo sta nella testata animata sopra la pagina.
@@ -290,7 +290,7 @@ fun ArchiveScreen(r: Router) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(
             GridCells.Adaptive(160.dp), Modifier.widthIn(max = 1024.dp).fillMaxHeight(),
-            contentPadding = PaddingValues(horizontal = Space.s4, vertical = Space.s5),
+            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s5, bottom = Space.s5 + LocalBarInset.current),
             horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -361,7 +361,7 @@ fun ArchiveScreen(r: Router) {
 // ---------------------------------------------------------------- Audio
 
 @Composable
-fun AudioScreen(r: Router) {
+fun AudioScreen(r: Router, openSettings: () -> Unit = {}) {
     val devices by r.devices.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val sources = devices.filter { "audio-src" in it.caps }
@@ -402,24 +402,12 @@ fun AudioScreen(r: Router) {
                 CSwitchRow("Un dispositivo alla volta", "Quando la musica parte qui, gli altri si mettono in pausa", autoPause) { on ->
                     autoPause = on; r.prefs.autoPause = on
                 }
-                CRow("Se non ci sono", if (mute) "Muto" else "Altoparlante") {
-                    CButton("Cambia", { mute = !mute; r.prefs.fallbackMute = mute })
-                }
                 if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
                     CButton("Collega qui", { r.headphones.connectHere(preferred) })
                 }
-                if (rooted != true) {
-                    CText(
-                        if (rooted == null) "Controllo del root in corso…"
-                        else "Su Android collegare e scollegare le cuffie richiede il root. Senza, Relay avvisa gli altri dispositivi ma qui non può spostarle.",
-                        tertiary = true,
-                    )
-                    CButton("Riprova root", { r.headphones.retryRoot() })
-                }
-                val rootError by Root.lastError.collectAsState()
-                if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
-                if (!android.provider.Settings.canDrawOverlays(ctx)) {
-                    CText("Per capire quando usi questo dispositivo serve il permesso \"Mostra sopra altre app\" (in Impostazioni).", tertiary = true)
+                if (preferred.isNotEmpty() && rooted != true) {
+                    CText("Per spostare le cuffie da qui serve il root.", tertiary = true)
+                    CButton("Apri le impostazioni avanzate", openSettings, kind = ButtonKind.Tertiary)
                 }
             }
         }
@@ -441,19 +429,6 @@ fun AudioScreen(r: Router) {
                             r.prefs.headphones = marked
                         }
                     }
-                    val options = listOf(0, 5, 10, 20, 30)
-                    CRow("Scollega dopo", if (idle == 0) "Mai" else "$idle minuti senza audio") {
-                        CButton("Cambia", {
-                            idle = options[(options.indexOf(idle) + 1) % options.size]
-                            r.prefs.idleMinutes = idle
-                        })
-                    }
-                }
-                if (cannot) {
-                    CText(
-                        "L'ultimo tentativo di spostare le cuffie da qui non è riuscito. Il dettaglio è sopra, sotto \"Cuffie preferite qui\".",
-                        tertiary = true,
-                    )
                 }
             }
         }
@@ -484,6 +459,11 @@ fun AudioScreen(r: Router) {
 
 // ---------------------------------------------------------------- Impostazioni
 
+/** Etichetta di gruppo sopra un blocco di schede, come nelle impostazioni di iOS. */
+@Composable
+private fun Group(text: String) =
+    Text(text.uppercase(), style = CanoneType.footnote, color = Canone.colors.labelTertiary, modifier = Modifier.padding(start = Space.s3, top = Space.s2))
+
 @Composable
 fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () -> Unit = {}) {
     val ctx = LocalContext.current
@@ -491,6 +471,7 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () ->
     var hub by remember { mutableStateOf(r.prefs.hubUrl) }
     var token by remember { mutableStateOf(r.prefs.token) }
     var tick by remember { mutableIntStateOf(0) }
+    val hubState by r.hubState.collectAsState()
 
     DisposableEffect(ctx) {
         val lc = (ctx as? ComponentActivity)?.lifecycle
@@ -512,72 +493,28 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () ->
             }
         }
     }
+    fun save() {
+        r.prefs.name = name; r.prefs.hubUrl = hub; r.prefs.token = token
+        r.reconfigure()
+        toast(ctx, "Salvato")
+    }
 
     ScreenList("Impostazioni") {
+        // ------------------------------------------------------------ generali
+        item { Group("Generali") }
         item {
             CCard {
                 SectionTitle("Questo dispositivo")
-                CField("Nome del dispositivo", name, { name = it }, "Tablet del salotto")
-                CField("Indirizzo del server", hub, { hub = it }, "ponte.esempio.it", mono = true)
-                CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
-                CButton("Salva", {
-                    r.prefs.name = name; r.prefs.hubUrl = hub; r.prefs.token = token
-                    r.reconfigure()
-                    toast(ctx, "Salvato")
-                }, kind = ButtonKind.Primary)
+                CField("Nome", name, { name = it }, "Tablet del salotto")
+                CButton("Salva", ::save, kind = ButtonKind.Primary)
             }
         }
         item {
-            @Suppress("UNUSED_EXPRESSION") tick
-            CCard {
-                SectionTitle("Permessi")
-                if (Build.VERSION.SDK_INT >= 33) {
-                    PermRow("Notifiche di Relay", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
-                        askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                    CDivider()
-                }
-                PermRow("Mostra sopra altre app", "Per inviare gli appunti copiati con l'app in background", Settings.canDrawOverlays(ctx)) {
-                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
-                }
-                CDivider()
-                PermRow("Appunti in tempo reale", "Legge i log di sistema per accorgersi di quando copi", r.clipLog.hasLogPermission()) {
-                    // Con il root si concede da soli; altrimenti serve il comando adb mostrato qui sotto.
-                    val ok = try {
-                        Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
-                    } catch (_: Exception) { false }
-                    toast(ctx, if (ok) "Concesso: riapri Relay" else "Serve il comando adb, vedi sotto")
-                }
-                CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
-                CDivider()
-                if (Build.VERSION.SDK_INT >= 31) {
-                    PermRow("Bluetooth", "Cuffie e collegamento di riserva senza Wi-Fi", has(ctx, Manifest.permission.BLUETOOTH_CONNECT)) {
-                        askOther.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                    }
-                    CDivider()
-                }
-                PermRow("Dispositivi Wi-Fi vicini", "Wi-Fi Direct tra telefono e tablet quando non c'è rete", has(ctx, nearbyPerm)) {
-                    askOther.launch(nearbyPerm)
-                }
-                CDivider()
-                PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
-                CDivider()
-                PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {
-                    ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                }
-                CDivider()
-                val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-                PermRow("Nessun risparmio batteria", "Evita che Android fermi Relay", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
-                    ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                }
-            }
-        }
-        item {
-            val status by r.updater.status.collectAsState()
             val upd by r.updater.ui.collectAsState()
+            val status by r.updater.status.collectAsState()
             CCard {
                 SectionTitle("Aggiornamenti")
-                CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola dalle release su GitHub, tramite il tuo server" }) {
+                CRow("Versione 1.0.${r.updater.current}", status.ifEmpty { "Si aggiorna da sola tramite il tuo server" }) {
                     val busy = upd?.phase == Updater.Phase.Checking || upd?.phase == Updater.Phase.Downloading || upd?.phase == Updater.Phase.Installing
                     if (busy) UpdateRing(upd!!.phase, if ((upd?.total ?: 0) > 0) upd!!.done.toFloat() / upd!!.total else 0f, 28.dp)
                     else CButton("Cerca ora", { r.scope.launch { r.updater.check(install = true, manual = true) } })
@@ -592,8 +529,111 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () ->
                 }
             }
         }
+
+        // ------------------------------------------------------------ permessi
+        item { Group("Permessi") }
         item {
-            CButton("Rivedi la configurazione iniziale", replayOnboarding, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
+            @Suppress("UNUSED_EXPRESSION") tick
+            CCard {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    PermRow("Notifiche di Relay", "Serve al servizio in primo piano", has(ctx, Manifest.permission.POST_NOTIFICATIONS)) {
+                        askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    CDivider()
+                }
+                PermRow("Accesso alle notifiche", "Per mostrarle sul PC", listenerEnabled(ctx)) {
+                    ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+                CDivider()
+                PermRow("Foto e screenshot", "Per inviare gli screenshot", has(ctx, imagesPermission())) { askImages.launch(imagesPermission()) }
+                CDivider()
+                if (Build.VERSION.SDK_INT >= 31) {
+                    PermRow("Bluetooth", "Cuffie e collegamento di riserva senza Wi-Fi", has(ctx, Manifest.permission.BLUETOOTH_CONNECT)) {
+                        askOther.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                    CDivider()
+                }
+                PermRow("Dispositivi Wi-Fi vicini", "Wi-Fi Direct tra telefono e tablet quando non c'è rete", has(ctx, nearbyPerm)) {
+                    askOther.launch(nearbyPerm)
+                }
+                CDivider()
+                PermRow("Mostra sopra altre app", "Per inviare gli appunti copiati con l'app in background", Settings.canDrawOverlays(ctx)) {
+                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)))
+                }
+                CDivider()
+                val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+                PermRow("Nessun risparmio batteria", "Evita che Android fermi Relay", pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+                    ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ avanzate
+        item { Group("Avanzate") }
+        item {
+            CCard {
+                SectionTitle("Server")
+                CRow("Stato", hubState) { CBadge(if (hubState == "Connesso") "Online" else "Offline", if (hubState == "Connesso") Tone.Positive else Tone.Caution) }
+                CField("Indirizzo", hub, { hub = it }, "ponte.esempio.it", mono = true)
+                CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
+                CButton("Salva e riconnetti", ::save, kind = ButtonKind.Primary)
+            }
+        }
+        item {
+            val rooted by r.headphones.rooted.collectAsState()
+            val rootError by Root.lastError.collectAsState()
+            val cannot by r.headphones.cannotDisconnect.collectAsState()
+            var idle by remember { mutableIntStateOf(r.prefs.idleMinutes) }
+            var mute by remember { mutableStateOf(r.prefs.fallbackMute) }
+            CCard {
+                SectionTitle("Root e cuffie")
+                CRow(
+                    "Root",
+                    when (rooted) { true -> "Relay può collegare e scollegare le cuffie"; false -> "Non disponibile: senza, qui le cuffie non si spostano"; null -> "Controllo in corso…" },
+                ) {
+                    CBadge(when (rooted) { true -> "Attivo"; false -> "No"; null -> "…" }, if (rooted == true) Tone.Positive else Tone.Neutral)
+                    if (rooted != true) CButton("Riprova", { r.headphones.retryRoot() })
+                }
+                if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
+                if (cannot) CText("L'ultimo tentativo di spostare le cuffie da qui non è riuscito.", tertiary = true)
+                CDivider()
+                val options = listOf(0, 5, 10, 20, 30)
+                CRow("Scollega le cuffie dopo", if (idle == 0) "Mai" else "$idle minuti senza audio") {
+                    CButton("Cambia", {
+                        idle = options[(options.indexOf(idle) + 1) % options.size]
+                        r.prefs.idleMinutes = idle
+                    })
+                }
+                CDivider()
+                CRow("Se le cuffie non ci sono", if (mute) "Muto" else "Altoparlante") {
+                    CButton("Cambia", { mute = !mute; r.prefs.fallbackMute = mute })
+                }
+            }
+        }
+        item {
+            CCard {
+                SectionTitle("Appunti in tempo reale")
+                PermRow("Lettura dei log di sistema", "Serve ad accorgersi di quando copi", r.clipLog.hasLogPermission()) {
+                    // Con il root si concede da soli; altrimenti serve il comando adb mostrato qui sotto.
+                    val ok = try {
+                        Runtime.getRuntime().exec(arrayOf("su", "-c", "pm grant ${ctx.packageName} android.permission.READ_LOGS")).waitFor() == 0
+                    } catch (_: Exception) { false }
+                    toast(ctx, if (ok) "Concesso: riapri Relay" else "Serve il comando adb, vedi sotto")
+                }
+                CText("Senza root: dal PC, con il debug USB attivo, esegui  adb shell pm grant ${ctx.packageName} android.permission.READ_LOGS", tertiary = true)
+            }
+        }
+
+        // ------------------------------------------------------------ informazioni
+        item { Group("Informazioni") }
+        item {
+            CCard {
+                CRow("Identificativo", r.deviceId, mono = true)
+                CDivider()
+                CRow("Versione", "1.0.${r.updater.current}")
+                CDivider()
+                CButton("Rivedi la configurazione iniziale", replayOnboarding, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
+            }
         }
     }
 }

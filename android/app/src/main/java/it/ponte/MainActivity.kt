@@ -22,6 +22,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
@@ -93,7 +98,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Appunti", "Archivio", "Audio", "Impostazioni")
+/** Icona di ogni scheda (indici di TabGlyph). */
+private val GLYPHS = listOf(0, 2, 3, 4, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -109,10 +116,11 @@ private fun PonteApp(r: Router) {
             0 -> Onboarding(r) { r.prefs.seenVersion = code; mode = 2 }
             1 -> UpdateDone(name) { r.prefs.seenVersion = code; mode = 2 }
             else -> {
-                var showBackup by remember { mutableStateOf(false) }
+                var page by remember { mutableIntStateOf(0) } // 0 nessuna, 1 backup, 2 dispositivi
                 Box(Modifier.fillMaxSize()) {
-                    MainShell(r, onBackup = { showBackup = true }) { r.prefs.onboarded = false; mode = 0 }
-                    if (showBackup) it.ponte.ui.BackupScreen(r) { showBackup = false }
+                    MainShell(r, onBackup = { page = 1 }, onDevices = { page = 2 }) { r.prefs.onboarded = false; mode = 0 }
+                    if (page == 1) it.ponte.ui.BackupScreen(r) { page = 0 }
+                    if (page == 2) it.ponte.ui.DevicesPage(r) { page = 0 }
                 }
             }
         }
@@ -120,7 +128,7 @@ private fun PonteApp(r: Router) {
 }
 
 @Composable
-private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> Unit) {
+private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, replayOnboarding: () -> Unit) {
     val c = Canone.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0) { TABS.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -130,11 +138,11 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
 
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
-            0 -> HomeScreen(r) { select(it) }
-            1 -> DevicesScreen(r)
-            2 -> ClipScreen(r)
-            3 -> ArchiveScreen(r)
-            4 -> AudioScreen(r)
+            // Home usa la vecchia numerazione: 1 Dispositivi (pagina a parte), 2 Appunti, 3 Archivio, 4 Audio
+            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> select(1); 3 -> select(2); 4 -> select(3); else -> select(0) } }
+            1 -> ClipScreen(r)
+            2 -> ArchiveScreen(r)
+            3 -> AudioScreen(r) { select(4) }
             else -> SettingsScreen(r, replayOnboarding, onBackup)
         }
     }
@@ -185,7 +193,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         it.ponte.ui.RelayMark(32.dp)
                         Text("Relay", style = CanoneType.title3, color = c.labelPrimary)
                     }
-                    TABS.forEachIndexed { i, t -> SideItem(t, i, pager.currentPage == i) { select(i) } }
+                    TABS.forEachIndexed { i, t -> SideItem(t, GLYPHS[i], pager.currentPage == i) { select(i) } }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.fillMaxSize()) {
@@ -198,47 +206,18 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         } else {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.statusBarsPadding()) { header() }
+                val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val inset = 66.dp + 10.dp + navBottom
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    pages(Modifier.fillMaxSize())
-                    sheet()
-                }
-                TabBar(pos, pager.currentPage) { select(it) }
-            }
-        }
-    }
-}
-
-/**
- * Barra in basso: solo icone. Una pillola sfumata scivola sotto l'icona attiva seguendo il dito durante lo swipe,
- * e le icone passano dal grigio al bianco man mano che la pillola ci arriva sopra.
- */
-@Composable
-private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
-    val c = Canone.colors
-    Column(Modifier.fillMaxWidth().background(c.bgSurface).navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSeparator))
-        BoxWithConstraints(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = Space.s2)) {
-            val itemW = maxWidth / TABS.size
-            val pillW = 56.dp
-            Box(
-                Modifier.align(Alignment.CenterStart).size(pillW, 36.dp)
-                    .graphicsLayer { translationX = (pos() * itemW.toPx()) + (itemW - pillW).toPx() / 2f }
-                    .clip(CircleShape).background(Brand.gradient),
-            )
-            Row(Modifier.fillMaxSize()) {
-                TABS.forEachIndexed { i, label ->
-                    Box(
-                        Modifier.weight(1f).fillMaxHeight()
-                            .semantics { contentDescription = label }
-                            .clickable(
-                                role = Role.Tab, onClick = { onSelect(i) }, indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val near = (1f - kotlin.math.abs(i - pos())).coerceIn(0f, 1f)
-                        TabGlyph(i, androidx.compose.ui.graphics.lerp(c.labelSecondary, Color.White, near), current == i, Modifier.size(24.dp))
+                    androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
+                        pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })
                     }
+                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
+                    it.ponte.ui.GlassTabBar(
+                        layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
+                        Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom),
+                    )
                 }
             }
         }
@@ -247,7 +226,7 @@ private fun TabBar(pos: () -> Float, current: Int, onSelect: (Int) -> Unit) {
 
 /** Voce della barra laterale (finestre larghe): icona e testo, sfondo tenue quando è attiva. */
 @Composable
-private fun SideItem(label: String, index: Int, selected: Boolean, onClick: () -> Unit) {
+private fun SideItem(label: String, glyph: Int, selected: Boolean, onClick: () -> Unit) {
     val c = Canone.colors
     val bg by animateColorAsState(if (selected) c.accentSubtle else Color.Transparent, tween(220), label = "fondo")
     val fg by animateColorAsState(if (selected) c.accentOnSubtle else c.labelSecondary, tween(220), label = "testo")
@@ -255,7 +234,7 @@ private fun SideItem(label: String, index: Int, selected: Boolean, onClick: () -
         Modifier.fillMaxWidth().height(44.dp).clip(CircleShape).background(bg).clickable(role = Role.Tab, onClick = onClick).padding(horizontal = Space.s4),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
-        TabGlyph(index, fg, selected, Modifier.size(22.dp))
+        TabGlyph(glyph, fg, selected, Modifier.size(22.dp))
         Text(label, maxLines = 1, style = if (selected) CanoneType.footnote.copy(fontWeight = FontWeight.Medium) else CanoneType.footnote, color = fg)
     }
 }

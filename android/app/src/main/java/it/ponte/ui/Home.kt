@@ -56,7 +56,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             Modifier.widthIn(max = 720.dp).fillMaxHeight(),
-            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 120.dp),
+            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + LocalBarInset.current),
             verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
             item {
