@@ -164,7 +164,7 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                         ch.consume()
                         val d = (ch.position.x - down.position.x) / travel
                         if (kotlin.math.abs(ch.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
-                        if (moved) scope.launch { pos.snapTo((startPos + d).coerceIn(-0.14f, 1.14f)) }
+                        if (moved) scope.launch { pos.snapTo((startPos + d).coerceIn(0f, 1f)) }
                     }
                     held = false
                     val target = if (moved) pos.value > 0.5f else !now
@@ -185,10 +185,8 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                     val travel = (trackW - thumb - pad * 2).toPx()
                     translationX = pos.value * travel
                     val g = grow.value
-                    // si allunga nel verso del movimento: più è lontano dal punto d'arrivo, più si stira
-                    val stretch = (kotlin.math.abs(pos.targetValue - pos.value) * 0.55f).coerceAtMost(0.4f)
-                    scaleX = 1f + 0.14f * g + stretch * 0.5f
-                    scaleY = 1f + 0.04f * g - stretch * 0.1f
+                    scaleX = 1f + 0.12f * g
+                    scaleY = 1f + 0.05f * g
                 }
                 .drop(dark, tint = Color.White.copy(alpha = if (dark) 0.88f else 0.97f)),
         )

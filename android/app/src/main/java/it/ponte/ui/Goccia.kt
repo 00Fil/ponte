@@ -1,10 +1,11 @@
 package it.ponte.ui
 
 import androidx.compose.animation.core.Animatable
+import android.os.Build
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -81,7 +83,49 @@ object Goccia {
 @Composable
 fun isDark() = isSystemInDarkTheme()
 
-/** Una goccia: velo, parete interna, riflesso e contorno tonale. [press] (0..1) è letto solo in fase di disegno. */
+/**
+ * Bordo di vetro spesso, stessa luce della barra: sul lato verso la luce (in alto a sinistra) il bordo si illumina, sul lato opposto passa
+ * un poco di luce rifratta, e i tre colori si sfalsano di una frazione di pixel lungo il bordo (dispersione). Dentro, la goccia è limpida.
+ * È un overlay procedurale: nessun livello, nessuna copia dello sfondo, quindi costa quasi niente su ogni componente.
+ */
+private const val BEVEL_AGSL = """
+uniform float2 size;
+uniform float radius;
+uniform float bevel;
+uniform float strength;
+uniform float press;
+
+float edgeW(float depth) {
+  float t = clamp(1.0 - depth / bevel, 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+half4 main(float2 fc) {
+  float2 p = fc - size * 0.5;
+  float2 hb = size * 0.5 - float2(radius);
+  float2 q = abs(p) - hb;
+  float sd = length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+  float depth = -sd;
+  if (depth < 0.0) return half4(0.0);
+  float2 s = float2(p.x < 0.0 ? -1.0 : 1.0, p.y < 0.0 ? -1.0 : 1.0);
+  float2 n = (q.x > 0.0 || q.y > 0.0) ? normalize(max(q, float2(0.0001))) * s : (q.x > q.y ? float2(s.x, 0.0) : float2(0.0, s.y));
+  float lit = dot(n, normalize(float2(-0.55, -0.83)));
+  float w = edgeW(depth);
+  float hi = max(lit, 0.0) * w;
+  float lo = max(-lit, 0.0) * w * 0.45;
+  float shift = 0.9;
+  float wr = edgeW(depth - shift);
+  float wb = edgeW(depth + shift);
+  float disp = (max(lit, 0.0) + 0.35) * strength;
+  float3 fringe = float3(wr - w, 0.0, wb - w) * disp;
+  float a = (hi + lo) * strength * (1.0 + 0.5 * press);
+  float3 rgb = float3(1.0) * a + fringe * 0.8;
+  float alpha = clamp(a + abs(fringe.r) + abs(fringe.b), 0.0, 1.0);
+  return half4(half3(clamp(rgb, 0.0, 1.0)), half(alpha));
+}
+"""
+
+/** Una goccia: velo, bordo spesso con luce e dispersione, riflesso e contorno tonale. [press] (0..1) è letto solo in fase di disegno. */
 fun Modifier.drop(
     dark: Boolean,
     corner: Dp? = null,
@@ -95,43 +139,49 @@ fun Modifier.drop(
     val white = Color.White
     val base = if (tint != Color.Unspecified) tint else ink.copy(alpha = if (dark) 0.10f else 0.07f)
     val spot = Brush.radialGradient(
-        listOf(white.copy(alpha = if (dark) 0.28f else 0.80f), Color.Transparent),
+        listOf(white.copy(alpha = if (dark) 0.22f else 0.60f), Color.Transparent),
         center = Offset(size.width * 0.26f, size.height * 0.20f), radius = size.height * 1.15f,
     )
-    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.07f else 0.30f), startY = 0f, endY = size.height)
+    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.06f else 0.22f), startY = 0f, endY = size.height)
     val wall = 2.dp.toPx()
     val hair = 1.dp.toPx()
     val edge = Goccia.edge(dark)
+    val shader = if (Build.VERSION.SDK_INT >= 33) {
+        android.graphics.RuntimeShader(BEVEL_AGSL).apply {
+            setFloatUniform("size", size.width, size.height)
+            setFloatUniform("radius", r)
+            setFloatUniform("bevel", minOf(size.minDimension * 0.30f, 7.dp.toPx()))
+            setFloatUniform("strength", if (dark) 0.55f else 0.95f)
+        }
+    } else null
+    val brush = shader?.let { ShaderBrush(it) }
     onDrawBehind {
         if (fill != null) drawRoundRect(fill, cornerRadius = cr) else drawRoundRect(base, cornerRadius = cr)
         drawRoundRect(lift, cornerRadius = cr)
         drawRoundRect(spot, cornerRadius = cr)
         val p = press()
-        if (p > 0.01f) drawRoundRect(white.copy(alpha = (if (dark) 0.14f else 0.28f) * p), cornerRadius = cr)
-        drawRoundRect(edge.copy(alpha = edge.alpha * 0.45f), Offset(wall / 2, wall / 2), Size(size.width - wall, size.height - wall), CornerRadius((r - wall / 2).coerceAtLeast(0f)), style = Stroke(wall))
+        if (p > 0.01f) drawRoundRect(white.copy(alpha = (if (dark) 0.12f else 0.22f) * p), cornerRadius = cr)
+        if (brush != null && Build.VERSION.SDK_INT >= 33) {
+            shader!!.setFloatUniform("press", p)
+            drawRoundRect(brush, cornerRadius = cr)
+        } else {
+            drawRoundRect(edge.copy(alpha = edge.alpha * 0.45f), Offset(wall / 2, wall / 2), Size(size.width - wall, size.height - wall), CornerRadius((r - wall / 2).coerceAtLeast(0f)), style = Stroke(wall))
+        }
         drawRoundRect(edge, Offset(hair / 2, hair / 2), Size(size.width - hair, size.height - hair), CornerRadius((r - hair / 2).coerceAtLeast(0f)), style = Stroke(hair))
     }
 }
 
-/**
- * Stato del tocco di una goccia: quanto è premuta e di quanto è tirata (in pixel, già smorzati come un elastico).
- * Letto solo in fase di disegno, quindi muovere la goccia non ricompone nulla.
- */
+/** Stato del tocco di una goccia: quanto è premuta (0..1). Letto solo in fase di disegno. */
 class DropTouch {
     val press = Animatable(0f)
-    val dx = Animatable(0f)
-    val dy = Animatable(0f)
 }
 
 @Composable
 fun rememberDropTouch() = remember { DropTouch() }
 
 /**
- * Comportamento di una goccia al tocco:
- *  - tocchi: si gonfia e si illumina subito, con una molla quasi senza rimbalzo;
- *  - tieni premuto e muovi il dito: la goccia si ALLUNGA verso il dito come un elastico (più tiri, più resiste) e lo segue un poco;
- *  - rilasci dentro la goccia: scatta il click e torna indietro con un piccolo rimbalzo; rilasci fuori: torna indietro senza click.
- * Sono i punti in cui il dito resta fermo a lungo che "armano" lo stiramento: un gesto veloce lascia scorrere liste e pagine.
+ * Tocco normale e uguale per tutti: la goccia si gonfia e si illumina quando la premi, torna a posto con una molla morbida quando
+ * rilasci; il click scatta al rilascio se il dito è ancora sopra. La pressione lunga (se prevista) scatta dopo il tempo di sistema.
  */
 fun Modifier.dropGestures(
     t: DropTouch,
@@ -143,15 +193,12 @@ fun Modifier.dropGestures(
     val haptic = LocalHapticFeedback.current
     val click by rememberUpdatedState(onClick)
     val long by rememberUpdatedState(onLongClick)
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val limit = with(density) { 24.dp.toPx() }
-    fun rubber(d: Float) = limit * (1f - kotlin.math.exp(-kotlin.math.abs(d) / limit)) * (if (d < 0f) -1f else 1f)
     this
         .semantics { role = Role.Button; this.onClick { click(); true } }
         .pointerInput(enabled) {
             if (!enabled) return@pointerInput
             awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
+                awaitFirstDown(requireUnconsumed = false)
                 scope.launch { t.press.animateTo(1f, Goccia.press) }
                 var fired = false
                 val timer = scope.launch {
@@ -159,29 +206,10 @@ fun Modifier.dropGestures(
                     val lc = long
                     if (lc != null) { fired = true; haptic.performHapticFeedback(HapticFeedbackType.LongPress); lc() }
                 }
-                var inside = true
-                var cancelled = false
-                val slop = viewConfiguration.touchSlop
-                val margin = 28.dp.toPx()
-                while (true) {
-                    val ev = awaitPointerEvent()
-                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-                    if (ch.isConsumed && !ch.pressed) { cancelled = true; break }
-                    if (!ch.pressed) break
-                    val raw = ch.position - down.position
-                    if (raw.getDistance() > slop * 2) timer.cancel()
-                    inside = ch.position.x > -margin && ch.position.x < size.width + margin && ch.position.y > -margin && ch.position.y < size.height + margin
-                    val armed = ch.uptimeMillis - down.uptimeMillis > 160
-                    if (armed) {
-                        ch.consume()
-                        scope.launch { t.dx.snapTo(rubber(raw.x)); t.dy.snapTo(rubber(raw.y)) }
-                    } else if (ch.isConsumed) { cancelled = true; break }
-                }
+                val up = waitForUpOrCancellation()
                 timer.cancel()
-                scope.launch { t.press.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 420f)) }
-                scope.launch { t.dx.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 360f)) }
-                scope.launch { t.dy.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 360f)) }
-                if (!cancelled && inside && !fired) {
+                scope.launch { t.press.animateTo(0f, Goccia.settle) }
+                if (up != null && !fired) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     click()
                 }
@@ -189,17 +217,11 @@ fun Modifier.dropGestures(
         }
 }
 
-/**
- * Deformazione del solo contenitore (mai del contenuto, che sta fuori da questo livello): resta ancorato al suo posto e si
- * gonfia e si allunga di pochissimo, giusto quanto basta a dare l'idea di una goccia.
- */
+/** Il solo contenitore si gonfia appena quando è premuto; l'etichetta e il contenuto restano fermi. */
 fun Modifier.dropDeform(t: DropTouch): Modifier = this.graphicsLayer {
     val p = t.press.value
-    val lim = 24.dp.toPx()
-    val sx = (abs(t.dx.value) / lim).coerceAtMost(1f)
-    val sy = (abs(t.dy.value) / lim).coerceAtMost(1f)
-    scaleX = 1f + 0.030f * p + 0.035f * sx - 0.010f * sy
-    scaleY = 1f + 0.010f * p + 0.035f * sy - 0.010f * sx
+    scaleX = 1f + 0.035f * p
+    scaleY = 1f + 0.012f * p
 }
 
 /** Riga/scheda cliccabile: non si muove; il contenitore si illumina appena mentre lo premi. */
