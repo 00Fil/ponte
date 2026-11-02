@@ -16,7 +16,14 @@ object Alerts {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel("piano", "Agenda e Studio", NotificationManager.IMPORTANCE_HIGH).apply { enableVibration(true) })
         val open = PendingIntent.getActivity(ctx, code, ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.putExtra("tab", kind), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        // Notifica con la grafica dell'app: il corpo è un riquadro blu con la stella, non quello di sistema.
+        val rv = android.widget.RemoteViews(ctx.packageName, R.layout.notif_plan).apply {
+            setTextViewText(R.id.n_title, title)
+            setTextViewText(R.id.n_text, text)
+            setTextViewText(R.id.n_time, java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(java.util.Date()))
+        }
         nm.notify(code, Notification.Builder(ctx, "piano").setSmallIcon(R.drawable.ic_ponte).setContentTitle(title).setContentText(text)
+            .setStyle(Notification.DecoratedCustomViewStyle()).setCustomContentView(rv).setCustomBigContentView(rv).setColor(0xFF2F5FFF.toInt())
             .setAutoCancel(true).setContentIntent(open).setCategory(Notification.CATEGORY_REMINDER).build())
         @Suppress("DEPRECATION")
         (ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 180, 120, 180), -1))

@@ -16,6 +16,8 @@ import java.util.Calendar
 import java.util.UUID
 
 data class Ev(val id: String, val start: Long, val end: Long, val allDay: Boolean, val title: String, val color: Int, val note: String, val place: String, val remind: Int)
+/** Evento di Google Calendar copiato da un telefono: gli altri dispositivi lo vedono senza account. */
+data class ExtEv(val id: String, val start: Long, val end: Long, val allDay: Boolean, val title: String, val place: String, val color: Int, val device: String)
 data class Subject(val id: String, val name: String, val color: Int)
 data class Task(val id: String, val title: String, val subject: String, val due: Long, val done: Boolean)
 data class Exam(val id: String, val title: String, val subject: String, val date: Long)
@@ -28,7 +30,7 @@ data class Timer(val phase: String = "focus", val running: Boolean = false, val 
 data class PlanState(
     val events: List<Ev> = emptyList(), val subjects: List<Subject> = emptyList(), val tasks: List<Task> = emptyList(),
     val exams: List<Exam> = emptyList(), val sessions: List<Sess> = emptyList(), val cards: List<Card> = emptyList(),
-    val cfg: Map<String, Int> = emptyMap(), val timer: Timer = Timer(),
+    val cfg: Map<String, Int> = emptyMap(), val timer: Timer = Timer(), val ext: List<ExtEv> = emptyList(),
 ) {
     fun cfg(k: String, def: Int) = cfg[k] ?: def
 }
@@ -39,7 +41,7 @@ data class PlanState(
  */
 class Plan(private val ctx: Context, private val r: Router) {
     private val file = File(ctx.filesDir, "plan.json")
-    private val groups = listOf("ev", "sub", "tk", "ex", "ses", "card", "cfg", "tm")
+    private val groups = listOf("ev", "sub", "tk", "ex", "ses", "card", "cfg", "tm", "gev")
     private val doc = HashMap<String, HashMap<String, JSONObject>>().also { m -> groups.forEach { m[it] = HashMap() } }
     val state = MutableStateFlow(PlanState())
     private val http = okhttp3.OkHttpClient.Builder().connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS).readTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
@@ -78,6 +80,7 @@ class Plan(private val ctx: Context, private val r: Router) {
             live("card").map { (id, v) -> Card(id, v.optString("s"), v.optString("q"), v.optString("a"), v.optInt("b"), v.optLong("due")) },
             cfg,
             if (t == null) Timer() else Timer(t.optString("p", "focus"), t.optInt("n") == 1, t.optLong("s"), t.optLong("e"), t.optString("sb"), t.optInt("c"), t.optString("dv")),
+            live("gev").map { (id, v) -> ExtEv(id, v.optLong("t"), v.optLong("e"), v.optInt("a") == 1, v.optString("ti"), v.optString("l"), v.optInt("c"), v.optString("dv")) },
         )
     }
 
@@ -113,8 +116,32 @@ class Plan(private val ctx: Context, private val r: Router) {
     suspend fun push() { syncServer(); broadcast() }
     fun onRemote(d: JSONObject?) { if (d != null && merge(d)) { publish(); save(); reschedule() } }
 
+    private val cal = CalendarBridge(ctx)
+
+    /** Copia nel documento condiviso gli eventi dei calendari di questo telefono (Google): così li vedono anche gli altri dispositivi. */
+    private fun mirror() {
+        if (!cal.granted()) return
+        val now = System.currentTimeMillis()
+        val from = now - 30 * 86_400_000L; val to = now + 120 * 86_400_000L
+        val mine = cal.events(from, to).associateBy { "g${it.calId}_${it.id}_${it.start}" }
+        val g = doc["gev"]!!
+        val stale = g.filter { (id, v) -> v.optString("dv") == r.deviceId && v.optInt("d") != 1 && v.optLong("t") in from..to && id !in mine }.keys
+        val fresh = mine.filter { (id, e) -> g[id].let { o -> o == null || o.optInt("d") == 1 || o.optLong("t") != e.start || o.optLong("e") != e.end || o.optString("ti") != e.title || o.optString("l") != e.place } }
+        if (stale.isEmpty() && fresh.isEmpty()) return
+        mutate {
+            fresh.forEach { (id, e) -> put("gev", id) { put("t", e.start); put("e", e.end); put("a", if (e.allDay) 1 else 0); put("ti", e.title); put("l", e.place); put("c", e.color); put("dv", r.deviceId) } }
+            stale.forEach { del("gev", it) }
+        }
+    }
+
+    /** Il brano successivo costa tempo: il pomodoro in corso si allunga di [ms]. */
+    fun timerPenalty(ms: Long) {
+        val t = state.value.timer
+        if (t.running) mutate { writeTimer(t.copy(endAt = t.endAt + ms)) }
+    }
+
     fun start() {
-        r.scope.launch { while (true) { kotlinx.coroutines.delay(2 * 60_000L); if (r.screenOn) push() } }
+        r.scope.launch { while (true) { try { mirror() } catch (_: Exception) {}; kotlinx.coroutines.delay(2 * 60_000L); if (r.screenOn) push() } }
         reschedule()
     }
 

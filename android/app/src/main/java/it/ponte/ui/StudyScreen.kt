@@ -28,6 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,7 +125,34 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     val secs = ((left + 999) / 1000).toInt()
     val mine = t.device.isEmpty() || t.device == r.deviceId
 
-    CCard {
+    val np = rememberNowPlaying()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val palette = remember(np?.art) { moodColors(np?.art) }
+    val dark = isDark()
+    val base = listOf(c.accent, Color(0xFF5DA0FF), Color(0xFF8E5BB5))
+    val m0 by androidx.compose.animation.animateColorAsState(palette.getOrNull(0) ?: base[0], tween(1600), label = "m0")
+    val m1 by androidx.compose.animation.animateColorAsState(palette.getOrNull(1) ?: palette.getOrNull(0) ?: base[1], tween(1600), label = "m1")
+    val m2 by androidx.compose.animation.animateColorAsState(palette.getOrNull(2) ?: palette.getOrNull(0) ?: base[2], tween(1600), label = "m2")
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "ambiente")
+    val drift by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(16000, easing = androidx.compose.animation.core.LinearEasing)), label = "deriva")
+    val breathe by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(3200), androidx.compose.animation.core.RepeatMode.Reverse), label = "respiro")
+    val strength by animateFloatAsState(if (t.running) 1f else if (np?.playing == true) 0.7f else 0.4f, tween(900), label = "forza")
+    val shape = RoundedCornerShape(Radius.xl)
+    Column(
+        Modifier.fillMaxWidth().clip(shape).background(c.bgSurface)
+            .drawBehind {
+                val cols = listOf(m0, m1, m2)
+                val rad = size.maxDimension * 0.75f
+                val a = (if (dark) 0.50f else 0.34f) * strength * (0.82f + 0.18f * breathe)
+                for (i in 0 until 3) {
+                    val ang = (drift + i / 3f) * 2f * Math.PI.toFloat()
+                    val ctr = Offset(size.width * (0.5f + 0.42f * kotlin.math.cos(ang)), size.height * (0.5f + 0.38f * kotlin.math.sin(ang * (1f + i * 0.3f))))
+                    drawCircle(Brush.radialGradient(listOf(cols[i].copy(alpha = a), Color.Transparent), ctr, rad), rad, ctr)
+                }
+            }
+            .border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s5),
+        verticalArrangement = Arrangement.spacedBy(Space.s4),
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium, color = tint)
             CButton("Durate", onSettings, kind = ButtonKind.Tertiary)
@@ -146,6 +177,35 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until rounds) Box(Modifier.padding(horizontal = 3.dp).size(8.dp).clip(CircleShape).background(if (i < t.cycle % rounds || (t.phase == "long" && t.cycle > 0)) tint else c.bgSunken))
         }
+        if (np != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Column(Modifier.weight(1f)) {
+                Text(np.title.ifBlank { np.app }, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                if (np.artist.isNotBlank()) Text(np.artist, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            val cost = t.running && focus
+            val tk = rememberDropTouch()
+            Row(
+                Modifier.height(36.dp).dropGestures(tk, {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    np.controller.transportControls.skipToNext()
+                    if (cost) r.plan.timerPenalty(60_000L)
+                }),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    Modifier.fillMaxHeight().dropDeform(tk).drop(dark, press = { tk.press.value }, touch = tk).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Canvas(Modifier.size(14.dp)) {
+                        val w = size.width; val h = size.height
+                        val tri = androidx.compose.ui.graphics.Path().apply { moveTo(0f, 0f); lineTo(w * 0.72f, h / 2); lineTo(0f, h); close() }
+                        drawPath(tri, c.labelPrimary)
+                        drawRect(c.labelPrimary, Offset(w * 0.82f, 0f), Size(w * 0.16f, h))
+                    }
+                    if (cost) Text("+1:00", style = CanoneType.footnote.copy(fontFeatureSettings = "tnum"), color = c.labelSecondary)
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
             if (t.running) CButton("Ferma", { r.plan.timerStop() }, Modifier.weight(1f))
             else CButton("Avvia", { r.plan.timerStart("") }, Modifier.weight(1f), kind = ButtonKind.Primary)
@@ -154,6 +214,23 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
             }, Modifier.weight(1f))
         }
     }
+}
+
+
+/** Fino a tre colori vivi e distanti tra loro presi dalla copertina: servono alla luce d'ambiente. */
+private fun moodColors(art: android.graphics.Bitmap?): List<Color> {
+    if (art == null) return emptyList()
+    return try {
+        val b = android.graphics.Bitmap.createScaledBitmap(art, 12, 12, true)
+        val hsv = FloatArray(3)
+        val all = (0 until 144).map { android.graphics.Color.colorToHSV(b.getPixel(it % 12, it / 12), hsv); hsv.clone() }.sortedByDescending { it[1] * it[2] }
+        val picked = ArrayList<FloatArray>()
+        for (h in all) {
+            if (picked.size >= 3) break
+            if (picked.none { val d = kotlin.math.abs(it[0] - h[0]); minOf(d, 360f - d) < 40f }) picked += h
+        }
+        picked.map { Color(android.graphics.Color.HSVToColor(floatArrayOf(it[0], it[1].coerceAtLeast(0.5f), it[2].coerceIn(0.65f, 1f)))) }
+    } catch (_: Exception) { emptyList() }
 }
 
 @Composable

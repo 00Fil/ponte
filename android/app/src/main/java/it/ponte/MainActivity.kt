@@ -119,19 +119,14 @@ private fun PonteApp(r: Router) {
                 // Caricamento vero: si mostra solo se il server si sta ancora collegando. Se è già tutto pronto si entra direttamente.
                 val hub by r.hubState.collectAsState()
                 var timedOut by remember { mutableStateOf(false) }
-                var grace by remember { mutableStateOf(false) }
-                androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(250); grace = true; kotlinx.coroutines.delay(2250); timedOut = true }
+                var minShown by remember { mutableStateOf(false) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(1700); minShown = true; kotlinx.coroutines.delay(1800); timedOut = true }
                 val configured = remember { r.prefs.wsUrl() != null && r.prefs.token.isNotEmpty() }
-                val ready = !configured || (hub != "Connessione in corso" && hub != "Non configurato") || timedOut
+                val ready = minShown && (!configured || (hub != "Connessione in corso" && hub != "Non configurato") || timedOut)
                 if (!ready) {
                     val c = Canone.colors
                     Box(Modifier.fillMaxSize().background(c.bgCanvas), contentAlignment = Alignment.Center) {
-                        androidx.compose.animation.AnimatedVisibility(grace, enter = androidx.compose.animation.fadeIn(tween(300))) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-                                it.ponte.ui.RelayMark(72.dp)
-                                Text("Mi collego ai tuoi dispositivi", style = CanoneType.footnote, color = c.labelTertiary)
-                            }
-                        }
+                        it.ponte.ui.Star3D(Modifier.size(260.dp))
                     }
                 } else Box(Modifier.fillMaxSize()) {
                     MainShell(r, onBackup = { page = 1 }) { r.prefs.onboarded = false; mode = 0 }

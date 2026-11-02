@@ -3,10 +3,10 @@ import path from 'node:path';
 
 /**
  * Agenda e Studio sincronizzati. Il documento è un insieme di gruppi (ev eventi, sub materie, tk compiti, ex esami,
- * ses sessioni di studio, card flashcard, cfg impostazioni, tm timer), ognuno una mappa id -> record "l'ultimo che scrive vince":
+ * ses sessioni di studio, card flashcard, cfg impostazioni, tm timer, gev eventi di Google Calendar copiati dai telefoni), ognuno una mappa id -> record "l'ultimo che scrive vince":
  * ogni record ha la data di modifica `u` e, se eliminato, `d: 1`. L'unione è commutativa e idempotente come per le Finanze.
  */
-export const GROUPS = ['ev', 'sub', 'tk', 'ex', 'ses', 'card', 'cfg', 'tm'];
+export const GROUPS = ['ev', 'sub', 'tk', 'ex', 'ses', 'card', 'cfg', 'tm', 'gev'];
 
 export function mergePlan(a, b) {
   const out = {};
