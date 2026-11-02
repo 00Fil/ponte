@@ -153,7 +153,7 @@ private fun lensEffect33(p: LensParams): RenderEffect {
  * così ai bordi la luce piegata trova ancora contenuto da pescare; poi tutto viene ritagliato a capsula.
  */
 @Composable
-private fun Glass(
+internal fun Glass(
     layer: GraphicsLayer,
     origin: () -> Offset,
     width: androidx.compose.ui.unit.Dp,

@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -254,21 +255,15 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
     LaunchedEffect(selected) { if (!holding) follow.animateTo(selected.toFloat(), Goccia.settle) }
     LaunchedEffect(holding) { bubble.animateTo(if (holding) 1.24f else 1f, spring(dampingRatio = 0.78f, stiffness = 360f)) }
 
-    BoxWithConstraints(modifier.fillMaxWidth().height(42.dp).drop(dark)) {
+    val segLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    BoxWithConstraints(modifier.fillMaxWidth().height(42.dp)) {
         val pad = 3.dp
         val itemW = (maxWidth - pad * 2) / n
         val h = maxHeight - pad * 2
+        // Pista ed etichette vengono registrate: la goccia le rifrange con la stessa lente della barra.
+        Box(Modifier.fillMaxSize().drawWithContent { segLayer.record { this@drawWithContent.drawContent() }; drawLayer(segLayer) }.drop(dark)) {
         Box(Modifier.fillMaxSize().padding(pad)) {
-            Box(
-                Modifier.size(itemW, h)
-                    .graphicsLayer {
-                        translationX = follow.value * itemW.toPx()
-                        val stretch = (abs(follow.targetValue - follow.value) * 0.30f).coerceAtMost(0.34f)
-                        scaleX = bubble.value * (1f + stretch)
-                        scaleY = 1f + (bubble.value - 1f) * 0.75f - stretch * 0.28f
-                    }
-                    .drop(dark, tint = c.accent.copy(alpha = if (dark) 0.34f else 0.22f)),
-            )
             Row(
                 Modifier.fillMaxSize().pointerInput(n) {
                     awaitEachGesture {
@@ -307,6 +302,17 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
                         )
                     }
                 }
+            }
+        }
+        }
+        // La goccia di vetro: lente della barra sopra pista ed etichette, si gonfia appena quando la tieni premuta.
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            Box(Modifier.graphicsLayer { translationX = follow.value * itemW.toPx(); scaleX = bubble.value; scaleY = 1f + (bubble.value - 1f) * 0.75f }) {
+                Glass(
+                    segLayer, { Offset(with(dens) { pad.toPx() + follow.value * itemW.toPx() }, with(dens) { pad.toPx() }) },
+                    itemW, h, edge = 9.dp, amount = 7.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp,
+                )
+                Box(Modifier.size(itemW, h).drop(dark, tint = c.accent.copy(alpha = if (dark) 0.16f else 0.10f)))
             }
         }
     }
