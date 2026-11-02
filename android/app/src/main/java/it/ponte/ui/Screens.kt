@@ -49,6 +49,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -445,7 +446,7 @@ fun SettingsScreen(r: Router, replayOnboarding: () -> Unit = {}, onBackup: () ->
         }
     }
 
-    androidx.compose.animation.AnimatedContent(sub, transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)).togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140))) }, label = "modulo") { page ->
+    androidx.compose.animation.AnimatedContent(sub, transitionSpec = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) togetherWith (androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140))) }, label = "modulo") { page ->
         ScreenList("Impostazioni") {
             if (page != null) item {
                 CButton("‹  Impostazioni", { sub = null }, kind = ButtonKind.Tertiary)
