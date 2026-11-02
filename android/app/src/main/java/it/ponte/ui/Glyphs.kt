@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.vector.PathParser
  * Ogni icona è un unico tracciato tratteggiato in un solo passaggio, così dove le linee si incrociano non si vede nessuna sovrapposizione.
  * Quando la scheda diventa attiva l'icona si ridisegna (come in lucide-animated) e l'ingranaggio ruota piano.
  *
- * Indici: 0 casa, 1 dispositivi, 2 appunti, 3 archivio, 4 cuffie, 5 impostazioni.
+ * Indici: 0 casa, 1 dispositivi, 2 appunti, 3 archivio, 4 cuffie, 5 impostazioni, 6 portafoglio, 7 invia, 8 disco, 9 banconote, 10 scudo, 11 calendario, 12 laurea.
  */
 private fun rr(x: Float, y: Float, w: Float, h: Float, r: Float) =
     "M${x + r} ${y}H${x + w - r}A$r $r 0 0 1 ${x + w} ${y + r}V${y + h - r}A$r $r 0 0 1 ${x + w - r} ${y + h}H${x + r}A$r $r 0 0 1 $x ${y + h - r}V${y + r}A$r $r 0 0 1 ${x + r} ${y}Z"
@@ -64,6 +64,10 @@ private val ICONS: List<List<String>> = listOf(
     listOf(rr(2f, 6f, 20f, 12f, 2f), circ(12f, 12f, 2f), "M6 12h.01", "M18 12h.01"),
     // shield-check
     listOf("M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z", "m9 12 2 2 4-4"),
+    // calendar-days
+    listOf("M8 2v4", "M16 2v4", rr(3f, 4f, 18f, 18f, 2f), "M3 10h18", "M8 14h.01", "M12 14h.01", "M16 14h.01", "M8 18h.01", "M12 18h.01"),
+    // graduation-cap
+    listOf("M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z", "M22 10v6", "M6 12.5V16a6 3 0 0 0 12 0v-3.5"),
 )
 
 @Composable
