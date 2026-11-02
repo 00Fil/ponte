@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -131,8 +134,76 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         (0 until last.coerceAtLeast(2)).map { i -> acc += sums.getOrElse(i) { 0f }; acc }
     }
 
+    // ritmo di spesa: spesa cumulata di questo periodo contro il periodo prima, con la previsione a fine periodo
+    val pace = remember(m.txs, month, year) {
+        val cal = Calendar.getInstance()
+        val buckets = if (month < 0) 12 else Calendar.getInstance().apply { clear(); set(year, month, 1) }.getActualMaximum(Calendar.DAY_OF_MONTH)
+        fun bucket(ts: Long): Int { cal.timeInMillis = ts; return (if (month < 0) cal.get(Calendar.MONTH) else cal.get(Calendar.DAY_OF_MONTH) - 1).coerceIn(0, buckets - 1) }
+        val cur = FloatArray(buckets); val prev = FloatArray(buckets)
+        m.txs.forEach { t ->
+            if (t.cents >= 0) return@forEach
+            if (t.ts in from until to) cur[bucket(t.ts)] += -t.cents / 100f
+            else if (t.ts in pf until pt) prev[bucket(t.ts)] += -t.cents / 100f
+        }
+        val ongoing = System.currentTimeMillis() in from until to
+        val last = if (ongoing) bucket(System.currentTimeMillis()) + 1 else if (System.currentTimeMillis() < from) 0 else buckets
+        var a = 0f; val curCum = (0 until last).map { a += cur[it]; a }
+        var b = 0f; val prevCum = (0 until buckets).map { b += prev[it]; b }
+        val proj = if (ongoing && last >= 3 && last < buckets) curCum.last() / last * buckets else null
+        PaceData(curCum, prevCum, buckets, proj)
+    }
+
     @Composable
     fun Back(label: String) = BackRow("Finanze", label) { onSub(null) }
+
+    // Nuovo movimento: pagina fissa, tutto visibile senza scorrere e sopra la barra.
+    @Composable
+    fun AddPage() {
+        val dark = isDark()
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                Modifier.widthIn(max = 720.dp).fillMaxSize().padding(start = Space.s4, end = Space.s4, top = Space.s3, bottom = Space.s3 + LocalBarInset.current),
+                verticalArrangement = Arrangement.spacedBy(Space.s3),
+            ) {
+                Back(if (income) "Nuova entrata" else "Nuova spesa")
+                GlassSegmented(listOf("Spesa", "Entrata"), if (income) 1 else 0, { income = it == 1 })
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(58.dp))
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Text(
+                            "€" + amount.ifEmpty { "0" },
+                            style = CanoneType.title1.copy(fontSize = 48.sp, lineHeight = 58.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+                            color = if (amount.isEmpty()) c.labelTertiary else c.labelPrimary, maxLines = 1,
+                        )
+                    }
+                    Action("", "Banconote", false, glyph = 9) { cashMode = if (income) 2 else 1; tally = emptyMap(); onSub("cash") }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    (if (income) listOf("Entrate") else CATEGORIES.dropLast(1)).let { listOf("") + it }.forEach { k ->
+                        val sel = cat == k
+                        Box(
+                            Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken)
+                                .dropClickable({ cat = k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
+                        ) { Text(k.ifEmpty { "Auto" }, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1) }
+                    }
+                    Box(Modifier.clip(CircleShape).background(c.bgSunken).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                        Text(if (showNote) "Nascondi nota" else "+ Nota", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+                    }
+                }
+                if (showNote) CField("Nota", note, { note = it }, "Dove o cosa")
+                AmountPad(amount, Modifier.weight(1f).fillMaxWidth()) { amount = it }
+                CButton(if (income) "Aggiungi entrata" else "Aggiungi spesa", {
+                    val v = r.finance.toCents(amount)
+                    if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
+                    val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
+                    val before = r.finance.state.value.totalCents
+                    r.finance.add(if (income) v else -v, k, note.trim())
+                    Flash.show(before, if (income) v else -v)
+                    amount = ""; note = ""; cat = ""; showNote = false; onSub(null)
+                }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+            }
+        }
+    }
 
     androidx.compose.animation.AnimatedContent(
         sub,
@@ -143,7 +214,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         },
         label = "finanze",
     ) { page ->
-        ScreenList("Finanze") {
+        if (page == "add") AddPage() else ScreenList("Finanze") {
             when (page) {
                 null -> {
                     // ------------------------------------------------ cruscotto: solo grafici e tasti
@@ -154,7 +225,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 EyeToggle(r)
                             }
                             CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
-                            Trend(trend, c.accent, Modifier.fillMaxWidth().height(96.dp).blurIf(MoneyPrivacy.hidden))
+                            PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
                                 Column { Text("Contanti", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.cashCents, CanoneType.body, c.labelPrimary) }
                                 Column { Text("Revolut", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.revolutCents, CanoneType.body, c.labelPrimary) }
@@ -227,7 +298,8 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item { GlassSegmented(listOf("Ho speso", "Ho ricevuto"), if (spend) 0 else 1, { cashMode = if (it == 0) 1 else 2; tally = emptyMap() }) }
                     item {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                            CountUp(tallyCents, CanoneType.title1.copy(fontSize = 48.sp, fontWeight = FontWeight.SemiBold), if (tallyCents == 0L) c.labelTertiary else if (spend) c.critical else c.positive)
+                            // numero a slot, come nell'animazione a schermo intero
+                            RollingText(eur(tallyCents), CanoneType.title1.copy(fontSize = 48.sp, lineHeight = 60.sp, fontWeight = FontWeight.SemiBold), if (tallyCents == 0L) c.labelTertiary else if (spend) c.critical else c.positive, haptic = true)
                             Text("Nel portafoglio " + eur(m.cashCents), style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
                         }
                     }
@@ -269,49 +341,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     }
                 }
 
-                "add" -> {
-                    item { Back(if (income) "Nuova entrata" else "Nuova spesa") }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-                            GlassSegmented(listOf("Spesa", "Entrata"), if (income) 1 else 0, { income = it == 1 })
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(58.dp))
-                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                    Text(
-                                        "€" + amount.ifEmpty { "0" },
-                                        style = CanoneType.title1.copy(fontSize = 56.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
-                                        color = if (amount.isEmpty()) c.labelTertiary else c.labelPrimary, maxLines = 1,
-                                    )
-                                }
-                                // pagare o incassare con le banconote: si passa alla cassa e il risultato diventa il movimento
-                                Action("", "Banconote", false, glyph = 9) { cashMode = if (income) 2 else 1; tally = emptyMap(); onSub("cash") }
-                            }
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                (if (income) listOf("Entrate") else CATEGORIES.dropLast(1)).let { listOf("") + it }.forEach { k ->
-                                    val sel = cat == k
-                                    Box(
-                                        Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken)
-                                            .dropClickable({ cat = k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
-                                    ) { Text(k.ifEmpty { "Auto" }, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1) }
-                                }
-                                Box(Modifier.clip(CircleShape).background(c.bgSunken).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
-                                    Text(if (showNote) "Nascondi nota" else "+ Nota", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
-                                }
-                            }
-                            if (showNote) CField("Nota", note, { note = it }, "Dove o cosa")
-                            AmountPad(amount) { amount = it }
-                            CButton(if (income) "Aggiungi entrata" else "Aggiungi spesa", {
-                                val v = r.finance.toCents(amount)
-                                if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
-                                val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
-                                val before = r.finance.state.value.totalCents
-                                r.finance.add(if (income) v else -v, k, note.trim())
-                                Flash.show(before, if (income) v else -v)
-                                amount = ""; note = ""; cat = ""; showNote = false; onSub(null)
-                            }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-                        }
-                    }
-                }
+                "add" -> {}
 
                 "moves" -> {
                     item { Back("Movimenti") }
@@ -620,7 +650,7 @@ private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
 }
 
 @Composable
-private fun AmountPad(value: String, onChange: (String) -> Unit) {
+private fun AmountPad(value: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
     fun press(k: String) {
         val next = when (k) {
             "," -> if (',' in value) value else if (value.isEmpty()) "0," else "$value,"
@@ -634,21 +664,101 @@ private fun AmountPad(value: String, onChange: (String) -> Unit) {
         }
         onChange(next)
     }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 row.forEach { k ->
                     val t = rememberDropTouch()
                     val dark = isDark()
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        // tasto rotondo grande quanto lo spazio permette (massimo 76 dp)
+                        val d = minOf(maxWidth, maxHeight, 76.dp)
                         Box(
-                            Modifier.size(70.dp).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
+                            Modifier.size(d).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
                                 .dropDeform(t).drop(dark, press = { t.press.value }, touch = t),
                             contentAlignment = Alignment.Center,
                         ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
                     }
                 }
             }
+        }
+    }
+}
+
+
+internal class PaceData(val cur: List<Float>, val prev: List<Float>, val buckets: Int, val proj: Float?)
+
+/**
+ * Ritmo di spesa: quanto hai speso finora (linea piena) contro lo stesso punto del periodo prima (linea grigia), con la previsione
+ * a fine periodo (tratteggio). Tocca o trascina per leggere giorno per giorno.
+ */
+@Composable
+internal fun PaceChart(d: PaceData, year: Boolean, accent: Color, modifier: Modifier) {
+    val c = Canone.colors
+    val grow = rememberGrow(d.cur to d.prev)
+    var sel by remember(d) { mutableStateOf<Int?>(null) }
+    val months = listOf("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic")
+    fun label(i: Int) = if (year) months[i] else "giorno ${i + 1}"
+    val now = d.cur.lastOrNull() ?: 0f
+    val prevSame = d.prev.getOrElse((d.cur.size - 1).coerceAtLeast(0)) { 0f }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        // riga di lettura: valore toccato, oppure confronto con il periodo prima e previsione
+        Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            val s = sel
+            if (s != null) {
+                Text(label(s), style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+                d.cur.getOrNull(s)?.let { Text(eur((it * 100).toLong()), style = CanoneType.footnote, color = accent) }
+                Text("prima " + eur((d.prev.getOrElse(s) { 0f } * 100).toLong()), style = CanoneType.footnote, color = c.labelTertiary)
+            } else {
+                val diff = now - prevSame
+                Text(
+                    if (d.cur.isEmpty()) "Nessuna spesa ancora" else if (diff > 0.5f) "+" + eur((diff * 100).toLong()) + " rispetto a prima" else if (diff < -0.5f) "−" + eur((-diff * 100).toLong()) + " rispetto a prima" else "Come il periodo prima",
+                    style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = if (diff > 0.5f) c.critical else c.positive,
+                )
+                Spacer(Modifier.weight(1f))
+                d.proj?.let { Text("a fine " + (if (year) "anno" else "mese") + " ~" + eur((it * 100).toLong()), style = CanoneType.footnote, color = c.labelTertiary) }
+            }
+        }
+        Canvas(Modifier.fillMaxWidth().height(120.dp).pointerInput(d) {
+            fun pick(x: Float) { sel = ((x / size.width) * (d.buckets - 1)).roundToInt().coerceIn(0, d.buckets - 1) }
+            detectDragGestures(onDragStart = { pick(it.x) }, onDragEnd = { sel = null }, onDragCancel = { sel = null }) { ch, _ -> ch.consume(); pick(ch.position.x) }
+        }.pointerInput(d) { detectTapGestures { o -> val i = ((o.x / size.width) * (d.buckets - 1)).roundToInt().coerceIn(0, d.buckets - 1); sel = if (sel == i) null else i } }) {
+            if (d.buckets < 2) return@Canvas
+            val hi = maxOf(d.cur.maxOrNull() ?: 0f, d.prev.maxOrNull() ?: 0f, d.proj ?: 0f, 1f) * 1.08f
+            fun x(i: Int) = size.width * i / (d.buckets - 1)
+            fun y(v: Float) = size.height * (1f - v / hi)
+            // griglia leggera
+            for (k in 1..3) drawLine(c.lineSeparator, Offset(0f, size.height * k / 4f), Offset(size.width, size.height * k / 4f), 1f)
+            // periodo prima
+            val pp = androidx.compose.ui.graphics.Path()
+            d.prev.forEachIndexed { i, v -> if (i == 0) pp.moveTo(x(i), y(v * grow)) else pp.lineTo(x(i), y(v * grow)) }
+            drawPath(pp, c.labelTertiary.copy(alpha = 0.55f), style = Stroke(2.2f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            // questo periodo
+            if (d.cur.isNotEmpty()) {
+                val line = androidx.compose.ui.graphics.Path(); val area = androidx.compose.ui.graphics.Path()
+                area.moveTo(x(0), size.height)
+                d.cur.forEachIndexed { i, v -> val yy = y(v * grow); if (i == 0) line.moveTo(x(i), yy) else line.lineTo(x(i), yy); area.lineTo(x(i), yy) }
+                area.lineTo(x(d.cur.size - 1), size.height); area.close()
+                drawPath(area, Brush.verticalGradient(listOf(accent.copy(alpha = 0.30f), Color.Transparent)))
+                drawPath(line, accent, style = Stroke(3.2f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                // previsione
+                d.proj?.let { p ->
+                    val lx = x(d.cur.size - 1); val ly = y(d.cur.last() * grow)
+                    drawLine(accent.copy(alpha = 0.6f), Offset(lx, ly), Offset(x(d.buckets - 1), y(p * grow)), 2.4f, StrokeCap.Round, androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
+                    drawCircle(accent.copy(alpha = 0.6f), 4f, Offset(x(d.buckets - 1), y(p * grow)))
+                }
+                drawCircle(accent, 6f, Offset(x(d.cur.size - 1), y(d.cur.last() * grow))); drawCircle(Color.White, 2.5f, Offset(x(d.cur.size - 1), y(d.cur.last() * grow)))
+            }
+            sel?.let { s ->
+                drawLine(c.labelTertiary, Offset(x(s), 0f), Offset(x(s), size.height), 1.5f)
+                d.cur.getOrNull(s)?.let { drawCircle(accent, 7f, Offset(x(s), y(it))); drawCircle(Color.White, 3f, Offset(x(s), y(it))) }
+                drawCircle(c.labelTertiary, 5f, Offset(x(s), y(d.prev.getOrElse(s) { 0f })))
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+            Legend(if (year) "Quest'anno" else "Questo mese", accent)
+            Legend(if (year) "Anno prima" else "Mese prima", c.labelTertiary)
+            if (d.proj != null) Legend("Previsione", accent.copy(alpha = 0.5f))
         }
     }
 }

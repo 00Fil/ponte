@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.composed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.blur
@@ -79,6 +80,20 @@ fun FlashHost() {
 }
 
 
-/** Importi nascosti: sfocatura al posto dei puntini. Con Android < 12 (niente blur) il testo si fa quasi trasparente. */
-fun Modifier.blurIf(on: Boolean): Modifier = if (!on) this else if (android.os.Build.VERSION.SDK_INT >= 31)
-    this.blur(MoneyPrivacy.BLUR.dp) else this.graphicsLayer { alpha = 0.08f }
+/**
+ * Importi nascosti: sfocatura animata (si dissolve dentro e fuori) con bordi morbidi: la sfocatura esce oltre il testo e sfuma, niente taglio netto.
+ * Con Android < 12 (niente blur) il testo sfuma fin quasi a sparire.
+ */
+fun Modifier.blurIf(on: Boolean): Modifier = composed {
+    val v by androidx.compose.animation.core.animateFloatAsState(
+        if (on) 1f else 0f, androidx.compose.animation.core.tween(480, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "censura",
+    )
+    if (v < 0.001f) this else this.graphicsLayer {
+        clip = false
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val r = (v * MoneyPrivacy.BLUR.dp.toPx()).coerceAtLeast(0.01f)
+            renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Decal)
+            alpha = 1f - 0.25f * v
+        } else alpha = 1f - 0.9f * v
+    }
+}

@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -75,7 +77,7 @@ import kotlin.math.roundToInt
  */
 object Goccia {
     /** Molla del tocco: poco rimbalzo. */
-    val press = spring<Float>(dampingRatio = 0.8f, stiffness = 520f)
+    val press = spring<Float>(dampingRatio = 0.72f, stiffness = 280f)
     /** Molla di assestamento di una goccia che scivola da un'opzione all'altra. */
     val settle = spring<Float>(dampingRatio = 0.86f, stiffness = 320f)
     /** Molla con cui la goccia segue il dito. */
@@ -85,8 +87,10 @@ object Goccia {
 
     /** Corpo opaco e colorato del vetro: stesso azzurro del tocco su un dispositivo (accentSubtle), non bianco. */
     fun body(dark: Boolean) = if (dark) Color(0xFF1A2F63) else Color(0xFFD3E2FF)
+    /** Velo trasparente dei controlli: azzurrato, mai bianco latte. */
+    fun veil(dark: Boolean) = if (dark) Color(0xFF6FA0FF).copy(alpha = 0.12f) else Color(0xFF2F5FFF).copy(alpha = 0.07f)
     /** Rilascio "liquido": rimbalza oltre lo zero e si assesta, la goccia ondeggia. */
-    val release = spring<Float>(dampingRatio = 0.42f, stiffness = 260f)
+    val release = spring<Float>(dampingRatio = 0.38f, stiffness = 170f)
 
     fun ink(dark: Boolean) = if (dark) Color.White else Color(0xFF14204A)
     fun edge(dark: Boolean) = ink(dark).copy(alpha = if (dark) 0.14f else 0.10f)
@@ -150,14 +154,15 @@ fun Modifier.drop(
     val cr = CornerRadius(r)
     val ink = Goccia.ink(dark)
     val white = Color.White
-    val base = if (tint != Color.Unspecified) lerp(Goccia.body(dark), tint.copy(alpha = 1f), tint.alpha.coerceIn(0f, 1f) * 1.6f) else Goccia.body(dark)
+    // velo trasparente (si vede cosa c'è sotto), appena colorato di azzurro; nessun riempimento opaco
+    val base = if (tint != Color.Unspecified) tint else Goccia.veil(dark)
     val spot = Brush.radialGradient(
-        listOf(white.copy(alpha = if (dark) 0.16f else 0.34f), Color.Transparent),
+        listOf(white.copy(alpha = if (dark) 0.10f else 0.22f), Color.Transparent),
         center = Offset(size.width * 0.26f, size.height * 0.20f), radius = size.height * 1.0f,
     )
-    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.04f else 0.10f), startY = 0f, endY = size.height)
+    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.03f else 0.06f), startY = 0f, endY = size.height)
     // lucido: una fascia di luce nitida sul bordo alto, come il vetro curvo
-    val gloss = Brush.verticalGradient(0f to white.copy(alpha = if (dark) 0.26f else 0.55f), 0.38f to Color.Transparent, startY = 0f, endY = size.height)
+    val gloss = Brush.verticalGradient(0f to white.copy(alpha = if (dark) 0.14f else 0.26f), 0.30f to Color.Transparent, startY = 0f, endY = size.height)
     val glossInset = 2.dp.toPx()
     val wall = 2.dp.toPx()
     val hair = 1.dp.toPx()
@@ -181,7 +186,7 @@ fun Modifier.drop(
             // bagliore alla pressione: la luce rifratta si accende dove tocchi e si allarga come un liquido
             val at = touch?.pos?.takeIf { it.isSpecified } ?: Offset(size.width * 0.5f, size.height * 0.5f)
             val glow = Brush.radialGradient(
-                listOf(white.copy(alpha = (if (dark) 0.50f else 0.85f) * p.coerceAtMost(1.2f)), Goccia.body(dark).copy(alpha = 0.18f * p.coerceAtMost(1f)), Color.Transparent),
+                listOf(white.copy(alpha = (if (dark) 0.42f else 0.65f) * p.coerceIn(0f, 1.2f)), Color(0xFF6FB4FF).copy(alpha = 0.22f * p.coerceIn(0f, 1f)), Color.Transparent),
                 center = at, radius = maxOf(size.width, size.height) * (0.55f + 0.5f * p.coerceAtMost(1f)),
             )
             drawRoundRect(glow, cornerRadius = cr)
@@ -217,6 +222,7 @@ fun Modifier.dropGestures(
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val click by rememberUpdatedState(onClick)
     val long by rememberUpdatedState(onLongClick)
     this
@@ -226,6 +232,8 @@ fun Modifier.dropGestures(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 t.pos = down.position
+                // una vibrazione per ogni tasto premuto
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 scope.launch { t.press.animateTo(1f, Goccia.press) }
                 var fired = false
                 val timer = scope.launch {
@@ -235,11 +243,12 @@ fun Modifier.dropGestures(
                 }
                 val up = waitForUpOrCancellation()
                 timer.cancel()
-                scope.launch { t.press.animateTo(0f, Goccia.release) }
-                if (up != null && !fired) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    click()
+                // anche un tocco rapido fa vedere tutta la goccia: arriva gonfia, poi torna ondeggiando
+                scope.launch {
+                    if (t.press.value < 0.9f) t.press.animateTo(1f, androidx.compose.animation.core.tween(140, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                    t.press.animateTo(0f, Goccia.release)
                 }
+                if (up != null && !fired) click()
             }
         }
 }
@@ -247,8 +256,8 @@ fun Modifier.dropGestures(
 /** Il solo contenitore si gonfia appena quando è premuto; l'etichetta e il contenuto restano fermi. */
 fun Modifier.dropDeform(t: DropTouch): Modifier = this.graphicsLayer {
     val p = t.press.value
-    scaleX = 1f + 0.06f * p
-    scaleY = 1f + 0.03f * p
+    scaleX = 1f + 0.10f * p
+    scaleY = 1f + 0.06f * p
 }
 
 /** Bagliore di luce rifratta che si accende dove tocchi una scheda e si allarga come un liquido. */
@@ -277,36 +286,128 @@ fun Modifier.dropTaps(onTap: () -> Unit, onDouble: () -> Unit, corner: Dp = Radi
     val dark = isDark()
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val tap by rememberUpdatedState(onTap)
     val dbl by rememberUpdatedState(onDouble)
     this.pressGlow(t, dark, corner).pointerInput(Unit) {
         detectTapGestures(
             onPress = { o ->
                 t.pos = o
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 scope.launch { t.press.animateTo(1f, Goccia.press) }
                 tryAwaitRelease()
-                scope.launch { t.press.animateTo(0f, Goccia.release) }
+                scope.launch {
+                    if (t.press.value < 0.9f) t.press.animateTo(1f, androidx.compose.animation.core.tween(140))
+                    t.press.animateTo(0f, Goccia.release)
+                }
             },
-            onTap = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); tap() },
+            onTap = { tap() },
             onDoubleTap = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); dbl() },
         )
     }
 }
 
-/** "Copiato" a tutta scheda: una velatura di marca sale sopra la scheda, il testo si assesta con una molla, poi sparisce. [trigger] > 0 la fa partire. */
+/**
+ * "Copiato" a tutta scheda: il contenuto si sfoca (morph blur), sopra sale un velo di vetro leggermente opaco con la stessa forma della scheda,
+ * e la scritta si mette a fuoco. Poi tutto torna nitido. Niente riquadri: velo e sfocatura seguono il bordo arrotondato.
+ */
+class CopyFx { val p = Animatable(0f) }
+
 @Composable
-fun CopiedOverlay(trigger: Int, modifier: Modifier = Modifier) {
-    var show by remember { mutableStateOf(false) }
-    LaunchedEffect(trigger) { if (trigger > 0) { show = true; kotlinx.coroutines.delay(950); show = false } }
-    androidx.compose.animation.AnimatedVisibility(
-        show, modifier,
-        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(140)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.6f, 380f), initialScale = 0.92f),
-        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300)),
+fun rememberCopyFx() = remember { CopyFx() }
+
+fun CopyFx.play(scope: kotlinx.coroutines.CoroutineScope) {
+    scope.launch {
+        p.animateTo(1f, androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        kotlinx.coroutines.delay(700)
+        p.animateTo(0f, androidx.compose.animation.core.tween(520, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
+}
+
+/** Il contenuto della scheda sotto al velo: si sfoca mentre compare "Copiato". */
+fun Modifier.copyBlur(fx: CopyFx): Modifier = this.graphicsLayer {
+    val v = fx.p.value
+    if (v > 0.005f && Build.VERSION.SDK_INT >= 31) {
+        val b = v * 22f
+        renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal)
+    } else renderEffect = null
+}
+
+@Composable
+fun CopiedVeil(fx: CopyFx, corner: Dp, modifier: Modifier = Modifier) {
+    val dark = isDark()
+    val c = Canone.colors
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
+    Box(
+        modifier.graphicsLayer { alpha = fx.p.value }.clip(shape)
+            .background(c.bgSurface.copy(alpha = if (dark) 0.38f else 0.46f))
+            .drop(dark, corner = corner, tint = Color.Transparent),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Brand.sky.copy(alpha = 0.96f), Brand.mid.copy(alpha = 0.97f), Brand.royal.copy(alpha = 0.98f)))), contentAlignment = Alignment.Center) {
-            Text("Copiato", style = CanoneType.title3, color = Color.White)
+        Text(
+            "Copiato", style = CanoneType.title3, color = c.labelPrimary,
+            modifier = Modifier.graphicsLayer {
+                val v = fx.p.value
+                val s = 0.86f + 0.14f * v
+                scaleX = s; scaleY = s
+                if (Build.VERSION.SDK_INT >= 31 && v < 0.98f) { val b = (1f - v) * 14f + 0.01f; renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) } else renderEffect = null
+            },
+        )
+    }
+}
+
+/**
+ * Icona di vetro (comandi del player): la forma stessa è vetro, senza cerchio intorno. Corpo trasparente tinto, riflesso in alto,
+ * bordo di luce e i tre colori sfalsati sul bordo come una lente; premuta si gonfia e si accende.
+ */
+@Composable
+fun GlassGlyph(kind: Int, size: Dp, onClick: () -> Unit) {
+    val t = rememberDropTouch()
+    val dark = isDark()
+    Box(
+        Modifier.size(size).dropGestures(t, onClick).graphicsLayer { val p = t.press.value; val s = 1f + 0.16f * p; scaleX = s; scaleY = s },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(size * 0.64f)) {
+            val path = mediaPath(kind, this.size.width, this.size.height)
+            val ink = Goccia.ink(dark)
+            val px = 1.dp.toPx()
+            val p = t.press.value.coerceIn(0f, 1.2f)
+            // ombra morbida sotto
+            translate(0f, 1.6f * px) { drawPath(path, Color.Black.copy(alpha = if (dark) 0.35f else 0.14f)) }
+            // dispersione: rosso e azzurro sfalsati di una frazione di pixel ai bordi
+            translate(-1.1f * px * (1f + p), 0f) { drawPath(path, Color(0xFFFF5470).copy(alpha = 0.32f)) }
+            translate(1.1f * px * (1f + p), 0f) { drawPath(path, Color(0xFF4DA3FF).copy(alpha = 0.40f)) }
+            // corpo di vetro: trasparente in basso, più denso in alto
+            drawPath(path, Brush.verticalGradient(listOf(ink.copy(alpha = if (dark) 0.92f else 0.86f), ink.copy(alpha = if (dark) 0.50f else 0.48f))))
+            clipPath(path) {
+                // riflesso in alto e bagliore alla pressione
+                drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.40f else 0.55f), 0.42f to Color.Transparent))
+                if (p > 0.01f) drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.7f * p.coerceAtMost(1f)), Color.Transparent), center = t.pos.takeIf { it.isSpecified }?.let { Offset(it.x - (size.toPx() - this.size.width) / 2, it.y - (size.toPx() - this.size.height) / 2) } ?: center, radius = this.size.maxDimension), radius = this.size.maxDimension)
+            }
+            // bordo di luce
+            drawPath(path, Color.White.copy(alpha = if (dark) 0.35f else 0.55f), style = Stroke(1.2f * px))
         }
     }
+}
+
+/** Forme dei comandi: 0 indietro, 1 play, 2 pausa, 3 avanti. Angoli arrotondati come le icone di sistema. */
+private fun mediaPath(kind: Int, w: Float, h: Float): androidx.compose.ui.graphics.Path {
+    val p = androidx.compose.ui.graphics.Path()
+    fun tri(x0: Float, x1: Float, y0: Float = h * 0.14f, y1: Float = h * 0.86f) {
+        p.moveTo(x0, y0); p.lineTo(x1, (y0 + y1) / 2); p.lineTo(x0, y1); p.close()
+    }
+    fun triL(x0: Float, x1: Float) { p.moveTo(x1, h * 0.2f); p.lineTo(x0, h * 0.5f); p.lineTo(x1, h * 0.8f); p.close() }
+    when (kind) {
+        1 -> tri(w * 0.22f, w * 0.92f, h * 0.08f, h * 0.92f)
+        2 -> {
+            p.addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.18f, h * 0.1f, w * 0.42f, h * 0.9f, CornerRadius(w * 0.07f)))
+            p.addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.58f, h * 0.1f, w * 0.82f, h * 0.9f, CornerRadius(w * 0.07f)))
+        }
+        3 -> { tri(w * 0.02f, w * 0.50f, h * 0.2f, h * 0.8f); tri(w * 0.48f, w * 0.96f, h * 0.2f, h * 0.8f) }
+        else -> { triL(w * 0.04f, w * 0.52f); triL(w * 0.50f, w * 0.98f) }
+    }
+    return p
 }
 
 /**

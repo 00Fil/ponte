@@ -112,22 +112,34 @@ fun headphonesBattery(ctx: Context, address: String): Int? = try {
     (dev.javaClass.getMethod("getBatteryLevel").invoke(dev) as Int).takeIf { it in 0..100 }
 } catch (_: Exception) { null }
 
-/** Cursore del volume: pista tonale, riempimento accento e pomello-goccia; trascina o tocca. */
+/** Cursore a sola linea (niente pallino): la pista si ispessisce mentre la tocchi o trascini, come su iOS. */
 @Composable
 fun DropSlider(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
     val c = Canone.colors
-    var w by remember { mutableStateOf(1) }
-    val d = LocalDensity.current
+    var active by remember { mutableStateOf(false) }
+    val change by androidx.compose.runtime.rememberUpdatedState(onChange)
+    val thick by androidx.compose.animation.core.animateDpAsState(if (active) 12.dp else 6.dp, androidx.compose.animation.core.spring(0.7f, 420f), label = "pista")
     Box(
-        modifier.fillMaxWidth().height(36.dp).onSizeChanged { w = it.width }
-            .pointerInput(Unit) { detectTapGestures { onChange((it.x / size.width).coerceIn(0f, 1f)) } }
-            .pointerInput(Unit) { detectHorizontalDragGestures { ch, _ -> ch.consume(); onChange((ch.position.x / size.width).coerceIn(0f, 1f)) } },
+        modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
+            androidx.compose.foundation.gestures.awaitEachGesture {
+                val down = androidx.compose.foundation.gestures.awaitFirstDown()
+                active = true
+                change((down.position.x / size.width).coerceIn(0f, 1f))
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!ch.pressed) break
+                    ch.consume()
+                    change((ch.position.x / size.width).coerceIn(0f, 1f))
+                }
+                active = false
+            }
+        },
         contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(c.bgSunken))
-        Box(Modifier.fillMaxWidth(value.coerceIn(0f, 1f)).height(10.dp).clip(CircleShape).background(c.accent))
-        val thumb = with(d) { 28.dp.toPx() }
-        Box(Modifier.offset { IntOffset(((w - thumb) * value).roundToInt(), 0) }.size(28.dp).drop(isDark(), tint = Color.White.copy(alpha = 0.9f)))
+        Box(Modifier.fillMaxWidth().height(thick).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.12f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(value.coerceIn(0f, 1f)).background(if (active) c.labelPrimary else c.labelSecondary))
+        }
     }
 }
 
@@ -216,13 +228,7 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 listOf(0 to { tc.skipToPrevious() }, (if (np.playing) 2 else 1) to { if (np.playing) tc.pause() else tc.play() }, 3 to { tc.skipToNext() }).forEach { (k, act) ->
-                    val t = rememberDropTouch()
-                    val big = k == 1 || k == 2
-                    Box(
-                        Modifier.size(if (big) 68.dp else 54.dp).dropGestures(t, act).dropDeform(t)
-                            .drop(isDark(), tint = if (big) c.accent.copy(alpha = 0.32f) else Color.Unspecified, press = { t.press.value }, touch = t),
-                        contentAlignment = Alignment.Center,
-                    ) { MediaIcon(k, c.labelPrimary, Modifier.size(if (big) 26.dp else 20.dp)) }
+                    GlassGlyph(k, if (k == 1 || k == 2) 64.dp else 50.dp, act)
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {

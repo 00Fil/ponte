@@ -63,7 +63,9 @@ private object Tick { @Volatile var last = 0L }
  */
 @Composable
 fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, haptic: Boolean = false) {
-    val st = style.copy(fontFeatureSettings = "tnum", lineHeight = if (style.lineHeight.isSpecified) style.lineHeight else (style.fontSize.value * 1.25f).sp)
+    // riga mai più bassa del carattere: con cifre grandi (48–52 sp) la colonna non taglia più il numero
+    val minLh = style.fontSize.value * 1.22f
+    val st = style.copy(fontFeatureSettings = "tnum", lineHeight = if (style.lineHeight.isSpecified && style.lineHeight.value >= minLh) style.lineHeight else minLh.sp)
     // verso: confronto numerico grezzo tra il valore precedente e il nuovo
     val num = remember(text) { text.filter { it.isDigit() || it == '-' }.toLongOrNull() ?: 0L }
     var prev by remember { mutableStateOf(num) }
@@ -115,7 +117,7 @@ private fun RollDigit(digit: Int, style: TextStyle, color: Color, index: Int, up
  */
 @Composable
 fun MorphText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, haptic: Boolean = false) {
-    val st = style.copy(fontFeatureSettings = "tnum")
+    val st = style.copy(fontFeatureSettings = "tnum", lineHeight = maxOf(if (style.lineHeight.isSpecified) style.lineHeight.value else 0f, style.fontSize.value * 1.22f).sp)
     val view = androidx.compose.ui.platform.LocalView.current
     var first by remember { mutableStateOf(true) }
     LaunchedEffect(text) {

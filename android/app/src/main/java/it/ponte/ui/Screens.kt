@@ -159,7 +159,9 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
     val all by r.files.items.collectAsState()
     val history by r.clipboard.history.collectAsState()
     val keys = listOf("clips", "images", "files")
-    val tab = keys.indexOf(tabKey).coerceAtLeast(0)
+    val tabSel = keys.indexOf(tabKey).coerceAtLeast(0)
+    // La scheda mostrata segue quella scelta a metà sfocatura: il cambio di contenuto (il momento pesante) avviene quando è invisibile.
+    var tab by remember { mutableIntStateOf(tabSel) }
     var folders by remember { mutableStateOf(r.prefs.folders) }
     var placed by remember { mutableStateOf(r.prefs.fileFolders) }
     var folder by remember { mutableStateOf<String?>(null) }
@@ -168,14 +170,21 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
     // passaggio tra le schede: il contenuto nuovo entra sfocato e si mette a fuoco (non scatta)
     val fx = remember { androidx.compose.animation.core.Animatable(1f) }
     val firstRun = remember { booleanArrayOf(true) }
-    androidx.compose.runtime.LaunchedEffect(tab) {
-        if (firstRun[0]) { firstRun[0] = false; return@LaunchedEffect }
-        fx.snapTo(0f); fx.animateTo(1f, androidx.compose.animation.core.tween(460, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    androidx.compose.runtime.LaunchedEffect(tabSel) {
+        if (firstRun[0]) { firstRun[0] = false; tab = tabSel; return@LaunchedEffect }
+        if (tab == tabSel) return@LaunchedEffect
+        fx.animateTo(0f, androidx.compose.animation.core.tween(170, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+        tab = tabSel
+        // due fotogrammi per comporre il contenuto nuovo mentre è ancora sfocato, poi messa a fuoco
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        fx.animateTo(1f, androidx.compose.animation.core.tween(380, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
     }
     val tabFx = Modifier.graphicsLayer {
         val v = fx.value
-        alpha = 0.2f + 0.8f * v
-        if (v < 1f && android.os.Build.VERSION.SDK_INT >= 31) { val b = (1f - v) * 26f + 0.01f; renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) }
+        alpha = 0.15f + 0.85f * v
+        translationY = (1f - v) * 10.dp.toPx()
+        renderEffect = if (v < 0.995f && android.os.Build.VERSION.SDK_INT >= 31) { val b = (1f - v) * 20f + 0.01f; androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) } else null
     }
     val filter = if (tab == 1) "screenshot" else "file"
     val grouped = remember(history) {
@@ -233,7 +242,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                 }
             }
             item(key = "seg", span = { GridItemSpan(maxLineSpan) }) {
-                GlassSegmented(listOf("Appunti", "Immagini", "File"), tab, { onTab(keys[it]); folder = null })
+                GlassSegmented(listOf("Appunti", "Immagini", "File"), tabSel, { onTab(keys[it]); folder = null })
             }
             if (tab == 0) {
                 if (history.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
@@ -243,7 +252,8 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                     if (h == null) {
                         Text(day ?: "", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelTertiary, modifier = Modifier.then(tabFx).padding(top = Space.s2, start = Space.s1))
                     } else {
-                        var n by remember { mutableIntStateOf(0) }
+                        val fx = rememberCopyFx()
+                        val rowScope = rememberCoroutineScope()
                         val tone = deviceTone(if (h.mine) "me" else h.from)
                         val pic = DevicePics.rememberPic(if (h.mine) r.deviceId else h.from)
                         val link = h.text.trim().let { (it.startsWith("http://") || it.startsWith("https://")) && !it.contains(' ') }
@@ -252,9 +262,9 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                         val shape2 = RoundedCornerShape(Radius.lg)
                         Box(
                             Modifier.then(tabFx).fillMaxWidth().clip(shape2).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape2)
-                                .dropClickable({ r.clipboard.copyLocal(h.text); n++ }, corner = Radius.lg),
+                                .dropClickable({ r.clipboard.copyLocal(h.text); fx.play(rowScope) }, corner = Radius.lg),
                         ) {
-                            Row(Modifier.padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                            Row(Modifier.copyBlur(fx).padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                                 Box(Modifier.size(40.dp).drop(isDark(), tint = tone.copy(alpha = 0.34f)), contentAlignment = Alignment.Center) {
                                     if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp).clip(androidx.compose.foundation.shape.CircleShape), contentScale = ContentScale.Fit)
                                     else TabGlyph(if (h.mine) 0 else 1, c.labelPrimary, false, Modifier.size(20.dp))
@@ -272,7 +282,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                                     )
                                 }
                             }
-                            CopiedOverlay(n, Modifier.matchParentSize())
+                            CopiedVeil(fx, Radius.lg, Modifier.matchParentSize())
                         }
                     }
                 }
@@ -703,7 +713,8 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                             }
                         }
                     }
-                    item { Category(10, "Permessi", "Cosa può fare Relay su questo telefono", Color(0xFF3F86FF)) { onSub("perm") } }
+                    // Permessi solo se c'è qualcosa da concedere
+                    if (missingPerms(ctx) > 0) item { Category(10, "Permessi", "Qualcosa da concedere", Color(0xFF3F86FF)) { onSub("perm") } }
                     item { Category(5, "Sistema", "Aggiornamenti, server e questo dispositivo", Color(0xFF8E8E93)) { onSub("sys") } }
                     item { SetGroup("Moduli") }
                     item { Category(1, "Condividi", "Collegamento diretto, screenshot, notifiche", Color(0xFF2FB5C4)) { onSub("share") } }
@@ -715,7 +726,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                     item {
                         var rev by remember { mutableStateOf(r.prefs.revolutNotif) }
                         CCard {
-                            CSwitchRow("Nascondi gli importi", "Nelle dashboard al posto delle cifre compare •••• (anche dall'occhio accanto al saldo)", MoneyPrivacy.hidden) {
+                            CSwitchRow("Nascondi gli importi", "Nelle dashboard le cifre si sfocano (anche dall'occhio accanto al saldo)", MoneyPrivacy.hidden) {
                                 MoneyPrivacy.hidden = it; r.prefs.hideMoney = it
                             }
                             CDivider()

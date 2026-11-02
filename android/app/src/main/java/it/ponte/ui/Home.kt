@@ -212,15 +212,17 @@ private fun OpsTicker(ops: List<Tx>) {
 private fun ShotWidget(r: Router, e: it.ponte.FileEntry?, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
     val ctx = LocalContext.current
-    var n by remember { mutableIntStateOf(0) }
+    val fx = rememberCopyFx()
+    val scope = rememberCoroutineScope()
     val copy = {
         if (e != null) {
             val cm = ctx.getSystemService(ClipboardManager::class.java)
             cm.setPrimaryClip(ClipData.newUri(ctx.contentResolver, e.name, r.files.uriFor(e)))
-            n++
+            fx.play(scope)
         }
     }
     Widget(modifier.height(190.dp), onTap = copy, onDouble = onClick) {
+      Box(Modifier.matchParentSize().copyBlur(fx)) {
         val bmp by produceState<Bitmap?>(null, e?.path) {
             value = e?.let { withContext(Dispatchers.IO) { thumb(it.path) } }
         }
@@ -230,23 +232,25 @@ private fun ShotWidget(r: Router, e: it.ponte.FileEntry?, modifier: Modifier, on
             Text(if (e == null) "Nessuno screenshot" else "Ultimo screenshot", style = CanoneType.footnote, color = if (bmp != null) Color.White else c.labelTertiary)
             if (e != null) Text("Tocca per copiare · due volte per aprire", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
         }
-        CopiedOverlay(n, Modifier.matchParentSize())
+      }
+        CopiedVeil(fx, Radius.xl, Modifier.matchParentSize())
     }
 }
 
 @Composable
 private fun ClipWidget(r: Router, text: String?, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
-    var n by remember { mutableIntStateOf(0) }
-    Widget(modifier.height(190.dp), onTap = { if (text != null) { r.clipboard.copyLocal(text); n++ } }, onDouble = onClick) {
-        Column(Modifier.fillMaxSize().padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
+    val fx = rememberCopyFx()
+    val scope = rememberCoroutineScope()
+    Widget(modifier.height(190.dp), onTap = { if (text != null) { r.clipboard.copyLocal(text); fx.play(scope) } }, onDouble = onClick) {
+        Column(Modifier.fillMaxSize().copyBlur(fx).padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(Space.s1)) {
                 Text("Ultimo copiato", style = CanoneType.footnote, color = c.labelTertiary)
                 Text(text ?: "Niente per ora", style = CanoneType.body, color = if (text == null) c.labelTertiary else c.labelPrimary, maxLines = 5, overflow = TextOverflow.Ellipsis)
             }
             if (text != null) Text("Tocca per copiare · due volte per aprire", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 2)
         }
-        CopiedOverlay(n, Modifier.matchParentSize())
+        CopiedVeil(fx, Radius.xl, Modifier.matchParentSize())
     }
 }
 
