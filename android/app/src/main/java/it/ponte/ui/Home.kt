@@ -113,7 +113,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
 
 /** Contenitore dei widget: stesso bordo e raggio ovunque. */
 @Composable
-private fun Widget(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun Widget(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Box(
