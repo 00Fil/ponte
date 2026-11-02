@@ -88,7 +88,7 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { touch.press.value })
         ButtonKind.Secondary -> Modifier.drop(dark, press = { touch.press.value })
         ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { touch.press.value })
-        ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * grow.value)) }
+        ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * touch.press.value)) }
     }
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp)
