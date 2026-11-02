@@ -76,7 +76,6 @@ import androidx.core.content.ContextCompat
 import it.ponte.ui.ShareScreen
 import it.ponte.ui.Canone
 import it.ponte.ui.CanoneType
-import it.ponte.ui.DevicesScreen
 import it.ponte.ui.AudioScreen
 import it.ponte.ui.PonteTheme
 import it.ponte.ui.SettingsScreen

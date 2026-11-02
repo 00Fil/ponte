@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.size
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
