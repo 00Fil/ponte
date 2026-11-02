@@ -1,15 +1,10 @@
 package it.ponte.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -117,29 +112,105 @@ fun Modifier.drop(
     }
 }
 
-/** Tocco di una goccia: si gonfia e si allunga appena, senza ricomporre. */
+/**
+ * Stato del tocco di una goccia: quanto è premuta e di quanto è tirata (in pixel, già smorzati come un elastico).
+ * Letto solo in fase di disegno, quindi muovere la goccia non ricompone nulla.
+ */
+class DropTouch {
+    val press = Animatable(0f)
+    val dx = Animatable(0f)
+    val dy = Animatable(0f)
+}
+
 @Composable
-fun rememberDropPress(src: MutableInteractionSource): androidx.compose.runtime.State<Float> {
-    val pressed by src.collectIsPressedAsState()
-    return animateFloatAsState(if (pressed) 1f else 0f, Goccia.press, label = "goccia")
+fun rememberDropTouch() = remember { DropTouch() }
+
+/**
+ * Comportamento di una goccia al tocco:
+ *  - tocchi: si gonfia e si illumina subito, con una molla quasi senza rimbalzo;
+ *  - tieni premuto e muovi il dito: la goccia si ALLUNGA verso il dito come un elastico (più tiri, più resiste) e lo segue un poco;
+ *  - rilasci dentro la goccia: scatta il click e torna indietro con un piccolo rimbalzo; rilasci fuori: torna indietro senza click.
+ * Sono i punti in cui il dito resta fermo a lungo che "armano" lo stiramento: un gesto veloce lascia scorrere liste e pagine.
+ */
+fun Modifier.dropTouch(
+    t: DropTouch,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    enabled: Boolean = true,
+    shrink: Boolean = false,
+): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val click by rememberUpdatedState(onClick)
+    val long by rememberUpdatedState(onLongClick)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val limit = with(density) { 44.dp.toPx() }
+    fun rubber(d: Float) = limit * (1f - kotlin.math.exp(-kotlin.math.abs(d) / limit)) * (if (d < 0f) -1f else 1f)
+    this
+        .semantics { role = Role.Button; this.onClick { click(); true } }
+        .pointerInput(enabled) {
+            if (!enabled) return@pointerInput
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                scope.launch { t.press.animateTo(1f, Goccia.press) }
+                var fired = false
+                val timer = scope.launch {
+                    kotlinx.coroutines.delay(viewConfiguration.longPressTimeoutMillis)
+                    val lc = long
+                    if (lc != null) { fired = true; haptic.performHapticFeedback(HapticFeedbackType.LongPress); lc() }
+                }
+                var inside = true
+                var cancelled = false
+                val slop = viewConfiguration.touchSlop
+                val margin = 28.dp.toPx()
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if (ch.isConsumed && !ch.pressed) { cancelled = true; break }
+                    if (!ch.pressed) break
+                    val raw = ch.position - down.position
+                    if (raw.getDistance() > slop * 2) timer.cancel()
+                    inside = ch.position.x > -margin && ch.position.x < size.width + margin && ch.position.y > -margin && ch.position.y < size.height + margin
+                    val armed = ch.uptimeMillis - down.uptimeMillis > 160
+                    if (armed) {
+                        ch.consume()
+                        scope.launch { t.dx.snapTo(rubber(raw.x)); t.dy.snapTo(rubber(raw.y)) }
+                    } else if (ch.isConsumed) { cancelled = true; break }
+                }
+                timer.cancel()
+                scope.launch { t.press.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 420f)) }
+                scope.launch { t.dx.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 360f)) }
+                scope.launch { t.dy.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 360f)) }
+                if (!cancelled && inside && !fired) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    click()
+                }
+            }
+        }
+        .graphicsLayer {
+            val p = t.press.value
+            val x = t.dx.value
+            val y = t.dy.value
+            val sx = abs(x) / size.width
+            val sy = abs(y) / size.height
+            translationX = x * 0.5f
+            translationY = y * 0.5f
+            // si allunga verso il dito: il perno sta sul lato opposto
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                0.5f - 0.42f * (x / limit).coerceIn(-1f, 1f),
+                0.5f - 0.42f * (y / limit).coerceIn(-1f, 1f),
+            )
+            val inflate = if (shrink) -0.035f else Goccia.INFLATE_X + 0.04f
+            val inflateY = if (shrink) -0.035f else Goccia.INFLATE_Y + 0.02f
+            scaleX = 1f + inflate * p + sx * 0.55f - sy * 0.12f
+            scaleY = 1f + inflateY * p + sy * 0.55f - sx * 0.16f
+        }
 }
 
-fun Modifier.dropScale(g: androidx.compose.runtime.State<Float>, amount: Float = 1f): Modifier = this.graphicsLayer {
-    val v = g.value * amount
-    scaleX = 1f + Goccia.INFLATE_X * v
-    scaleY = 1f + Goccia.INFLATE_Y * v
-}
-
-/** Riga/scheda cliccabile: al tocco si schiaccia appena e rimbalza piano, come una goccia. */
-@OptIn(ExperimentalFoundationApi::class)
+/** Riga/scheda cliccabile: al tocco si schiaccia appena, si può tirare come un elastico, torna con un piccolo rimbalzo. */
 fun Modifier.dropClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
-    val src = remember { MutableInteractionSource() }
-    val g = rememberDropPress(src)
-    this.graphicsLayer {
-        val v = g.value
-        scaleX = 1f - 0.022f * v
-        scaleY = 1f - 0.022f * v
-    }.combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onLongClick)
+    val t = rememberDropTouch()
+    this.dropTouch(t, onClick, onLongClick, shrink = true)
 }
 
 /**

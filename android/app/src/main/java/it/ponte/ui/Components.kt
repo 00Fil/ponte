@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.drag
@@ -82,19 +83,17 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Tertiary -> c.accent
         ButtonKind.Destructive -> c.criticalOnCritical
     }
-    val src = remember { MutableInteractionSource() }
-    val grow = rememberDropPress(src)
+    val touch = rememberDropTouch()
     val glass = when (kind) {
-        ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { grow.value })
-        ButtonKind.Secondary -> Modifier.drop(dark, press = { grow.value })
-        ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { grow.value })
+        ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { touch.press.value })
+        ButtonKind.Secondary -> Modifier.drop(dark, press = { touch.press.value })
+        ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { touch.press.value })
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * grow.value)) }
     }
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp)
-            .dropScale(grow)
-            .then(glass).alpha(if (enabled) 1f else 0.4f)
-            .clickable(interactionSource = src, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+            .dropTouch(touch, onClick, enabled = enabled)
+            .then(glass).alpha(if (enabled) 1f else 0.4f),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5), maxLines = 1)
@@ -142,8 +141,8 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
     val grow = androidx.compose.animation.core.animateFloatAsState(
         if (held) 1f else 0f, Goccia.press, label = "pomello",
     )
-    val settle = Goccia.settle
-    androidx.compose.runtime.LaunchedEffect(checked) { if (!held) pos.animateTo(if (checked) 1f else 0f, settle) }
+    val settle = spring<Float>(dampingRatio = 0.6f, stiffness = 380f)
+    androidx.compose.runtime.LaunchedEffect(checked) { if (!held) pos.animateTo(if (checked) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 380f)) }
     val now by androidx.compose.runtime.rememberUpdatedState(checked)
     val change by androidx.compose.runtime.rememberUpdatedState(onChange)
     val trackW = 54.dp
@@ -165,7 +164,7 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                         ch.consume()
                         val d = (ch.position.x - down.position.x) / travel
                         if (kotlin.math.abs(ch.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
-                        if (moved) scope.launch { pos.snapTo((startPos + d).coerceIn(0f, 1f)) }
+                        if (moved) scope.launch { pos.snapTo((startPos + d).coerceIn(-0.14f, 1.14f)) }
                     }
                     held = false
                     val target = if (moved) pos.value > 0.5f else !now
@@ -177,7 +176,7 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
         // pista: grigio di vetro quando è spenta, azzurro lucido quando è accesa, con dissolvenza tra i due
         Box(Modifier.matchParentSize().drop(dark, tint = c.fillControl.copy(alpha = if (dark) 0.55f else 0.65f)))
         Box(
-            Modifier.matchParentSize().graphicsLayer { alpha = pos.value }.drop(dark, fill = on),
+            Modifier.matchParentSize().graphicsLayer { alpha = pos.value.coerceIn(0f, 1f) }.drop(dark, fill = on),
         )
         // pomello: vetro chiaro, si gonfia e si allunga quando lo tieni premuto
         Box(
@@ -186,8 +185,11 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                     val travel = (trackW - thumb - pad * 2).toPx()
                     translationX = pos.value * travel
                     val g = grow.value
-                    scaleX = 1f + 0.38f * g
-                    scaleY = 1f + 0.10f * g
+                    // si allunga nel verso del movimento: più è lontano dal punto d'arrivo, più si stira
+                    val stretch = (kotlin.math.abs(pos.targetValue - pos.value) * 0.55f).coerceAtMost(0.4f)
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (pos.targetValue >= pos.value) 0.2f else 0.8f, 0.5f)
+                    scaleX = 1f + 0.38f * g + stretch
+                    scaleY = 1f + 0.10f * g - stretch * 0.25f
                 }
                 .drop(dark, tint = Color.White.copy(alpha = if (dark) 0.88f else 0.97f)),
         )
