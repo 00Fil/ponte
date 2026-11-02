@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.border
@@ -12,7 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.gestures.detectTapGestures
+import detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
@@ -240,10 +242,10 @@ private fun MonthCard(
     Column(
         Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(shape).background(c.bgSurface).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape)
             .pointerInput(expanded) {
-                androidx.compose.foundation.gestures.detectHorizontalDragGestures(onDragEnd = { if (dx < -90f) onStep(1) else if (dx > 90f) onStep(-1); dx = 0f }, onDragCancel = { dx = 0f }) { _, d -> dx += d }
+                detectHorizontalDragGestures(onDragEnd = { if (dx < -90f) onStep(1) else if (dx > 90f) onStep(-1); dx = 0f }, onDragCancel = { dx = 0f }) { _, d -> dx += d }
             }
             .pointerInput(expanded) {
-                androidx.compose.foundation.gestures.detectVerticalDragGestures(onDragEnd = { if (dy < -50f) onExpand(false) else if (dy > 50f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
+                detectVerticalDragGestures(onDragEnd = { if (dy < -50f) onExpand(false) else if (dy > 50f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
             }
             .animateContentSize(spring(1f, 420f))
             .padding(horizontal = Space.s3, vertical = Space.s2),
@@ -297,7 +299,7 @@ private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: 
     ) {
         Column(
             Modifier.fillMaxWidth().pointerInput(expanded) {
-                androidx.compose.foundation.gestures.detectVerticalDragGestures(onDragEnd = { if (dy < -40f) onExpand(false) else if (dy > 40f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
+                detectVerticalDragGestures(onDragEnd = { if (dy < -40f) onExpand(false) else if (dy > 40f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
             }.padding(horizontal = Space.s5, vertical = Space.s3),
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(4.dp).clip(CircleShape).background(c.lineStrong))
@@ -335,7 +337,7 @@ private fun SwipeRow(canDelete: Boolean, onDelete: () -> Unit, content: @Composa
         Box(
             Modifier.offset { androidx.compose.ui.unit.IntOffset(off.value.toInt(), 0) }.then(
                 if (!canDelete) Modifier else Modifier.pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                    detectHorizontalDragGestures(
                         onDragEnd = { scope.launch { if (off.value < -limit) { off.animateTo(-4000f, tween(180)); onDelete(); off.snapTo(0f) } else off.animateTo(0f, spring(0.8f, 400f)) } },
                         onDragCancel = { scope.launch { off.animateTo(0f, spring(0.8f, 400f)) } },
                     ) { _, d -> scope.launch { off.snapTo((off.value + d).coerceIn(-limit * 1.6f, 0f)) } }
@@ -374,7 +376,7 @@ private fun SheetHost(onDismiss: () -> Unit, content: @Composable (close: () -> 
     fun close() { scope.launch { shown = false; kotlinx.coroutines.delay(230); onDismiss() } }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures { close() } })
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { close() } })
         }
         androidx.compose.animation.AnimatedVisibility(
             shown, Modifier.align(Alignment.BottomCenter),
@@ -384,11 +386,11 @@ private fun SheetHost(onDismiss: () -> Unit, content: @Composable (close: () -> 
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight * 0.92f).offset { androidx.compose.ui.unit.IntOffset(0, drag.value.toInt()) }
                     .clip(shape).background(c.bgSurface).imePadding()
-                    .pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures { } },
+                    .pointerInput(Unit) { detectTapGestures { } },
             ) {
                 Box(
                     Modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
-                        androidx.compose.foundation.gestures.detectVerticalDragGestures(
+                        detectVerticalDragGestures(
                             onDragEnd = { scope.launch { if (drag.value > 160f) close() else drag.animateTo(0f, spring(0.8f, 400f)) } },
                             onDragCancel = { scope.launch { drag.animateTo(0f, spring(0.8f, 400f)) } },
                         ) { _, d -> scope.launch { drag.snapTo((drag.value + d).coerceAtLeast(0f)) } }
