@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -333,7 +334,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                     if (pair.size == 1) Box(Modifier.weight(1f))
                                 }
                             }
-                            CText(if (spend) "Tocca le banconote che hai dato, tieni premuto per toglierne una." else "Tocca le banconote che hai preso, tieni premuto per toglierne una.", tertiary = true)
+                            CText(if (spend) "Ogni tocco conta una banconota data. Il − sul contatore ne toglie una." else "Ogni tocco conta una banconota presa. Il − sul contatore ne toglie una.", tertiary = true)
                         }
                     }
                     if (spend) item {
@@ -443,7 +444,7 @@ private fun TxRow(t: Tx, ctx: android.content.Context, onDelete: () -> Unit) {
 private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSub: () -> Unit, modifier: Modifier) {
     val touch = rememberDropTouch()
     val base = noteColor(denom)
-    Box(modifier.aspectRatio(2.05f).dropGestures(touch, onAdd, onSub)) {
+    Box(modifier.aspectRatio(2.05f).dropGestures(touch, onAdd)) {
         Box(Modifier.fillMaxSize().dropDeform(touch).clip(RoundedCornerShape(10.dp))) {
             Canvas(Modifier.fillMaxSize()) {
                 val a = if (count > 0) 1f else 0.62f
@@ -465,9 +466,14 @@ private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSu
             Text("${denom / 100}", style = CanoneType.title1.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp))
             Text("EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, letterSpacing = 1.5.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 8.dp))
         }
-        if (count > 0) Box(
-            Modifier.align(Alignment.TopStart).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 9.dp, vertical = 3.dp),
-        ) { RollingText("×$count", CanoneType.footnote.copy(fontWeight = FontWeight.Medium), Color.White) }
+        // il contatore e il "−" esplicito: un tocco sulla banconota ne aggiunge una, per toglierne una si tocca il "−"
+        if (count > 0) Row(
+            Modifier.align(Alignment.TopStart).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.clip(CircleShape).clickable(onClick = onSub).padding(horizontal = 9.dp, vertical = 3.dp)) { Text("−", style = CanoneType.footnote.copy(fontWeight = FontWeight.Bold), color = Color.White) }
+            RollingText("×$count", CanoneType.footnote.copy(fontWeight = FontWeight.Medium), Color.White, modifier = Modifier.padding(end = 10.dp))
+        }
         if (owned > 0) Text("hai $owned", style = CanoneType.footnote.copy(fontSize = 10.sp), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 10.dp))
     }
 }
@@ -671,20 +677,22 @@ private fun AmountPad(value: String, modifier: Modifier = Modifier, onChange: (S
         }
         onChange(next)
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                row.forEach { k ->
-                    val t = rememberDropTouch()
-                    val dark = isDark()
-                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        // tasto rotondo grande quanto lo spazio permette (massimo 76 dp)
-                        val d = minOf(maxWidth, maxHeight, 76.dp)
-                        Box(
-                            Modifier.size(d).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
-                                .dropDeform(t).drop(dark, press = { t.press.value }, touch = t),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
+    // Tastierino vero: tre colonne strette e centrate (il blocco non si allarga con lo schermo), righe uguali.
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 276.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    row.forEach { k ->
+                        val t = rememberDropTouch()
+                        val dark = isDark()
+                        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            val d = minOf(maxWidth, maxHeight, 76.dp)
+                            Box(
+                                Modifier.size(d).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
+                                    .dropDeform(t).drop(dark, press = { t.press.value }, touch = t),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
+                        }
                     }
                 }
             }
