@@ -2,6 +2,8 @@ package it.ponte
 
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import it.ponte.ui.BannerHost
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -232,7 +234,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     // Scheda dell'aggiornamento: galleggia in basso, non sposta il contenuto.
     val upd by r.updater.ui.collectAsState()
     val sheet: @Composable BoxScope.() -> Unit = {
-        it.ponte.ui.BannerHost()
+        BannerHost()
         androidx.compose.animation.AnimatedVisibility(
             upd != null, Modifier.align(Alignment.BottomCenter),
             enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(1f, 300f)) { it / 2 } + fadeIn(tween(220)),
@@ -248,7 +250,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     BoxWithConstraints(
         Modifier.fillMaxSize().background(c.bgCanvas).pointerInput(Unit) {
             // un tocco qualsiasi, in ogni punto, richiude il popup dei dispositivi (senza consumarlo)
-            androidx.compose.foundation.gestures.awaitEachGesture {
+            awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                 if (devOpen) devOpen = false
             }

@@ -65,7 +65,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         if (r.headphones.lockedBy.value == r.deviceId || r.audio.activeSource.value != null) return
         quietUntil = System.currentTimeMillis() + 5_000
         r.scope.launch { pause() }
-        Notify.say(ctx, "Ora usi " + r.deviceName(from), "Audio fermato su questo dispositivo", "Riprendi") { play() }
+        Notify.say(ctx, "Ora usi " + r.deviceName(from), "Audio fermato su questo dispositivo", "Riprendi", onAction = { play() })
     }
 
     private fun play() {
