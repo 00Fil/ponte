@@ -137,6 +137,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         }
     }
 
+    LaunchedEffect(sub) { if (sub == "study") { mode = 2; onSub(null) } }
     AnimatedContent(
         sub,
         transitionSpec = {
@@ -148,22 +149,24 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     ) { page ->
         when (page) {
             "edit" -> draft?.let { d -> EditorPage(r, d, cals, bridge, ctx, plan.events.size) { onSub(null); tick++ } } ?: Box(Modifier.fillMaxSize())
+            "set" -> StudySettings(r) { onSub(null) }
             "cals" -> CalendarsPage(ctx, bridge, granted, cals, hidden, target, { hidden = it; bridge.hidden = it; tick++ }, { target = it; bridge.target = it }, { ask.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }) { onSub(null) }
             else -> ScreenList("Agenda") {
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
-                        GlassSegmented(listOf("Mese", "Prossimi"), mode, { mode = it }, Modifier.weight(1f))
+                        GlassSegmented(listOf("Mese", "Prossimi", "Studio"), mode, { mode = it }, Modifier.weight(1f))
                         CButton("Calendari", { onSub("cals") }, kind = ButtonKind.Secondary)
                     }
                 }
-                if (!granted) item {
+                if (mode == 2) studyItems(r, plan) { onSub("set") }
+                if (!granted && mode != 2) item {
                     CCard {
                         Text("Google Calendar", style = CanoneType.bodyMedium, color = c.labelPrimary)
                         Text("Collega i calendari dell'account Google già sul telefono: gli eventi si vedono qui e quelli nuovi finiscono su Google.", style = CanoneType.footnote, color = c.labelSecondary)
                         CButton("Collega", { ask.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }, kind = ButtonKind.Primary)
                     }
                 }
-                if (mode == 0) {
+                if (mode == 2) { } else if (mode == 0) {
                     item {
                         CCard {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

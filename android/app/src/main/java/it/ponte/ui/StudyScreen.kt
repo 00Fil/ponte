@@ -77,92 +77,31 @@ private fun daysTo(t: Long): String {
     return when { n < 0 -> "passato"; n == 0 -> "oggi"; n == 1 -> "domani"; else -> "tra $n giorni" }
 }
 
+/** Il pomodoro e i dati di studio, dentro l'Agenda. */
+fun androidx.compose.foundation.lazy.LazyListScope.studyItems(r: Router, p: PlanState, onSettings: () -> Unit) {
+    item { PomodoroCard(r, p, onSettings) }
+    item { TodayCard(p) }
+    item { StatsPage(p) }
+}
+
+/** Durate del pomodoro. */
 @Composable
-fun StudyScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
+fun StudySettings(r: Router, back: () -> Unit) {
     val p by r.plan.state.collectAsState()
-    var subj by remember { mutableStateOf(p.timer.subject) }
-    var reviewSubject by remember { mutableStateOf("") }
-
-    AnimatedContent(
-        sub,
-        transitionSpec = {
-            val into = targetState != null
-            (fadeIn(tween(260)) + slideInHorizontally(spring(1f, 380f)) { if (into) it / 6 else -it / 6 }) togetherWith
-                (fadeOut(tween(160)) + slideOutHorizontally(tween(220)) { if (into) -it / 8 else it / 8 })
-        },
-        label = "studio",
-    ) { page ->
-        when (page) {
-            "subjects" -> Sheet("Materie", onSub) { SubjectsPage(r, p) }
-            "tasks" -> Sheet("Compiti", onSub) { TasksPage(r, p, ctx) }
-            "exams" -> Sheet("Esami", onSub) { ExamsPage(r, p, ctx) }
-            "cards" -> Sheet("Flashcard", onSub) { CardsPage(r, p, { reviewSubject = it; onSub("review") }) }
-            "review" -> Sheet("Ripasso", { onSub("cards") }, parent = "Flashcard") { ReviewPage(r, p, reviewSubject) { onSub("cards") } }
-            "stats" -> Sheet("Statistiche", onSub) { StatsPage(p) }
-            "set" -> Sheet("Impostazioni", onSub) { SettingsPage(r, p) }
-            else -> ScreenList("Studio") {
-                item { PomodoroCard(r, p, subj, { subj = it }) { onSub("set") } }
-                item { TodayCard(p) }
-                item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Action("", "Materie", false, glyph = 3) { onSub("subjects") }
-                        Action("", "Compiti", true, glyph = 2) { onSub("tasks") }
-                        Action("", "Esami", false, glyph = 10) { onSub("exams") }
-                        Action("", "Flashcard", false, glyph = 9) { onSub("cards") }
-                        Action("", "Dati", false, glyph = 6) { onSub("stats") }
-                    }
-                }
-                val soon = p.exams.filter { it.date >= dayStart(System.currentTimeMillis()) }.take(3)
-                val open = p.tasks.filter { !it.done }.sortedBy { if (it.due == 0L) Long.MAX_VALUE else it.due }.take(4)
-                if (soon.isNotEmpty() || open.isNotEmpty()) item {
-                    CCard {
-                        if (soon.isNotEmpty()) {
-                            SectionTitle("Esami in arrivo")
-                            soon.forEach { e -> SubRow(p, e.subject, e.title, daysTo(e.date) + " · " + fmt(e.date, "d MMM HH:mm")) }
-                        }
-                        if (open.isNotEmpty()) {
-                            SectionTitle("Da fare")
-                            open.forEach { t -> SubRow(p, t.subject, t.title, if (t.due > 0) "Scadenza " + daysTo(t.due) else "Senza scadenza") }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SubRow(p: PlanState, subject: String, title: String, note: String) {
-    val c = Canone.colors
-    val s = p.subjects.firstOrNull { it.id == subject }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(s?.let { planColor(it.color) } ?: c.labelTertiary))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = CanoneType.body, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-        }
-    }
-}
-
-/** Pagina secondaria a scorrimento con "‹ Studio" per tornare. */
-@Composable
-private fun Sheet(title: String, onSub: (String?) -> Unit, parent: String = "Studio", content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier.widthIn(max = 720.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = Space.s4, end = Space.s4, top = Space.s3, bottom = Space.s5 + LocalBarInset.current),
             verticalArrangement = Arrangement.spacedBy(Space.s4),
         ) {
-            BackRow(parent, title) { onSub(null) }
-            content()
+            BackRow("Agenda", "Pomodoro") { back() }
+            SettingsPage(r, p)
         }
     }
 }
 
 // -------------------------------------------------------------------------------------------------------------------- pomodoro
 @Composable
-private fun PomodoroCard(r: Router, p: PlanState, subj: String, onSubj: (String) -> Unit, onSettings: () -> Unit) {
+private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     val c = Canone.colors
     val t = p.timer
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -198,7 +137,7 @@ private fun PomodoroCard(r: Router, p: PlanState, subj: String, onSubj: (String)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 52.sp, lineHeight = 60.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), c.labelPrimary)
                     Text(
-                        if (t.running && !mine) "su un altro dispositivo" else p.subjects.firstOrNull { it.id == subj }?.name ?: "Nessuna materia",
+                        if (t.running && !mine) "su un altro dispositivo" else "Studio",
                         style = CanoneType.footnote, color = c.labelTertiary,
                     )
                 }
@@ -207,13 +146,9 @@ private fun PomodoroCard(r: Router, p: PlanState, subj: String, onSubj: (String)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until rounds) Box(Modifier.padding(horizontal = 3.dp).size(8.dp).clip(CircleShape).background(if (i < t.cycle % rounds || (t.phase == "long" && t.cycle > 0)) tint else c.bgSunken))
         }
-        if (focus && !t.running) ChipRow {
-            Chip("Nessuna", subj.isEmpty()) { onSubj("") }
-            p.subjects.forEach { s -> Chip(s.name, subj == s.id, planColor(s.color)) { onSubj(s.id) } }
-        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
             if (t.running) CButton("Ferma", { r.plan.timerStop() }, Modifier.weight(1f))
-            else CButton("Avvia", { r.plan.timerStart(subj) }, Modifier.weight(1f), kind = ButtonKind.Primary)
+            else CButton("Avvia", { r.plan.timerStart("") }, Modifier.weight(1f), kind = ButtonKind.Primary)
             CButton(if (focus) "Salta alla pausa" else "Salta la pausa", {
                 r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus")
             }, Modifier.weight(1f))
@@ -246,182 +181,6 @@ private fun TodayCard(p: PlanState) {
     }
 }
 
-// -------------------------------------------------------------------------------------------------------------------- materie
-@Composable
-private fun SubjectsPage(r: Router, p: PlanState) {
-    val c = Canone.colors
-    var name by remember { mutableStateOf("") }
-    var color by remember { mutableIntStateOf(p.subjects.size) }
-    CCard {
-        CField("Nuova materia", name, { name = it }, "Es. Analisi 1")
-        ColorDots(color % PLAN_COLORS.size) { color = it }
-        CButton("Aggiungi", { if (name.isNotBlank()) { r.plan.saveSubject(Subject("", name.trim(), color % PLAN_COLORS.size)); name = ""; color = p.subjects.size + 1 } }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-    }
-    if (p.subjects.isEmpty()) Text("Aggiungi le materie: servono a dividere le ore di studio, i compiti e le flashcard.", style = CanoneType.footnote, color = c.labelTertiary)
-    p.subjects.forEach { s ->
-        val week = minutesOn(p, dayStart(System.currentTimeMillis()) - 6 * DAYMS, Long.MAX_VALUE).let { _ -> p.sessions.filter { it.subject == s.id && it.start >= dayStart(System.currentTimeMillis()) - 6 * DAYMS }.sumOf { it.minutes } }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface).padding(Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Box(Modifier.size(14.dp).clip(CircleShape).background(planColor(s.color)))
-            Column(Modifier.weight(1f)) {
-                Text(s.name, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1)
-                Text("Ultimi 7 giorni: " + hm(week), style = CanoneType.footnote, color = c.labelTertiary)
-            }
-            CButton("×", { r.plan.removeSubject(s.id) }, kind = ButtonKind.Tertiary)
-        }
-    }
-}
-
-// -------------------------------------------------------------------------------------------------------------------- compiti
-@Composable
-private fun TasksPage(r: Router, p: PlanState, ctx: android.content.Context) {
-    val c = Canone.colors
-    var title by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-    var due by remember { mutableLongStateOf(0L) }
-    CCard {
-        CField("Nuovo compito", title, { title = it }, "Es. Esercizi capitolo 4")
-        if (p.subjects.isNotEmpty()) ChipRow {
-            Chip("Nessuna materia", subject.isEmpty()) { subject = "" }
-            p.subjects.forEach { s -> Chip(s.name, subject == s.id, planColor(s.color)) { subject = s.id } }
-        }
-        PickField("Scadenza", if (due == 0L) "Nessuna" else fmt(due, "EEE d MMM yyyy")) { pickDate(ctx, if (due == 0L) System.currentTimeMillis() else due) { due = dayStart(it) } }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s3), modifier = Modifier.fillMaxWidth()) {
-            if (due != 0L) CButton("Senza scadenza", { due = 0L }, Modifier.weight(1f))
-            CButton("Aggiungi", { if (title.isNotBlank()) { r.plan.saveTask(Task("", title.trim(), subject, due, false)); title = ""; due = 0L } }, Modifier.weight(1f), kind = ButtonKind.Primary)
-        }
-    }
-    val sorted = p.tasks.sortedWith(compareBy<Task> { it.done }.thenBy { if (it.due == 0L) Long.MAX_VALUE else it.due })
-    if (sorted.isEmpty()) Text("Nessun compito. Quelli con scadenza compaiono anche nell'Agenda.", style = CanoneType.footnote, color = c.labelTertiary)
-    sorted.forEach { t ->
-        val s = p.subjects.firstOrNull { it.id == t.subject }
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface).dropClickable({ r.plan.saveTask(t.copy(done = !t.done)) }, corner = Radius.lg).padding(Space.s3),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
-        ) {
-            Box(Modifier.size(24.dp).clip(CircleShape).background(if (t.done) c.accent else c.bgSunken), contentAlignment = Alignment.Center) { if (t.done) Text("✓", color = Color.White, style = CanoneType.footnote) }
-            Column(Modifier.weight(1f)) {
-                Text(t.title, style = CanoneType.body, color = if (t.done) c.labelTertiary else c.labelPrimary, textDecoration = if (t.done) TextDecoration.LineThrough else null, maxLines = 2)
-                val over = !t.done && t.due > 0 && t.due < dayStart(System.currentTimeMillis())
-                Text(listOfNotNull(s?.name, if (t.due > 0) daysTo(t.due) else null).joinToString(" · "), style = CanoneType.footnote, color = if (over) c.critical else c.labelTertiary)
-            }
-            CButton("×", { r.plan.removeTask(t.id) }, kind = ButtonKind.Tertiary)
-        }
-    }
-}
-
-// -------------------------------------------------------------------------------------------------------------------- esami
-@Composable
-private fun ExamsPage(r: Router, p: PlanState, ctx: android.content.Context) {
-    val c = Canone.colors
-    var title by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-    var date by remember { mutableLongStateOf(dayStart(System.currentTimeMillis()) + 7 * DAYMS + 9 * 3_600_000L) }
-    CCard {
-        CField("Nuovo esame", title, { title = it }, "Es. Scritto di Fisica")
-        if (p.subjects.isNotEmpty()) ChipRow {
-            Chip("Nessuna materia", subject.isEmpty()) { subject = "" }
-            p.subjects.forEach { s -> Chip(s.name, subject == s.id, planColor(s.color)) { subject = s.id } }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            PickField("Giorno", fmt(date, "EEE d MMM yyyy"), Modifier.weight(1f)) { pickDate(ctx, date) { date = it } }
-            PickField("Ora", fmt(date, "HH:mm"), Modifier.weight(1f)) { pickTime(ctx, date) { date = it } }
-        }
-        CButton("Aggiungi", { if (title.isNotBlank()) { r.plan.saveExam(Exam("", title.trim(), subject, date)); title = "" } }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-    }
-    if (p.exams.isEmpty()) Text("Gli esami compaiono nell'Agenda e ti avvisano la sera prima.", style = CanoneType.footnote, color = c.labelTertiary)
-    p.exams.forEach { e ->
-        val s = p.subjects.firstOrNull { it.id == e.subject }
-        val n = ((dayStart(e.date) - dayStart(System.currentTimeMillis())) / DAYMS).toInt()
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface).padding(Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Column(Modifier.size(52.dp).clip(RoundedCornerShape(Radius.md)).background(if (n < 0) c.bgSunken else c.accentSubtle), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(if (n < 0) "–" else n.toString(), style = CanoneType.title3, color = if (n < 0) c.labelTertiary else c.accentOnSubtle)
-                Text("giorni", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.labelTertiary)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(e.title, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1)
-                Text(listOfNotNull(s?.name, fmt(e.date, "EEE d MMM · HH:mm")).joinToString(" · "), style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-            }
-            CButton("×", { r.plan.removeExam(e.id) }, kind = ButtonKind.Tertiary)
-        }
-    }
-}
-
-// -------------------------------------------------------------------------------------------------------------------- flashcard
-@Composable
-private fun CardsPage(r: Router, p: PlanState, onReview: (String) -> Unit) {
-    val c = Canone.colors
-    var q by remember { mutableStateOf("") }
-    var a by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-    val now = System.currentTimeMillis()
-    val due = p.cards.filter { it.due <= now && (subject.isEmpty() || it.subject == subject) }
-    CCard {
-        Text("${p.cards.size} carte · ${p.cards.count { it.due <= now }} da ripassare", style = CanoneType.bodyMedium, color = c.labelPrimary)
-        if (p.subjects.isNotEmpty()) ChipRow {
-            Chip("Tutte", subject.isEmpty()) { subject = "" }
-            p.subjects.forEach { s -> Chip(s.name, subject == s.id, planColor(s.color)) { subject = s.id } }
-        }
-        CButton(if (due.isEmpty()) "Niente da ripassare" else "Ripassa ${due.size}", { onReview(subject) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, enabled = due.isNotEmpty())
-    }
-    CCard {
-        CField("Domanda", q, { q = it }, "Cosa dice il teorema di…?")
-        CField("Risposta", a, { a = it }, "La risposta")
-        CButton("Aggiungi carta", { if (q.isNotBlank() && a.isNotBlank()) { r.plan.saveCard(Card("", subject, q.trim(), a.trim(), 0, 0)); q = ""; a = "" } }, Modifier.fillMaxWidth())
-    }
-    p.cards.filter { subject.isEmpty() || it.subject == subject }.forEach { k ->
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface).padding(Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Column(Modifier.weight(1f)) {
-                Text(k.q, style = CanoneType.body, color = c.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(k.a, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text("Livello ${k.box}", style = CanoneType.footnote.copy(fontSize = 11.sp), color = c.labelTertiary)
-            CButton("×", { r.plan.removeCard(k.id) }, kind = ButtonKind.Tertiary)
-        }
-    }
-}
-
-@Composable
-private fun ReviewPage(r: Router, p: PlanState, subject: String, done: () -> Unit) {
-    val c = Canone.colors
-    val queue = remember { mutableStateOf(p.cards.filter { it.due <= System.currentTimeMillis() && (subject.isEmpty() || it.subject == subject) }.shuffled().map { it.id }) }
-    var shown by remember { mutableStateOf(false) }
-    var known by remember { mutableIntStateOf(0) }
-    val card = queue.value.firstOrNull()?.let { id -> p.cards.firstOrNull { it.id == id } }
-    if (card == null) {
-        CCard {
-            Text("Ripasso finito", style = CanoneType.title3, color = c.labelPrimary)
-            Text("Ne hai sapute $known. Le altre torneranno presto.", style = CanoneType.footnote, color = c.labelSecondary)
-            CButton("Torna alle carte", done, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-        }
-        return
-    }
-    fun answer(level: Int) {
-        // 0 non la so, 1 quasi, 2 facile
-        val now = System.currentTimeMillis()
-        val box = when (level) { 0 -> 0; 1 -> card.box; else -> (card.box + 1).coerceAtMost(BOX_DAYS.size - 1) }
-        val next = if (level == 0) now + 5 * 60_000L else if (level == 1) now + maxOf(BOX_DAYS[box], 1) * DAYMS / 2 else now + BOX_DAYS[box] * DAYMS
-        r.plan.saveCard(card.copy(box = box, due = next))
-        if (level == 2) known++
-        queue.value = queue.value.drop(1) + (if (level == 0) listOf(card.id) else emptyList())
-        shown = false
-    }
-    Text("Restano ${queue.value.size}", style = CanoneType.footnote, color = c.labelTertiary)
-    CCard {
-        Text(p.subjects.firstOrNull { it.id == card.subject }?.name ?: "Domanda", style = CanoneType.footnote, color = c.labelTertiary)
-        Text(card.q, style = CanoneType.title3, color = c.labelPrimary)
-        if (shown) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSeparator))
-            Text(card.a, style = CanoneType.body, color = c.labelPrimary)
-        }
-    }
-    if (!shown) CButton("Mostra la risposta", { shown = true }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-    else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-        CButton("Non la so", { answer(0) }, Modifier.weight(1f))
-        CButton("Quasi", { answer(1) }, Modifier.weight(1f))
-        CButton("Facile", { answer(2) }, Modifier.weight(1f), kind = ButtonKind.Primary)
-    }
-}
-
 // -------------------------------------------------------------------------------------------------------------------- statistiche
 @Composable
 private fun StatsPage(p: PlanState) {
@@ -447,21 +206,6 @@ private fun StatsPage(p: PlanState) {
             drawLine(c.labelTertiary.copy(alpha = 0.6f), Offset(0f, gy), Offset(size.width, gy), 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
         }
         Row(Modifier.fillMaxWidth()) { week.forEach { Text(fmt(it, "EEEEE").uppercase(), Modifier.weight(1f), style = CanoneType.footnote, color = c.labelTertiary, textAlign = TextAlign.Center) } }
-    }
-    val bySub = p.sessions.filter { it.start >= today - 6 * DAYMS }.groupBy { it.subject }.mapValues { e -> e.value.sumOf { it.minutes } }.toList().sortedByDescending { it.second }
-    if (bySub.isNotEmpty()) CCard {
-        SectionTitle("Per materia (7 giorni)")
-        val max = bySub.first().second.coerceAtLeast(1)
-        bySub.forEach { (id, m) ->
-            val s = p.subjects.firstOrNull { it.id == id }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(s?.name ?: "Senza materia", style = CanoneType.footnote, color = c.labelSecondary)
-                    Text(hm(m), style = CanoneType.footnote, color = c.labelTertiary)
-                }
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(c.bgSunken)) { Box(Modifier.fillMaxWidth(m.toFloat() / max).fillMaxHeight().clip(CircleShape).background(s?.let { planColor(it.color) } ?: c.labelTertiary)) }
-            }
-        }
     }
     CCard {
         Text("Totale", style = CanoneType.footnote, color = c.labelTertiary)

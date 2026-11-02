@@ -92,6 +92,7 @@ public sealed partial class MainWindow
         {
             case "edit": AgEditor(h); break;
             case "ics": AgIcs(h); break;
+            case "set": StSettings(h, _r.Plan.State); break;
             default: AgMain(h); break;
         }
     }
@@ -101,12 +102,13 @@ public sealed partial class MainWindow
         var top = new Grid { ColumnSpacing = 12 };
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Segmented("agmode", new[] { "Mese", "Prossimi" }, _agMode, i => { _agMode = i; RenderAgenda(); }));
+        top.Children.Add(Segmented("agmode", new[] { "Mese", "Prossimi", "Studio" }, _agMode, i => { _agMode = i; RenderAgenda(); }));
         var gb = Btn("Google Calendar", () => AgGo("ics"));
         Grid.SetColumn(gb, 1);
         top.Children.Add(gb);
         h.Children.Add(top);
 
+        if (_agMode == 2) { StDashboard(h, _r.Plan.State); return; }
         if (_r.S.IcsUrl.Length == 0)
         {
             var c = new StackPanel { Spacing = 8 };

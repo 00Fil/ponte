@@ -97,9 +97,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Studio", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Audio", "Impostazioni")
 /** Icona di ogni scheda (indici di TabGlyph). */
-private val GLYPHS = listOf(0, 1, 6, 11, 12, 4, 5)
+private val GLYPHS = listOf(0, 1, 6, 11, 4, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -170,11 +170,10 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     var finSub by remember { mutableStateOf<String?>(null) }
     var setSub by remember { mutableStateOf<String?>(null) }
     var agSub by remember { mutableStateOf<String?>(null) }
-    var stSub by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(
-        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 6 && setSub != null) || (pager.currentPage == 3 && agSub != null) || (pager.currentPage == 4 && stSub != null),
+        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 5 && setSub != null) || (pager.currentPage == 3 && agSub != null),
     ) {
-        when (pager.currentPage) { 2 -> finSub = null; 3 -> agSub = null; 4 -> stSub = null; else -> setSub = null }
+        when (pager.currentPage) { 2 -> finSub = null; 3 -> agSub = null; else -> setSub = null }
     }
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
@@ -183,18 +182,17 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     "devices" -> select(1)
                     "clips", "images" -> { shareSub = to; select(1) }
                     "finance" -> { finSub = null; select(2) }
-                    "audio" -> select(5)
+                    "audio" -> select(4)
                     "agenda" -> { agSub = null; select(3) }
-                    "studio" -> { stSub = null; select(4) }
-                    "perm" -> { setSub = "perm"; select(6) }
-                    else -> { setSub = null; select(6) }
+                    "studio" -> { agSub = "study"; select(3) }
+                    "perm" -> { setSub = "perm"; select(5) }
+                    else -> { setSub = null; select(5) }
                 }
             }
             1 -> ShareScreen(r, shareSub, { shareSub = it }, onBackup)
             2 -> it.ponte.ui.FinanceScreen(r, finSub) { finSub = it }
             3 -> it.ponte.ui.AgendaScreen(r, agSub) { agSub = it }
-            4 -> it.ponte.ui.StudyScreen(r, stSub) { stSub = it }
-            5 -> AudioScreen(r) { setSub = "audio"; select(6) }
+            4 -> AudioScreen(r) { setSub = "audio"; select(5) }
             else -> SettingsScreen(r, setSub, { setSub = it }, replayOnboarding)
         }
     }

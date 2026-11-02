@@ -60,7 +60,7 @@ public sealed partial class MainWindow
             hp.Children.Add(T(_r.Audio.SinkId != null ? "Audio su " + _r.DeviceName(_r.Audio.SinkId) : "Cuffie", 13, "LabelTertiary"));
             hp.Children.Add(T(holder == _r.DeviceId ? "Su questo PC" : holder == null ? "Libere" : "Su " + _r.DeviceName(holder), 16, "LabelPrimary", true));
             var w = Widget(hp, 170);
-            w.Tapped += (_, _) => Select(5);
+            w.Tapped += (_, _) => Select(4);
             Grid.SetColumn(w, 1);
             row2.Children.Add(w);
         }
@@ -127,7 +127,7 @@ public sealed partial class MainWindow
         var today = MinutesOn(p, DateTime.Today, DateTime.MaxValue);
         b.Children.Add(T(t.Running ? "Tocca per aprire" : today > 0 ? $"Oggi hai studiato {today} min" : "Tocca per iniziare", 12, "LabelTertiary"));
         var wb = Widget(b, 124);
-        wb.Tapped += (_, _) => Select(4);
+        wb.Tapped += (_, _) => { _agMode = 2; _agSub = null; Select(3); };
         Bounce(wb, 1.02f);
         Grid.SetColumn(wb, 1);
         g.Children.Add(wb);
@@ -323,7 +323,7 @@ public sealed partial class MainWindow
             Height = 170, CornerRadius = new CornerRadius(20), BorderBrush = GlassEdge(), BorderThickness = new Thickness(1),
             Background = B("BgSurface"), Child = g,
         };
-        w.DoubleTapped += (_, _) => Select(5);
+        w.DoubleTapped += (_, _) => Select(4);
         return w;
     }
 
