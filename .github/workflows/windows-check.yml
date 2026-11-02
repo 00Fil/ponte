@@ -2,7 +2,7 @@ name: Windows check
 
 on:
   push:
-    branches: [windows-port]
+    branches: [windows-port, agenda-studio]
 
 jobs:
   windows:

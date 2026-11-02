@@ -16,6 +16,7 @@ public sealed class Router
     public MediaSwitch Media { get; }
     public Updater Update { get; }
     public Finance Fin { get; }
+    public Plan Plan { get; }
     public NowPlaying Np { get; }
 
     private readonly HubLink _hub;
@@ -46,6 +47,7 @@ public sealed class Router
         Media = new MediaSwitch(this);
         Update = new Updater(this);
         Fin = new Finance(this);
+        Plan = new Plan(this);
         Np = new NowPlaying(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
@@ -61,6 +63,7 @@ public sealed class Router
         _ = _bt.StartAsync();
         Update.Start();
         Fin.Start();
+        Plan.Start();
         _ = Np.StartAsync();
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
         _ = Task.Run(async () =>
@@ -191,6 +194,7 @@ public sealed class Router
         await Files.CatchUp();
         await Clip.CatchUp();
         await Fin.Push();
+        await Plan.Push();
     }
 
     // ---- invio e ricezione ----
@@ -271,6 +275,9 @@ public sealed class Router
                 break;
             case "fin":
                 Fin.OnRemote(m["doc"] as JsonObject);
+                break;
+            case "plan":
+                Plan.OnRemote(m["doc"] as JsonObject);
                 break;
             case "clip":
                 Clip.OnRemote(m.S("text"), m.S("from"));

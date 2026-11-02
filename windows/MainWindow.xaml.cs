@@ -23,8 +23,8 @@ internal sealed class Cmd : ICommand
 
 public sealed partial class MainWindow : Window
 {
-    // Stessi moduli di Android: Home, Condividi (dispositivi, appunti, immagini, file), Finanze, Audio, Impostazioni.
-    private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Audio", "Impostazioni" };
+    // Stessi moduli di Android: Home, Condividi (dispositivi, appunti, immagini, file), Finanze, Agenda, Studio, Audio, Impostazioni.
+    private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Agenda", "Studio", "Audio", "Impostazioni" };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -39,8 +39,8 @@ public sealed partial class MainWindow : Window
         InitViewerKeys();
         _r = r;
         InitUpdateCard();
-        _pages = new[] { Page5, Page0, Page1, Page2, Page3 };
-        _hosts = new[] { Host5, Host0, Host1, Host2, Host3 };
+        _pages = new[] { Page5, Page0, Page1, PageA, PageS, Page2, Page3 };
+        _hosts = new[] { Host5, Host0, Host1, HostA, HostS, Host2, Host3 };
         Page4.Visibility = Visibility.Collapsed;
         HomeHero.Visibility = Visibility.Collapsed;
 
@@ -63,7 +63,7 @@ public sealed partial class MainWindow : Window
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
-        try { Select(_r.S.Token.Length == 0 ? 4 : 0); }
+        try { Select(_r.S.Token.Length == 0 ? 6 : 0); }
         catch (Exception e) { Crash.Log(e, "Barra laterale"); }
         if (!_r.S.Onboarded) ShowOnboarding();
     }
@@ -181,7 +181,7 @@ public sealed partial class MainWindow : Window
                 var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
                 nb.Click += (_, _) => Select(idx);
                 _nav.Add(nb);
-                (t < 3 ? NavMain : t == 3 ? NavTools : NavFoot).Children.Add(nb);
+                (t < 5 ? NavMain : t == 5 ? NavTools : NavFoot).Children.Add(nb);
             }
         }
         for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
@@ -203,9 +203,9 @@ public sealed partial class MainWindow : Window
         Refresh();
     }
 
-    private static readonly string[] Glyphs = { "\uE80F", "\uE72D", "\uE8C7", "\uE7F6", "\uE713" };
-    private readonly TextBlock[] _badge = new TextBlock[5];
-    private readonly Border[] _badgeBox = new Border[5];
+    private static readonly string[] Glyphs = { "\uE80F", "\uE72D", "\uE8C7", "\uE787", "\uE7BE", "\uE7F6", "\uE713" };
+    private readonly TextBlock[] _badge = new TextBlock[7];
+    private readonly Border[] _badgeBox = new Border[7];
 
     private Grid NavContent(int t)
     {
@@ -255,9 +255,17 @@ public sealed partial class MainWindow : Window
             case 0: RenderHome(); break;
             case 1: RenderShare(); break;
             case 2: RenderFinance(); break;
-            case 3: RenderAudio(); break;
-            case 4: RenderSettings(); break;
+            case 3: if (!Typing()) RenderAgenda(); break;
+            case 4: if (!Typing()) RenderStudy(); break;
+            case 5: RenderAudio(); break;
+            case 6: RenderSettings(); break;
         }
+    }
+
+    /// <summary>Se stai scrivendo in un campo, le pagine con moduli non si ridisegnano sotto le dita.</summary>
+    private bool Typing()
+    {
+        try { return Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(Root.XamlRoot) is TextBox; } catch (Exception) { return false; }
     }
 
     private StackPanel Reset(string title)

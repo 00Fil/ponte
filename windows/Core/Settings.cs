@@ -31,6 +31,8 @@ public sealed class Settings
     /// <summary>Cartelle create in Condividi e dove sta ogni file (id → cartella). Solo su questo PC.</summary>
     public List<string> Folders { get; set; } = new();
     public Dictionary<string, string> FileFolders { get; set; } = new();
+    /// <summary>Indirizzo segreto iCal del tuo Google Calendar (sola lettura).</summary>
+    public string IcsUrl { get; set; } = "";
     /// <summary>Configurazione iniziale completata.</summary>
     public bool Onboarded { get; set; }
     /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>
