@@ -111,12 +111,9 @@ public sealed partial class MainWindow
         var drawer = new Border
         {
             Background = B("BgSunken"), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 6, 14, 6), Child = ops,
-            OpacityMask = new LinearGradientBrush
-            {
-                StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(0, 1),
-                GradientStops = { new GradientStop { Color = Argb(255, 0, 0, 0), Offset = 0.6 }, new GradientStop { Color = Argb(60, 0, 0, 0), Offset = 1 } },
-            },
         };
+        // dissolvenza verso il basso: ogni riga un po' più tenue
+        for (var k = 0; k < ops.Children.Count; k++) ops.Children[k].Opacity = new[] { 1, 0.85, 0.6, 0.35 }[Math.Min(k, 3)];
         col.Children.Add(drawer);
         return Widget(col);
     }
