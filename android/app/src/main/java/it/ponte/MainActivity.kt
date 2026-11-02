@@ -160,7 +160,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         when (t) {
             0 -> HomeScreen(r) { to ->
                 when (to) {
-                    "devices", "clips", "images" -> { shareSub = to; select(1) }
+                    "devices" -> { shareSub = null; select(1) }
+                    "clips", "images" -> { shareSub = to; select(1) }
                     "finance" -> { finSub = null; select(2) }
                     "audio" -> select(3)
                     "perm" -> { setSub = "perm"; select(4) }
@@ -174,6 +175,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         }
     }
 
+    val headerDevices by r.devices.collectAsState()
     // Testata: fibra ottica dietro e titoli che scorrono con le pagine, in parallasse.
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(132.dp)) {
@@ -181,14 +183,28 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.30f to Color.Transparent, 0.92f to c.bgCanvas, 1f to c.bgCanvas)))
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
                 TABS.forEachIndexed { i, t ->
-                    Text(
-                        t, style = CanoneType.title1, color = c.labelPrimary,
-                        modifier = Modifier.graphicsLayer {
+                    Column(
+                        Modifier.graphicsLayer {
                             val d = i - pos()
                             alpha = (1f - kotlin.math.abs(d) * 1.6f).coerceIn(0f, 1f)
                             translationX = -d * 72.dp.toPx()
                         },
-                    )
+                    ) {
+                        Text(t, style = CanoneType.title1, color = c.labelPrimary)
+                        if (i == 0) {
+                            val n = headerDevices.size
+                            Text(
+                                if (n == 0) androidx.compose.ui.text.buildAnnotatedString { append("Solo questo dispositivo") }
+                                else androidx.compose.ui.text.buildAnnotatedString {
+                                    append("Collegato con ")
+                                    pushStyle(androidx.compose.ui.text.SpanStyle(color = c.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
+                                    append(if (n == 1) "1 dispositivo" else "$n dispositivi")
+                                    pop()
+                                },
+                                style = CanoneType.footnote, color = c.labelSecondary,
+                            )
+                        }
+                    }
                 }
             }
         }

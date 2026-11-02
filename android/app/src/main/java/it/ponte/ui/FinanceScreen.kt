@@ -451,12 +451,9 @@ private fun rememberGrow(key: Any): Float {
     return a.value
 }
 
-/** Cifra che scorre fino al nuovo valore. */
+/** Cifra in euro che rotola verso il nuovo valore. */
 @Composable
-private fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, color: Color) {
-    val v by androidx.compose.animation.core.animateFloatAsState(cents.toFloat(), androidx.compose.animation.core.tween(750, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "cifra")
-    Text(eur(v.toLong()), style = style.copy(fontFeatureSettings = "tnum"), color = color, maxLines = 1)
-}
+private fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, color: Color) = RollingText(eur(cents), style, color)
 
 @Composable
 private fun BarChart(bars: List<Triple<String, Long, Long>>, income: Color, spend: Color) {

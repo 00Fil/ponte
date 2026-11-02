@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Struttura comune di ogni modulo: una dashboard iniziale con riquadri e tasti che portano alle funzioni, e sotto-pagine con "‹ Modulo" per tornare.
@@ -56,27 +57,23 @@ fun BackRow(parent: String, title: String, onBack: () -> Unit) {
     }
 }
 
-/** Riquadro della dashboard: bollino a gradiente con icona, cifra e nota. Tocco = apre la funzione. */
+/** Riquadro della dashboard, compatto: bollino tonale con icona, titolo, cifra che rotola e una nota. Tocco = apre la funzione. */
 @Composable
 fun NavTile(icon: Int, title: String, value: String, note: String, tint: List<Color>, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
-    Column(
-        modifier.height(132.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(tint[0].copy(alpha = 0.10f), c.bgSurface), endY = 300f))
-            .border(BorderStroke(1.dp, c.lineSeparator), shape)
-            .dropClickable(onClick).padding(Space.s4),
-        verticalArrangement = Arrangement.SpaceBetween,
+    Row(
+        modifier.height(76.dp).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
+            .dropClickable(onClick).padding(horizontal = Space.s3),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Box(Modifier.size(32.dp).clip(CircleShape).background(Brush.linearGradient(tint)), contentAlignment = Alignment.Center) {
-                TabGlyph(icon, Color.White, false, Modifier.size(18.dp))
-            }
-            Text(title, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+        Box(Modifier.size(38.dp).clip(CircleShape).background(c.accentSubtle), contentAlignment = Alignment.Center) {
+            TabGlyph(icon, c.accentOnSubtle, false, Modifier.size(20.dp))
         }
-        Column {
-            Text(value, style = CanoneType.title2.copy(fontFeatureSettings = "tnum"), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+            RollingText(value, CanoneType.title3, c.labelPrimary)
+            Text(note, style = CanoneType.footnote.copy(fontSize = 11.sp), color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

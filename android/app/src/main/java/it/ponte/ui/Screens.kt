@@ -78,6 +78,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.ComponentActivity
 import it.ponte.FileEntry
 import it.ponte.Root
+import it.ponte.Device
 import it.ponte.Router
 import it.ponte.Updater
 import it.ponte.R
@@ -126,74 +127,6 @@ internal fun has(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ct
 internal fun listenerEnabled(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 private fun time(ts: Long, ctx: Context) = DateFormat.getTimeFormat(ctx).format(Date(ts))
 internal fun dateTime(ts: Long, ctx: Context) = DateFormat.getMediumDateFormat(ctx).format(Date(ts)) + " " + time(ts, ctx)
-
-// ---------------------------------------------------------------- Dispositivi
-
-@Composable
-fun DevicesScreen(r: Router, onBack: () -> Unit) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
-    val devices by r.devices.collectAsState()
-    val hub by r.hubState.collectAsState()
-
-    val hubTone = when (hub) {
-        "Connesso" -> Tone.Positive
-        "Non configurato" -> Tone.Neutral
-        "Connessione in corso" -> Tone.Caution
-        else -> Tone.Critical
-    }
-    val near = devices.count { it.via == "lan" }
-
-    ScreenList("Dispositivi") {
-        item { BackRow("Condividi", "Dispositivi", onBack) }
-        item { HeroCard(if (devices.isEmpty()) "Solo questo dispositivo" else if (devices.size == 1) "1 dispositivo collegato" else "${devices.size} dispositivi collegati", "Server: ${hub.lowercase()}") }
-        item {
-            CCard {
-                SectionTitle("Collegamenti")
-                CRow("Server", "Per chi è fuori casa e per l'archivio") { CBadge(hub, hubTone) }
-                CDivider()
-                CRow("Diretto", "Rete locale o rete privata, senza server") {
-                    when {
-                        !r.prefs.lanEnabled -> CBadge("Disattivata")
-                        near == 0 -> CBadge("Nessun dispositivo")
-                        else -> CBadge("$near collegati", Tone.Positive)
-                    }
-                }
-            }
-        }
-        item {
-            var target by remember { mutableStateOf<String?>(null) }
-            val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-                val id = target
-                if (uri != null && id != null) r.scope.launch { if (!DevicePics.save(ctx, id, uri)) toast(ctx, "Immagine non leggibile") }
-            }
-            CCard {
-                SectionTitle("Dispositivi")
-                CText("Tocca l'immagine per scegliere un PNG per ogni dispositivo, anche un render 3D con sfondo trasparente. Tienila premuta per toglierla.", tertiary = true)
-                val rows = listOf(Triple(r.deviceId, r.prefs.name + " (questo)", "Android")) + devices.map { Triple(it.id, it.name, if (it.platform == "windows") "Windows" else "Android") }
-                rows.forEachIndexed { i, (id, nm, plat) ->
-                    if (i > 0) CDivider()
-                    val d = devices.firstOrNull { it.id == id }
-                    val pic = DevicePics.rememberPic(id)
-                    CRow(nm, plat + (d?.let { x -> buildList {
-                        if ("audio-src" in x.caps) add("sorgente audio")
-                        if ("audio-sink" in x.caps) add("riceve audio")
-                    }.joinToString("") { " · $it" } } ?: "")) {
-                        if (d != null) CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent)
-                        Box(
-                            Modifier.size(56.dp).clip(RoundedCornerShape(Radius.lg)).background(c.bgSunken)
-                                .dropClickable({ target = id; pick.launch("image/*") }, { DevicePics.remove(ctx, id) }, Radius.lg),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
-                            else TabGlyph(if (plat == "Windows") 1 else 1, c.labelTertiary, false, Modifier.size(24.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------- Archivio
 
@@ -333,6 +266,108 @@ private fun ShareList(r: Router, tab: Int, onTab: (Int) -> Unit, onBack: () -> U
     }
 }
 
+/** Un indicatore di stato: pallino colorato e nome, per Server e per il collegamento diretto (P2P). */
+@Composable
+private fun StatusBubble(label: String, tone: Tone, on: Boolean) {
+    val c = Canone.colors
+    val col = when (tone) { Tone.Positive -> c.positive; Tone.Caution -> c.caution; Tone.Critical -> c.critical; else -> c.labelDisabled }
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "stato")
+    val a by pulse.animateFloat(1f, if (on) 0.35f else 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1100), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulsa")
+    Row(Modifier.height(28.dp).clip(RoundedCornerShape(50)).background(c.bgSunken).padding(horizontal = Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(8.dp).graphicsLayer { alpha = a }.clip(androidx.compose.foundation.shape.CircleShape).background(col))
+        Text(label, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+    }
+}
+
+/**
+ * Tutti i dispositivi in una scheda: in alto due bolle (server e collegamento diretto), poi l'elenco con l'immagine di ognuno.
+ * Toccando un dispositivo la scheda si allunga e dal suo bordo inferiore esce un cassetto grigio con i dettagli, dentro lo stesso contorno.
+ */
+@Composable
+private fun DevicesCard(r: Router) {
+    val c = Canone.colors
+    val ctx = LocalContext.current
+    val devices by r.devices.collectAsState()
+    val hub by r.hubState.collectAsState()
+    val shape = RoundedCornerShape(Radius.xl)
+    var open by remember { mutableStateOf<String?>(null) }
+    var target by remember { mutableStateOf<String?>(null) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val id = target
+        if (uri != null && id != null) r.scope.launch { if (!DevicePics.save(ctx, id, uri)) toast(ctx, "Immagine non leggibile") }
+    }
+    val near = devices.count { it.via != "server" }
+    val rows = listOf(Device(r.deviceId, r.prefs.name, "android", emptySet(), "self")) + devices
+    var last by remember { mutableStateOf<Device?>(null) }
+    rows.firstOrNull { it.id == open }?.let { last = it }
+
+    Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
+        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("Dispositivi", style = CanoneType.title3, color = c.labelPrimary)
+                    RollingText(if (devices.isEmpty()) "Solo questo" else "${devices.size + 1} collegati", CanoneType.footnote, c.labelTertiary)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    StatusBubble(if (hub == "Connesso") "Server" else "Server off", if (hub == "Connesso") Tone.Positive else if (hub == "Non configurato") Tone.Neutral else Tone.Caution, hub == "Connesso")
+                    StatusBubble(if (near > 0) "P2P $near" else "P2P", if (near > 0) Tone.Positive else Tone.Neutral, near > 0)
+                }
+            }
+            rows.forEach { d ->
+                val pic = DevicePics.rememberPic(d.id)
+                val sel = open == d.id
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(if (sel) c.accentSubtle else Color.Transparent)
+                        .dropClickable({ open = if (sel) null else d.id }, corner = Radius.lg).padding(Space.s2),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
+                ) {
+                    Box(Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                        if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
+                        else TabGlyph(1, c.labelTertiary, false, Modifier.size(22.dp))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(d.name + if (d.id == r.deviceId) " (questo)" else "", style = CanoneType.body, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (d.id == r.deviceId) "Android" else if (d.platform == "windows") "Windows" else "Android", style = CanoneType.footnote, color = c.labelTertiary)
+                    }
+                    if (d.id != r.deviceId) CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent)
+                    Text(if (sel) "⌃" else "⌄", style = CanoneType.body, color = c.labelTertiary)
+                }
+            }
+        }
+        // Il cassetto: stesso contorno della scheda, sfondo grigio, esce da sotto.
+        androidx.compose.animation.AnimatedVisibility(
+            open != null,
+            enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(1f, 380f)) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)),
+            exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(240)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)),
+        ) {
+            val d = last
+            if (d != null) {
+                val pic = DevicePics.rememberPic(d.id)
+                Column(Modifier.fillMaxWidth().background(c.bgSunken).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    CRow("Collegamento", when {
+                        d.id == r.deviceId -> "Questo dispositivo"
+                        d.via == "lan" -> "Diretto, rete locale o privata"
+                        d.via == "bt" -> "Bluetooth"
+                        else -> "Tramite il server"
+                    })
+                    if (d.id != r.deviceId) CRow("Funzioni", buildList {
+                        add("appunti"); add("file")
+                        if ("audio-src" in d.caps) add("sorgente audio")
+                        if ("audio-sink" in d.caps) add("riceve audio")
+                        if ("notif-src" in d.caps) add("notifiche")
+                    }.joinToString(" · "))
+                    else CRow("Identificativo", r.deviceId.take(13) + "…", mono = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        CButton(if (pic == null) "Scegli immagine" else "Cambia immagine", { target = d.id; pick.launch("image/*") }, Modifier.weight(1f))
+                        if (pic != null) CButton("Rimuovi", { DevicePics.remove(ctx, d.id) }, kind = ButtonKind.Tertiary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 /** Condividi: dashboard con dispositivi, contatori e tasti rapidi; da qui si apre ogni funzione (appunti, immagini, file, dispositivi, backup). */
 @Composable
 fun ShareScreen(r: Router, sub: String?, onSub: (String?) -> Unit, onBackup: () -> Unit) {
@@ -340,7 +375,6 @@ fun ShareScreen(r: Router, sub: String?, onSub: (String?) -> Unit, onBackup: () 
     ModuleSwitch(sub) { s ->
         when (s) {
             null -> ShareDashboard(r, onSub, onBackup)
-            "devices" -> DevicesScreen(r) { onSub(null) }
             else -> ShareList(r, tabs.indexOf(s).coerceAtLeast(0), { onSub(tabs[it]) }) { onSub(null) }
         }
     }
@@ -365,21 +399,7 @@ private fun ShareDashboard(r: Router, go: (String?) -> Unit, onBackup: () -> Uni
     }
     val shots = files.count { it.kind == "screenshot" }
     ScreenList("Condividi") {
-        item {
-            CCard(Modifier.dropClickable({ go("devices") })) {
-                Row(horizontalArrangement = Arrangement.spacedBy((-10).dp), verticalAlignment = Alignment.CenterVertically) {
-                    (listOf(r.deviceId) + devices.map { it.id }).take(5).forEach { id ->
-                        val pic = DevicePics.rememberPic(id)
-                        Box(Modifier.size(46.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken).border(BorderStroke(2.dp, c.bgSurface), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
-                            else TabGlyph(1, c.labelTertiary, false, Modifier.size(22.dp))
-                        }
-                    }
-                }
-                Text(if (devices.isEmpty()) "Solo questo dispositivo" else if (devices.size == 1) "1 dispositivo collegato" else "${devices.size} dispositivi collegati", style = CanoneType.title3, color = c.labelPrimary)
-                Text("Server: ${hub.lowercase()} · tocca per gestire i dispositivi", style = CanoneType.footnote, color = c.labelTertiary)
-            }
-        }
+        item { DevicesCard(r) }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Action("", "Invia appunti", true, glyph = 2) { toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare") }

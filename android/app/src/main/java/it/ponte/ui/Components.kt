@@ -100,18 +100,23 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
     }
 }
 
+/** Etichetta di stato: sfondo tonale uguale per tutte, il colore sta solo nel pallino. Altezza fissa, centrata. */
 @Composable
 fun CBadge(text: String, tone: Tone = Tone.Neutral) {
     val c = Canone.colors
-    val (bg, fg) = when (tone) {
-        Tone.Neutral -> c.bgSunken to c.labelSecondary
-        Tone.Positive -> c.positiveSubtle to c.positiveOnSubtle
-        Tone.Caution -> c.cautionSubtle to c.cautionOnSubtle
-        Tone.Critical -> c.criticalSubtle to c.criticalOnSubtle
-        Tone.Accent -> c.accentSubtle to c.accentOnSubtle
+    val dot = when (tone) {
+        Tone.Neutral -> c.labelDisabled
+        Tone.Positive -> c.positive
+        Tone.Caution -> c.caution
+        Tone.Critical -> c.critical
+        Tone.Accent -> c.accent
     }
-    Box(Modifier.clip(CircleShape).background(bg).padding(horizontal = Space.s3, vertical = Space.s1)) {
-        Text(text, style = CanoneType.footnote, color = fg, maxLines = 1)
+    Row(
+        Modifier.height(26.dp).clip(CircleShape).background(c.bgSunken).padding(horizontal = Space.s3),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(dot))
+        Text(text, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
     }
 }
 

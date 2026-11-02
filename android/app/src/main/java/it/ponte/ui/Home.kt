@@ -60,17 +60,6 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
             item {
-                HeroCard(
-                    hello,
-                    when {
-                        devices.isEmpty() -> "Solo questo dispositivo per ora"
-                        devices.size == 1 -> "Collegato con ${devices[0].name}"
-                        else -> "Collegato con ${devices.size} dispositivi"
-                    },
-                    height = 196.dp,
-                )
-            }
-            item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     NavTile(1, "Dispositivi", "${devices.size + 1}", if (hub == "Connesso") "server attivo" else hub.lowercase(), TINT_A, Modifier.weight(1f)) { go("devices") }
                     NavTile(2, "Appunti", "${clips.size}", "in cronologia", TINT_B, Modifier.weight(1f)) { go("clips") }
