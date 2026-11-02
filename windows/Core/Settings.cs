@@ -26,6 +26,11 @@ public sealed class Settings
     public bool FallbackMute { get; set; }
     /// <summary>Quando la musica parte qui gli altri dispositivi vanno in pausa (e viceversa).</summary>
     public bool AutoPause { get; set; } = true;
+    /// <summary>Importi nascosti nelle dashboard (sfocati).</summary>
+    public bool HideMoney { get; set; }
+    /// <summary>Cartelle create in Condividi e dove sta ogni file (id → cartella). Solo su questo PC.</summary>
+    public List<string> Folders { get; set; } = new();
+    public Dictionary<string, string> FileFolders { get; set; } = new();
     /// <summary>Configurazione iniziale completata.</summary>
     public bool Onboarded { get; set; }
     /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>

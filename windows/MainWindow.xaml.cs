@@ -23,7 +23,8 @@ internal sealed class Cmd : ICommand
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly string[] Tabs = { "Home", "Dispositivi", "Appunti", "Archivio", "Audio", "Impostazioni" };
+    // Stessi moduli di Android: Home, Condividi (dispositivi, appunti, immagini, file), Finanze, Audio, Impostazioni.
+    private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Audio", "Impostazioni" };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -38,8 +39,10 @@ public sealed partial class MainWindow : Window
         InitViewerKeys();
         _r = r;
         InitUpdateCard();
-        _pages = new[] { Page5, Page0, Page1, Page2, Page3, Page4 };
-        _hosts = new[] { Host5, Host0, Host1, Host2, Host3, Host4 };
+        _pages = new[] { Page5, Page0, Page1, Page2, Page3 };
+        _hosts = new[] { Host5, Host0, Host1, Host2, Host3 };
+        Page4.Visibility = Visibility.Collapsed;
+        HomeHero.Visibility = Visibility.Collapsed;
 
         Title = "Relay";
         SetupFrame();
@@ -60,7 +63,7 @@ public sealed partial class MainWindow : Window
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
 
-        try { Select(_r.S.Token.Length == 0 ? 5 : 0); }
+        try { Select(_r.S.Token.Length == 0 ? 4 : 0); }
         catch (Exception e) { Crash.Log(e, "Barra laterale"); }
         if (!_r.S.Onboarded) ShowOnboarding();
     }
@@ -178,7 +181,7 @@ public sealed partial class MainWindow : Window
                 var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
                 nb.Click += (_, _) => Select(idx);
                 _nav.Add(nb);
-                (t < 4 ? NavMain : t == 4 ? NavTools : NavFoot).Children.Add(nb);
+                (t < 3 ? NavMain : t == 3 ? NavTools : NavFoot).Children.Add(nb);
             }
         }
         for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
@@ -197,12 +200,12 @@ public sealed partial class MainWindow : Window
         }
         ApplyLayout();
         UpdateSideStatus();
-        if (i == 5) RenderSettings(); else Refresh();
+        Refresh();
     }
 
-    private static readonly string[] Glyphs = { "\uE80F", "\uE772", "\uE8C8", "\uE838", "\uE7F6", "\uE713" };
-    private readonly TextBlock[] _badge = new TextBlock[6];
-    private readonly Border[] _badgeBox = new Border[6];
+    private static readonly string[] Glyphs = { "\uE80F", "\uE72D", "\uE8C7", "\uE7F6", "\uE713" };
+    private readonly TextBlock[] _badge = new TextBlock[5];
+    private readonly Border[] _badgeBox = new Border[5];
 
     private Grid NavContent(int t)
     {
@@ -241,9 +244,7 @@ public sealed partial class MainWindow : Window
     {
         SideDevice.Text = _r.S.Name.Length > 0 ? _r.S.Name : Environment.MachineName;
         SideVersion.Text = "Questo PC · " + _r.Update.Current.ToString("'1.0.'0");
-        SetBadge(1, _r.Devices.Count);
-        SetBadge(2, _r.Clip.History.Count);
-        SetBadge(3, _r.Files.Items.Count);
+        // niente contatori sulle voci (come su Android): restano solo le icone
     }
 
     private void Refresh()
@@ -252,10 +253,10 @@ public sealed partial class MainWindow : Window
         switch (_tab)
         {
             case 0: RenderHome(); break;
-            case 1: RenderDevices(); break;
-            case 2: RenderClips(); break;
-            case 3: RenderArchive(); break;
-            case 4: RenderAudio(); break;
+            case 1: RenderShare(); break;
+            case 2: RenderFinance(); break;
+            case 3: RenderAudio(); break;
+            case 4: RenderSettings(); break;
         }
     }
 
@@ -264,142 +265,10 @@ public sealed partial class MainWindow : Window
         // Il titolo sta nella testata animata sopra la pagina.
         var h = _hosts[_tab];
         h.Children.Clear();
+        _money.Clear();
+        _hideCharts.Clear();
+        _ticks.Clear();
         return h;
-    }
-
-    // ---------------------------------------------------------------- Dispositivi
-
-    private void RenderDevices()
-    {
-        var h = Reset("Dispositivi");
-        var hub = _r.HubState;
-        var tone = hub switch { "Connesso" => "Positive", "Non configurato" => "Neutral", "Connessione in corso" => "Caution", _ => "Critical" };
-        var devices = _r.Devices;
-        var near = devices.Count(d => d.Via == "lan");
-
-        h.Children.Add(Card(
-            Text("Collegamenti", "SectionTitle"),
-            Row("Server", "Per chi è fuori casa e per l'archivio", Badge(hub, tone)),
-            Divider(),
-            Row("Diretto", "Rete locale o rete privata, senza server",
-                !_r.S.LanEnabled ? Badge("Disattivata") : near == 0 ? Badge("Nessun dispositivo") : Badge($"{near} collegati", "Positive"))));
-
-        var others = new List<UIElement> { Text("Altri dispositivi", "SectionTitle") };
-        if (devices.Count == 0)
-            others.Add(Text("Nessun altro dispositivo. Apri Relay su un altro dispositivo, con lo stesso server e lo stesso token.", "Footnote"));
-        for (var i = 0; i < devices.Count; i++)
-        {
-            var d = devices[i];
-            if (i > 0) others.Add(Divider());
-            var what = new List<string> { d.Platform == "windows" ? "Windows" : "Android" };
-            if (d.Caps.Contains("audio-sink")) what.Add("riceve audio");
-            if (d.Caps.Contains("notif-src")) what.Add("manda notifiche");
-            others.Add(Row(d.Name, string.Join(" · ", what), Badge(d.Via switch { "lan" => "Diretto", "bt" => "Bluetooth", _ => "Server" }, d.Via == "server" ? "Neutral" : "Accent")));
-        }
-        h.Children.Add(Card(others.ToArray()));
-    }
-
-    // ---------------------------------------------------------------- Appunti
-
-    private void RenderClips()
-    {
-        var h = Reset("Appunti");
-        h.Children.Add(Card(Row("Invio automatico", "Su Windows ogni volta che copi, il testo arriva sugli altri dispositivi.",
-            Btn("Invia ora", async () => await _r.Clip.SendCurrentAsync(), "PrimaryButton"))));
-
-        var history = _r.Clip.History;
-        if (history.Count == 0)
-        {
-            h.Children.Add(Card(Text("Nessun appunto. Copia qualcosa su un dispositivo collegato e comparirà qui.", "Footnote")));
-            return;
-        }
-        var rows = new List<UIElement>();
-        foreach (var c in history.Take(100))
-        {
-            var item = c;
-            if (rows.Count > 0) rows.Add(Divider());
-            var who = item.Mine ? "Inviato da qui" : _r.DeviceName(item.From);
-            var time = DateTimeOffset.FromUnixTimeMilliseconds(item.Ts).ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
-            var txt = item.Text.Length > 200 ? item.Text[..200] + "…" : item.Text;
-            var row = Row(txt, who + " · " + time, Btn("Copia", () => _r.Clip.SetLocal(item.Text)));
-            row.MinHeight = 48;
-            rows.Add(row);
-        }
-        h.Children.Add(Card(rows.ToArray()));
-    }
-
-    // ---------------------------------------------------------------- Archivio
-
-    private void RenderArchive()
-    {
-        var h = Reset("Archivio");
-        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        foreach (var (label, key) in new[] { ("Tutto", ""), ("Screenshot", "screenshot"), ("File", "file") })
-        {
-            var k = key;
-            chips.Children.Add(Btn(label, () => { _filter = k; Refresh(); }, _filter == k ? "ChipButtonSelected" : "ChipButton"));
-        }
-        var bar = new Grid();
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        bar.Children.Add(chips);
-        var send = Btn("Invia file", async () => await PickFilesAsync(), "PrimaryButton");
-        Grid.SetColumn(send, 1);
-        bar.Children.Add(send);
-        h.Children.Add(bar);
-
-        var items = _r.Files.Items.Where(f => _filter.Length == 0 || f.Kind == _filter).ToList();
-        if (items.Count == 0)
-        {
-            h.Children.Add(Card(Text("Nessun elemento. Fai uno screenshot su un dispositivo collegato e comparirà qui.", "Footnote")));
-            return;
-        }
-        var tiles = items.Select(Tile).Cast<UIElement>().ToList();
-        h.Children.Add(new ItemsRepeater
-        {
-            ItemsSource = tiles,
-            Layout = new UniformGridLayout
-            {
-                MinItemWidth = 184, MinItemHeight = 188, MinColumnSpacing = 12, MinRowSpacing = 12,
-                ItemsStretch = UniformGridLayoutItemsStretch.Fill,
-            },
-        });
-    }
-
-    private Button Tile(FileEntry e)
-    {
-        var thumb = new Border { Style = St("ThumbStyle") };
-        if (e.Mime.StartsWith("image/"))
-        {
-            try { thumb.Child = new Image { Stretch = Stretch.UniformToFill, Source = new BitmapImage { DecodePixelWidth = 480, UriSource = new Uri(e.Path) } }; }
-            catch (Exception) { }
-        }
-        thumb.Child ??= new TextBlock
-        {
-            Text = Path.GetExtension(e.Name).TrimStart('.').ToLowerInvariant(), Style = St("Figure"),
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var when = DateTimeOffset.FromUnixTimeMilliseconds(e.Ts).ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
-        var name = Text(e.Name, "Footnote");
-        name.TextWrapping = TextWrapping.NoWrap;
-        name.TextTrimming = TextTrimming.CharacterEllipsis;
-        var info = Text(FormatSize(e.Size) + " · " + when, "FootnoteTertiary");
-        info.TextWrapping = TextWrapping.NoWrap;
-        info.TextTrimming = TextTrimming.CharacterEllipsis;
-
-        var body = new StackPanel { Spacing = 8 };
-        body.Children.Add(thumb);
-        body.Children.Add(new StackPanel { Margin = new Thickness(8, 0, 8, 8), Children = { name, info } });
-
-        var tile = new Button { Style = St("TileStyle"), Content = body };
-        tile.Click += (_, _) => { if (e.Mime.StartsWith("image/")) OpenViewer(e); else _r.Files.Open(e); };
-        var menu = new MenuFlyout();
-        var del = new MenuFlyoutItem { Text = "Elimina" };
-        del.Click += async (_, _) => await ConfirmDeleteAsync(e);
-        menu.Items.Add(del);
-        tile.ContextFlyout = menu;
-        return tile;
     }
 
     private async Task ConfirmDeleteAsync(FileEntry e)
@@ -424,143 +293,6 @@ public sealed partial class MainWindow : Window
         var files = await picker.PickMultipleFilesAsync();
         if (files == null) return;
         foreach (var f in files) _ = _r.Files.SendFileAsync(f.Path, "file");
-    }
-
-    // ---------------------------------------------------------------- Audio
-
-    private void RenderAudio()
-    {
-        var h = Reset("Audio");
-        var hps = _r.Hp.List;
-        string Who(string? id) => id == null ? "nessuno" : id == _r.DeviceId ? "questo PC" : _r.DeviceName(id);
-        var locked = _r.Hp.LockedBy == _r.DeviceId;
-        var pref = _r.S.PreferredHp;
-        var choices = new List<string> { "" };
-        choices.AddRange(hps.Select(x => x.Address));
-        var auto = new List<UIElement>
-        {
-            Text("Passaggio automatico", "SectionTitle"),
-            Text("Le cuffie vanno dove fai partire l'audio, se è il dispositivo che stai usando. Blocca per tenerle qui mentre usi altro.", "Footnote"),
-            Row("Cuffie su", Who(_r.Hp.Holder)),
-            Row("In uso", Who(_r.Hp.Focus)),
-            Row("Blocco", _r.Hp.LockedBy == null ? "Nessuno" : "Su " + Who(_r.Hp.LockedBy),
-                Btn(locked ? "Sblocca" : "Blocca qui", () => _r.Hp.ToggleLock(), locked ? "SecondaryButton" : "PrimaryButton")),
-            Divider(),
-            Row("Cuffie preferite qui", hps.FirstOrDefault(x => x.Address == pref)?.Name ?? "Nessuna: passaggio spento", Btn("Cambia", () =>
-            {
-                _r.S.PreferredHp = choices[(choices.IndexOf(_r.S.PreferredHp) + 1) % choices.Count];
-                _r.S.Save();
-                RenderAudio();
-            })),
-            Row("Un dispositivo alla volta", _r.S.AutoPause ? "Gli altri vanno in pausa quando la musica parte qui" : "Spento", Btn("Cambia", () =>
-            {
-                _r.S.AutoPause = !_r.S.AutoPause;
-                _r.S.Save();
-                RenderAudio();
-            })),
-            Row("Se non ci sono", _r.S.FallbackMute ? "Muto" : "Casse", Btn("Cambia", () =>
-            {
-                _r.S.FallbackMute = !_r.S.FallbackMute;
-                _r.S.Save();
-                RenderAudio();
-            })),
-        };
-        h.Children.Add(Card(auto.ToArray()));
-        var marked = _r.S.Headphones;
-        var hp = new List<UIElement>
-        {
-            Text("Cuffie", "SectionTitle"),
-            Text("Segna le cuffie associate. Relay tiene collegato un solo dispositivo alla volta: quando l'audio parte qui gli altri le lasciano, e dopo un po' di inattività le lascia anche il PC, così non occupi i due slot.", "Footnote"),
-        };
-        if (hps.Count == 0) hp.Add(Text("Nessuna cuffia associata a questo PC.", "FootnoteTertiary"));
-        foreach (var x in hps)
-        {
-            var addr = x.Address;
-            hp.Add(Toggle(x.Name, x.Connected ? "Collegate qui" : "Non collegate qui", marked.Contains(addr), on =>
-            {
-                if (on) _r.S.Headphones.Add(addr); else _r.S.Headphones.Remove(addr);
-                _r.S.Save();
-                RenderAudio();
-            }));
-            if (marked.Contains(addr))
-                hp.Add(x.Connected
-                    ? Btn("Libera le cuffie", () => _r.Hp.Release(addr))
-                    : Btn("Collega qui", () => _r.Hp.Connect(addr), "PrimaryButton"));
-        }
-        var opts = new[] { 0, 5, 10, 20, 30 };
-        hp.Add(Row("Scollega dopo", _r.S.IdleMinutes == 0 ? "Mai" : $"{_r.S.IdleMinutes} minuti senza audio", Btn("Cambia", () =>
-        {
-            _r.S.IdleMinutes = opts[(Array.IndexOf(opts, _r.S.IdleMinutes) + 1) % opts.Length];
-            _r.S.Save();
-            RenderAudio();
-        })));
-        h.Children.Add(Card(hp.ToArray()));
-
-        var sinks = _r.Devices.Where(d => d.Caps.Contains("audio-sink")).ToList();
-        var playingTo = _r.Audio.SinkId;
-
-        h.Children.Add(Card(
-            Text("Ascolta altrove", "SectionTitle"),
-            Text("Scegli quale dispositivo deve suonare l'audio di questo PC. Le cuffie restano collegate a quel dispositivo: cambi solo da dove arriva il suono.", "Footnote"),
-            Text("Il ritardo è di circa 100 ms. Va bene per video e musica, meno per i giochi.", "FootnoteTertiary")));
-
-        if (sinks.Count == 0 && playingTo == null)
-        {
-            h.Children.Add(Card(Text("Nessun dispositivo in grado di riceverlo. Apri Relay su un telefono o un tablet Android.", "Footnote")));
-            return;
-        }
-        foreach (var d in sinks)
-        {
-            var dev = d;
-            var active = playingTo == dev.Id;
-            h.Children.Add(Card(Row(dev.Name, active ? "Sta suonando l'audio di questo PC" : "Disponibile",
-                active ? Btn("Ferma", () => _r.Audio.Route(null)) : Btn("Ascolta lì", () => _r.Audio.Route(dev.Id)))));
-        }
-    }
-
-    // ---------------------------------------------------------------- Impostazioni
-
-    private void RenderSettings()
-    {
-        var h = Reset("Impostazioni");
-        var s = _r.S;
-
-        var name = new TextBox { Text = s.Name, PlaceholderText = "PC della scrivania" };
-        var hub = new TextBox { Text = s.HubUrl, PlaceholderText = "ponte.esempio.it", FontFamily = (FontFamily)Application.Current.Resources["FontMono"] };
-        var token = new PasswordBox { Password = s.Token, PlaceholderText = "Lo stesso impostato sul server" };
-        h.Children.Add(Card(
-            Text("Questo dispositivo", "SectionTitle"),
-            Field("Nome del dispositivo", name),
-            Field("Indirizzo del server", hub),
-            Field("Token", token),
-            Btn("Salva", () =>
-            {
-                s.Name = name.Text.Trim().Length > 0 ? name.Text.Trim() : Environment.MachineName;
-                s.HubUrl = hub.Text.Trim();
-                s.Token = token.Password.Trim();
-                s.Save();
-                _r.Reconfigure();
-            }, "PrimaryButton")));
-
-        h.Children.Add(Card(
-            Text("Funzioni", "SectionTitle"),
-            Toggle("Collegamento diretto", "Rete locale e rete privata Headscale", s.LanEnabled, on => { s.LanEnabled = on; Apply(); }),
-            Divider(),
-            Toggle("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", s.Screenshots, on => { s.Screenshots = on; Apply(); }),
-            Row("Cartella degli screenshot", s.EffectiveScreenshotFolder, Btn("Cambia", async () => await PickScreenshotFolderAsync())),
-            Text("Nello Strumento di cattura attiva il salvataggio automatico degli screenshot, altrimenti restano solo negli appunti.", "FootnoteTertiary"),
-            Divider(),
-            Toggle("Notifiche del telefono", "Le notifiche inoltrate dal telefono compaiono come notifiche di Windows", s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); }),
-            Divider(),
-            Toggle("Avvia con Windows", "Relay parte in background all'accesso", GetAutostart(), SetAutostart)));
-
-        h.Children.Add(Card(
-            Text("Aggiornamenti", "SectionTitle"),
-            Row($"Versione 1.0.{_r.Update.Current}",
-                _r.Update.Status.Length > 0 ? _r.Update.Status : "Si aggiorna da sola dalle release su GitHub, tramite il tuo server",
-                Btn("Cerca ora", () => { _ = Task.Run(() => _r.Update.CheckAsync(install: true, manual: true)); }))));
-
-        h.Children.Add(Btn("Rivedi la configurazione iniziale", ShowOnboarding));
     }
 
     private void Apply()

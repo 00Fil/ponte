@@ -15,6 +15,8 @@ public sealed class Router
     public Headphones Hp { get; }
     public MediaSwitch Media { get; }
     public Updater Update { get; }
+    public Finance Fin { get; }
+    public NowPlaying Np { get; }
 
     private readonly HubLink _hub;
     private readonly LanMesh _lan;
@@ -43,6 +45,8 @@ public sealed class Router
         Hp = new Headphones(this);
         Media = new MediaSwitch(this);
         Update = new Updater(this);
+        Fin = new Finance(this);
+        Np = new NowPlaying(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
         _bt = new BtMesh(this);
@@ -56,6 +60,8 @@ public sealed class Router
         Media.Start();
         _ = _bt.StartAsync();
         Update.Start();
+        Fin.Start();
+        _ = Np.StartAsync();
         // Rete di sicurezza: l'arrivo istantaneo passa dal collegamento sempre aperto, questo recupera solo ciò che manca.
         _ = Task.Run(async () =>
         {
@@ -184,6 +190,7 @@ public sealed class Router
     {
         await Files.CatchUp();
         await Clip.CatchUp();
+        await Fin.Push();
     }
 
     // ---- invio e ricezione ----
@@ -261,6 +268,9 @@ public sealed class Router
                     foreach (var n in all)
                         if (n is JsonObject d && d.S("id") != DeviceId && d["addrs"] is JsonArray ad && ad.Count > 0)
                             _lan.Dial(d.S("id"), ad.Select(x => x?.GetValue<string>() ?? "").ToList(), (int)d.L("port", Proto.LanTcpPort));
+                break;
+            case "fin":
+                Fin.OnRemote(m["doc"] as JsonObject);
                 break;
             case "clip":
                 Clip.OnRemote(m.S("text"), m.S("from"));
