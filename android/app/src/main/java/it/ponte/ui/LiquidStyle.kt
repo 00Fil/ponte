@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 object Liquid {
     /** Colore di partenza dello sfondo: serve anche alle dissolvenze, per non lasciare bande diverse. */
     fun top(dark: Boolean) = if (dark) Color(0xFF0B1226) else Color(0xFFF1F6FF)
-    private fun bottom(dark: Boolean) = if (dark) Color(0xFF0C1130) else Color(0xFFE6EBFF)
+    fun bottom(dark: Boolean) = if (dark) Color(0xFF0C1130) else Color(0xFFE6EBFF)
 
     fun rim(dark: Boolean, strong: Boolean = false): Brush {
         val a = if (strong) 1f else 0.85f
