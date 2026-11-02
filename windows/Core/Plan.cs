@@ -338,7 +338,7 @@ public static class Ics
         return res.OrderBy(e => e.Start).ToList();
     }
 
-    private static string Unesc(string s) => s.Replace("\\n", "\n").Replace("\\N", "\n").Replace("\\,", ",").Replace("\;", ";").Replace("\\\\", "\\");
+    private static string Unesc(string s) => s.Replace("\\n", "\n").Replace("\\N", "\n").Replace("\\,", ",").Replace("\\;", ";").Replace("\\\\", "\\");
 
     private static bool ParseDate(string pars, string val, out DateTime local, out bool allDay)
     {
