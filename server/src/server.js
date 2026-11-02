@@ -118,12 +118,54 @@ export async function start({
     }
   }
   const clipIds = new Set(clips.map((c) => c.id));
+
+  // Tetto morbido sull'archivio (file + appunti): mai restrittivo. Un caricamento entra sempre; se poi si sfora, in coda
+  // parte la rimozione delle cose più vecchie finché si rientra.
+  const capBytes = Number(process.env.PONTE_STORE_CAP_GB ?? 50) * 1024 ** 3;
+  const clipBytes = (c) => Buffer.byteLength(c.text);
+  let evicting = false;
+  let evictAgain = false;
+  const evict = () => {
+    if (evicting) { evictAgain = true; return; }
+    evicting = true;
+    setImmediate(() => {
+      try {
+        let total = 0;
+        for (const e of index.values()) total += e.size || 0;
+        for (const c of clips) total += clipBytes(c);
+        if (total > capBytes) {
+          const items = [
+            ...[...index.values()].map((e) => ({ file: true, ts: e.ts || 0, e, size: e.size || 0 })),
+            ...clips.map((c) => ({ file: false, ts: c.ts || 0, c, size: clipBytes(c) })),
+          ].sort((a, b) => a.ts - b.ts);
+          const gone = new Set();
+          let files = false;
+          for (const it of items) {
+            if (total <= capBytes) break;
+            total -= it.size;
+            if (it.file) { index.delete(it.e.fid); fs.rmSync(path.join(filesDir, it.e.fid), { force: true }); files = true; }
+            else { clipIds.delete(it.c.id); gone.add(it.c); }
+          }
+          if (files) fs.writeFileSync(indexPath, [...index.values()].map((e) => JSON.stringify(e) + '\n').join(''));
+          if (gone.size) {
+            clips = clips.filter((c) => !gone.has(c));
+            fs.writeFileSync(clipsPath, clips.map((c) => JSON.stringify(c) + '\n').join(''));
+          }
+        }
+      } catch { /* alla prossima volta */ } finally {
+        evicting = false;
+        if (evictAgain) { evictAgain = false; evict(); }
+      }
+    });
+  };
+
   const saveClip = (m) => {
     if (typeof m.text !== 'string' || !m.text || clipIds.has(m.id)) return;
     const c = { id: m.id, from: m.from, ts: m.ts, text: m.text };
     clips.push(c);
     clipIds.add(c.id);
     fs.appendFileSync(clipsPath, JSON.stringify(c) + '\n');
+    evict();
   };
 
   /** @type {Map<string, {ws: import('ws').WebSocket, info: object}>} */
@@ -260,6 +302,7 @@ export async function start({
       const entry = { ...f.meta, ts: Date.now() };
       index.set(entry.fid, entry);
       fs.appendFileSync(indexPath, JSON.stringify(entry) + '\n');
+      evict();
       return true;
     }
     return false;

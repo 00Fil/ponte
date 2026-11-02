@@ -205,3 +205,24 @@ test('aggiornamenti: gira la release di GitHub ai dispositivi', async () => {
   gh.close();
   fs.rmSync(d, { recursive: true, force: true });
 });
+
+test('il tetto sull\'archivio non blocca: entra tutto, poi si tolgono le cose più vecchie', async () => {
+  const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ponte-cap-'));
+  process.env.PONTE_STORE_CAP_GB = String(10_000 / 1024 ** 3); // circa 10 KB
+  const s2 = await start({ port: 0, token: TOKEN, dataDir: d2, maxFileBytes: 1024 * 1024 });
+  delete process.env.PONTE_STORE_CAP_GB;
+  const ws = new WebSocket(`ws://127.0.0.1:${s2.port}/ws`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  await new Promise((r) => ws.on('open', r));
+  ws.send(JSON.stringify({ t: 'hello', id: uid(), from: 'dispositivo-cap', name: 'cap', platform: 'windows', caps: ['clip'] }));
+  await new Promise((r) => setTimeout(r, 100));
+  const ids = [uid(), uid(), uid()];
+  for (const id of ids) { ws.send(JSON.stringify({ t: 'clip', id, text: 'x'.repeat(6000) })); await new Promise((r) => setTimeout(r, 30)); }
+  await new Promise((r) => setTimeout(r, 200));
+  const res = await fetch(`http://127.0.0.1:${s2.port}/api/clips?since=0`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  const list = (await res.json()).map((c) => c.id);
+  assert.ok(list.includes(ids[2]), 'l\'ultimo resta');
+  assert.ok(!list.includes(ids[0]), 'il più vecchio è stato tolto');
+  ws.close();
+  await s2.close();
+  fs.rmSync(d2, { recursive: true, force: true });
+});
