@@ -230,8 +230,8 @@ fun GlassTabBar(
     val follow = remember { Animatable(0f) }
     val bubble = remember { Animatable(1f) }
     LaunchedEffect(holding) {
-        // si gonfia appena un poco quando la tocchi, senza rimbalzi vistosi
-        bubble.animateTo(if (holding) 1.09f else 1f, spring(dampingRatio = 0.82f, stiffness = 380f))
+        // si gonfia quando la tocchi, ma si assesta quasi senza oscillare
+        bubble.animateTo(if (holding) 1.24f else 1f, spring(dampingRatio = 0.78f, stiffness = 360f))
     }
     val pillPos = { if (holding || settling) follow.value else pos() }
 
@@ -253,7 +253,7 @@ fun GlassTabBar(
             // 1) il vetro della barra: rifrazione, sfocatura poca, colori vivi
             Glass(
                 layer, { origin }, barW, barH,
-                edge = 20.dp, amount = 13.dp, aberr = 0.28f, sat = 1.7f, magnify = 0f, blur = 5.dp,
+                edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 4.dp,
             )
             // 2) velo appena percettibile (non grigio): serve solo a dare corpo
             Box(
@@ -342,16 +342,16 @@ fun GlassTabBar(
                 Modifier.graphicsLayer {
                     val px = pillW.toPx()
                     translationX = pillPos() * px
-                    val stretch = (abs(follow.targetValue - follow.value) * 0.10f).coerceAtMost(0.12f)
+                    val stretch = (abs(follow.targetValue - follow.value) * 0.30f).coerceAtMost(0.34f)
                     scaleX = bubble.value * (1f + stretch)
-                    scaleY = 1f + (bubble.value - 1f) * 0.8f - stretch * 0.25f
+                    scaleY = 1f + (bubble.value - 1f) * 0.75f - stretch * 0.28f
                 },
             ) {
                 Glass(
                     barLayer,
                     { Offset(with(dens) { padX.toPx() + pillPos() * pillW.toPx() }, with(dens) { padY.toPx() }) },
                     pillW, pillH,
-                    edge = 22.dp, amount = 18.dp, aberr = 0.45f, sat = 1.6f, magnify = 0.08f, blur = 0.dp,
+                    edge = 10.dp, amount = 8.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp,
                 )
                 Box(
                     Modifier.size(pillW, pillH)
