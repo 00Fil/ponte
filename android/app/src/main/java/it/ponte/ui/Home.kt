@@ -110,9 +110,8 @@ private fun Tile(icon: Int, title: String, value: String, note: String, tint: Li
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Column(
-        modifier.height(132.dp).clip(shape)
-            .background(Brush.verticalGradient(listOf(tint[0].copy(alpha = 0.10f), c.bgSurface), endY = 300f))
-            .border(BorderStroke(1.dp, c.lineSeparator), shape)
+        modifier.height(132.dp).glassPanel(shape, isDark())
+            .background(Brush.verticalGradient(listOf(tint[0].copy(alpha = 0.16f), Color.Transparent), endY = 320f))
             .clickable(onClick = onClick).padding(Space.s4),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {

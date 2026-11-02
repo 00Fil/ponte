@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.isSystemInDarkTheme
+import it.ponte.ui.Liquid
+import it.ponte.ui.liquidCanvas
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -151,7 +154,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(132.dp)) {
             FiberField(Modifier.matchParentSize(), band = true, centerY = 0.42f, spread = 0.9f)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.bgCanvas)))
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Liquid.top(isSystemInDarkTheme()))))
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
                 TABS.forEachIndexed { i, t ->
                     Text(
@@ -185,7 +188,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
+    BoxWithConstraints(Modifier.fillMaxSize().liquidCanvas(isSystemInDarkTheme())) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 Column(Modifier.width(240.dp).fillMaxHeight().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {

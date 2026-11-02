@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
@@ -46,10 +47,9 @@ enum class Tone { Neutral, Positive, Caution, Critical, Accent }
 /** Scheda: Card di Canone. Raggio 28, margine interno 24, filetto a riposo. */
 @Composable
 fun CCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Column(
-        modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s5),
+        modifier.fillMaxWidth().glassPanel(shape, isDark()).padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
         content = content,
     )
@@ -61,7 +61,7 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
     val c = Canone.colors
     val (bg, fg) = when (kind) {
         ButtonKind.Primary -> Brand.royal to Color.White
-        ButtonKind.Secondary -> c.bgSunken to c.labelPrimary
+        ButtonKind.Secondary -> Color.Transparent to c.labelPrimary
         ButtonKind.Tertiary -> Color.Transparent to c.accent
         ButtonKind.Destructive -> c.critical to c.criticalOnCritical
     }
@@ -71,7 +71,16 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
     val scale by androidx.compose.animation.core.animateFloatAsState(
         if (pressed) 0.96f else 1f, androidx.compose.animation.core.spring(stiffness = 600f), label = "pressione",
     )
-    val fill = if (kind == ButtonKind.Primary) Modifier.background(Brand.gradient) else Modifier.background(bg)
+    val dark = isDark()
+    val fill = when (kind) {
+        // primario: azzurro lucido con riflesso in alto e bordo di luce
+        ButtonKind.Primary -> Modifier.background(Brand.gradient)
+            .background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.38f), 0.5f to Color.Transparent))
+            .border(1.dp, Liquid.rim(dark, true), CircleShape)
+        ButtonKind.Secondary -> Modifier.glassPanel(CircleShape, dark, veil = 0.9f, elevation = false)
+        ButtonKind.Tertiary -> Modifier
+        ButtonKind.Destructive -> Modifier.background(bg).border(1.dp, Liquid.rim(dark), CircleShape)
+    }
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -94,7 +103,7 @@ fun CBadge(text: String, tone: Tone = Tone.Neutral) {
         Tone.Critical -> c.criticalSubtle to c.criticalOnSubtle
         Tone.Accent -> c.accentSubtle to c.accentOnSubtle
     }
-    Box(Modifier.clip(CircleShape).background(bg).padding(horizontal = Space.s3, vertical = Space.s1)) {
+    Box(Modifier.clip(CircleShape).background(bg.copy(alpha = 0.85f)).border(1.dp, Liquid.rim(isDark()), CircleShape).padding(horizontal = Space.s3, vertical = Space.s1)) {
         Text(text, style = CanoneType.footnote, color = fg, maxLines = 1)
     }
 }
@@ -132,7 +141,7 @@ fun CRow(title: String, note: String? = null, modifier: Modifier = Modifier, mon
 
 @Composable
 fun CDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Canone.colors.lineSeparator))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Canone.colors.lineSeparator.copy(alpha = 0.55f)))
 }
 
 /** Campo di testo: etichetta sempre sopra e visibile, segnaposto solo come esempio. */
@@ -150,8 +159,8 @@ fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { inner ->
                 Box(
-                    Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(Radius.md)).background(c.bgSurface)
-                        .border(BorderStroke(1.5.dp, c.lineStrong), RoundedCornerShape(Radius.md)).padding(horizontal = Space.s4),
+                    Modifier.fillMaxWidth().height(44.dp).glassPanel(RoundedCornerShape(Radius.md), isDark(), veil = 0.8f, elevation = false)
+                        .padding(horizontal = Space.s4),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (value.isEmpty()) Text(placeholder, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelTertiary, maxLines = 1)

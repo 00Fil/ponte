@@ -108,7 +108,7 @@ fun UpdateSheet(u: Updater.Ui, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Radius.xl)
     Column(
         modifier.fillMaxWidth().shadow(18.dp, shape, ambientColor = Brand.royal.copy(alpha = 0.25f), spotColor = Brand.royal.copy(alpha = 0.25f))
-            .clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s4),
+            .glassPanel(shape, isDark(), elevation = false).padding(Space.s4),
         verticalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
