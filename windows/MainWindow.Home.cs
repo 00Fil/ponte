@@ -25,18 +25,19 @@ public sealed partial class MainWindow
         var sub = T(devices.Count == 0 ? "Solo questo PC per ora" : devices.Count == 1 ? "Collegato con 1 dispositivo" : $"Collegato con {devices.Count} dispositivi", 13, "LabelTertiary");
         h.Children.Add(sub);
 
-        h.Children.Add(MoneyWidget());
         h.Children.Add(PlanWidgets());
 
-        // ultimo screenshot e ultimo testo copiato
+        // ultimo screenshot, ultimo testo copiato e saldo: come su Android
         var row = new Grid { ColumnSpacing = 12 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var c0 = 0; c0 < 3; c0++) row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var shot = ShotWidget();
         var clip = ClipWidget();
+        var bal = BalanceCard();
         Grid.SetColumn(clip, 1);
+        Grid.SetColumn(bal, 2);
         row.Children.Add(shot);
         row.Children.Add(clip);
+        row.Children.Add(bal);
         h.Children.Add(row);
 
         // musica in un quadrato + attività della settimana
@@ -136,50 +137,30 @@ public sealed partial class MainWindow
 
     // ---------------------------------------------------------------- saldo
 
-    private Border MoneyWidget()
+    /// <summary>Il saldo come un riquadro qualsiasi: l'occhio nasconde l'importo, il resto del riquadro apre Finanze.</summary>
+    private Border BalanceCard()
     {
         var m = _r.Fin.State;
-        var col = new StackPanel { Spacing = 8 };
+        var col = new Grid();
+        col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        col.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.Children.Add(T("Saldo", 13, "LabelTertiary"));
         var eye = EyeToggle();
+        eye.Width = 32; eye.Height = 32;
         Grid.SetColumn(eye, 1);
         head.Children.Add(eye);
         col.Children.Add(head);
-        var bal = MoneyText("home.total", m.TotalCents, 40);
-        bal.Tapped += (_, _) => Select(2);
+        var bal = MoneyText("home.total", m.TotalCents, 24);
+        bal.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetRow(bal, 1);
         col.Children.Add(bal);
-
-        // cassetto con le ultime operazioni, sfumate in basso
-        var ops = new StackPanel { Spacing = 0 };
-        foreach (var t in m.Txs.Take(4))
-        {
-            var r = new Grid { Height = 34, ColumnSpacing = 10 };
-            r.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            r.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            r.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            r.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(CatColor(t.Cat)), VerticalAlignment = VerticalAlignment.Center });
-            var n = T(t.Note.Length > 0 ? t.Note : t.Cat, 13, "LabelSecondary");
-            n.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(n, 1);
-            r.Children.Add(n);
-            var v = MoneyText("home.op." + t.Id, t.Cents, 13, t.Cents > 0 ? "PositiveOnSubtle" : "LabelPrimary", true, t.Cents > 0 ? "+" : "");
-            v.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(v, 2);
-            r.Children.Add(v);
-            ops.Children.Add(r);
-        }
-        if (m.Txs.Count == 0) ops.Children.Add(T("Nessuna operazione", 13, "LabelTertiary"));
-        var drawer = new Border
-        {
-            Background = B("BgSunken"), CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 6, 14, 6), Child = ops,
-        };
-        // dissolvenza verso il basso: ogni riga un po' più tenue
-        for (var k = 0; k < ops.Children.Count; k++) ops.Children[k].Opacity = new[] { 1, 0.85, 0.6, 0.35 }[Math.Min(k, 3)];
-        col.Children.Add(drawer);
-        return Widget(col);
+        var w = Widget(col, 170);
+        w.Tapped += (_, _) => Select(2);
+        Bounce(w, 1.02f);
+        return w;
     }
 
     // ---------------------------------------------------------------- screenshot e testo

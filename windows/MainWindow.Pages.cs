@@ -396,7 +396,6 @@ public sealed partial class MainWindow
         info.Children.Add(T(_r.Hp.List.FirstOrDefault(x => x.Connected)?.Name ?? "Cuffie", 13, "LabelTertiary"));
         info.Children.Add(T(Who(_r.Hp.Holder), 22, "LabelPrimary", true));
         if (_r.Hp.LockedBy != null) info.Children.Add(T("Bloccate " + Who(_r.Hp.LockedBy).ToLowerInvariant(), 13, "LabelTertiary"));
-        info.Children.Add(T("Esce da " + np.OutputName, 13, "LabelTertiary"));
         Grid.SetColumn(info, 1);
         hpRow.Children.Add(info);
         var locked = _r.Hp.LockedBy == _r.DeviceId;
