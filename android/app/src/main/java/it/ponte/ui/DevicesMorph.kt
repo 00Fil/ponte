@@ -44,7 +44,7 @@ import it.ponte.Router
  * senza salti) mostrando le bolle dei dispositivi, poi si ritira; un tocco sulla pillola la riapre.
  */
 @Composable
-fun DevicesMorph(r: Router, open: Boolean, onToggle: () -> Unit) {
+fun DevicesMorph(r: Router, open: Boolean, onClose: () -> Unit = {}, onToggle: () -> Unit) {
     val c = Canone.colors
     val devices by r.devices.collectAsState()
     val n = devices.size
@@ -64,7 +64,7 @@ fun DevicesMorph(r: Router, open: Boolean, onToggle: () -> Unit) {
                 .pointerInput(open) {
                     if (!open) return@pointerInput
                     var dy = 0f
-                    detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy < -40f) onToggle() }, onDragCancel = {}) { _, a -> dy += a }
+                    detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy < -40f) onClose() }, onDragCancel = {}) { _, a -> dy += a }
                 },
         ) {
             if (p < 0.6f) Box(Modifier.size(w, 30.dp).graphicsLayer { alpha = (1f - p * 2f).coerceIn(0f, 1f) }, contentAlignment = Alignment.Center) {

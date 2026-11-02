@@ -110,7 +110,9 @@ public sealed class Headphones
         var from = m.S("from");
         if (from.Length == 0) return;
         _lastInputAt[from] = DateTime.UtcNow - TimeSpan.FromMilliseconds(m.L("ago"));
+        var was = Focus;
         Focus = ComputeFocus();
+        if (Focus == from && was != from && m.L("ago") < 3000) _r.Media.YieldTo(from);
         _r.Raise();
     }
 

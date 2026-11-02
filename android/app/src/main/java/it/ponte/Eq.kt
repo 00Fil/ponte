@@ -7,9 +7,12 @@ import android.media.audiofx.LoudnessEnhancer
 
 /** Equalizzatore di sistema: agisce sulla sessione audio globale (0), quindi su tutto ciò che il telefono riproduce. */
 object Eq {
+    private class Fx(val eq: Equalizer?, val bass: BassBoost?, val loud: LoudnessEnhancer?) {
+        fun release() { try { eq?.release() } catch (_: Throwable) {}; try { bass?.release() } catch (_: Throwable) {}; try { loud?.release() } catch (_: Throwable) {} }
+    }
+    /** Sessione audio -> effetti. La 0 è quella globale; le altre arrivano dalle app che annunciano la propria sessione. */
+    private val fx = java.util.concurrent.ConcurrentHashMap<Int, Fx>()
     private var eq: Equalizer? = null
-    private var bass: BassBoost? = null
-    private var loud: LoudnessEnhancer? = null
     private var sp: android.content.SharedPreferences? = null
 
     var bands = 0; private set
@@ -45,31 +48,64 @@ object Eq {
         e.apply(); apply()
     }
 
+    private fun make(sid: Int): Fx {
+        val e = try { Equalizer(1000, sid) } catch (_: Throwable) { null }
+        val b = try { BassBoost(1000, sid) } catch (_: Throwable) { null }
+        val l = try { LoudnessEnhancer(sid) } catch (_: Throwable) { null }
+        return Fx(e, b, l)
+    }
+
     fun start(ctx: Context) {
         if (sp == null) sp = ctx.applicationContext.getSharedPreferences("eq", Context.MODE_PRIVATE)
-        if (eq == null) {
-            try {
-                val e = Equalizer(1000, 0)
+        if (fx[0] == null) {
+            val g = make(0)
+            fx[0] = g
+            g.eq?.let { e ->
                 eq = e; bands = e.numberOfBands.toInt()
                 minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
                 freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
                 available = true
-            } catch (_: Throwable) { available = false }
-            try { bass = BassBoost(1000, 0) } catch (_: Throwable) {}
-            try { loud = LoudnessEnhancer(0) } catch (_: Throwable) {}
+            }
+            // Dove l'effetto globale è ignorato dal telefono, ci si aggancia a ogni sessione che le app annunciano (come fanno gli equalizzatori di sistema).
+            try {
+                val f = android.content.IntentFilter().apply {
+                    addAction(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+                    addAction(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+                }
+                androidx.core.content.ContextCompat.registerReceiver(ctx.applicationContext, object : android.content.BroadcastReceiver() {
+                    override fun onReceive(c: Context, i: android.content.Intent) {
+                        val sid = i.getIntExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, -1)
+                        if (sid <= 0) return
+                        if (i.action == android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION) {
+                            if (fx[sid] == null) {
+                                val x = make(sid); fx[sid] = x
+                                if (!available) x.eq?.let { e ->
+                                    eq = e; bands = e.numberOfBands.toInt()
+                                    minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
+                                    freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
+                                    available = true
+                                }
+                                apply()
+                            }
+                        } else fx.remove(sid)?.release()
+                    }
+                }, f, androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
+            } catch (_: Throwable) {}
         }
         apply()
     }
 
     private fun apply() {
         val on = enabled
-        try {
-            eq?.let { e ->
-                for (i in 0 until bands) e.setBandLevel(i.toShort(), (level(i).coerceIn(minDb, maxDb) * 100).toShort())
-                e.enabled = on
-            }
-        } catch (_: Throwable) {}
-        try { bass?.let { if (it.strengthSupported) it.setStrength((bassLevel * 10).toShort()); it.enabled = on && bassLevel > 0 } } catch (_: Throwable) {}
-        try { loud?.let { it.setTargetGain(gain * 100); it.enabled = on && gain > 0 } } catch (_: Throwable) {}
+        fx.values.forEach { x ->
+            try {
+                x.eq?.let { e ->
+                    for (i in 0 until minOf(bands, e.numberOfBands.toInt())) e.setBandLevel(i.toShort(), (level(i).coerceIn(minDb, maxDb) * 100).toShort())
+                    e.enabled = on
+                }
+            } catch (_: Throwable) {}
+            try { x.bass?.let { if (it.strengthSupported) it.setStrength((bassLevel * 10).toShort()); it.enabled = on && bassLevel > 0 } } catch (_: Throwable) {}
+            try { x.loud?.let { it.setTargetGain(gain * 100); it.enabled = on && gain > 0 } } catch (_: Throwable) {}
+        }
     }
 }

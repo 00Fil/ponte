@@ -181,9 +181,9 @@ const val DIFFERENT_KEY = "Questa copia ha una firma diversa dalle nuove: disins
 
 fun notifyUser(c: Context, intent: Intent?, title: String, text: String) {
     val nm = c.getSystemService(NotificationManager::class.java)
-    nm.createNotificationChannel(NotificationChannel("aggiornamenti", "Aggiornamenti", NotificationManager.IMPORTANCE_DEFAULT))
-    val b = Notification.Builder(c, "aggiornamenti")
-        .setSmallIcon(R.drawable.ic_ponte)
+    Notify.channels(c)
+    val b = Notification.Builder(c, Notify.UPDATES)
+        .setSmallIcon(R.drawable.ic_n_update)
         .setContentTitle(title)
         .setContentText(text)
         .setStyle(Notification.BigTextStyle().bigText(text))

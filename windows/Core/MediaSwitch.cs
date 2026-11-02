@@ -74,6 +74,15 @@ public sealed class MediaSwitch
         _ = PauseAsync();
     }
 
+    /// <summary>Un altro dispositivo è diventato quello in uso: qui l'audio si ferma subito.</summary>
+    public void YieldTo(string from)
+    {
+        if (!_r.S.AutoPause || !_playing) return;
+        if (_r.Hp.LockedBy == _r.DeviceId || _r.Audio.SinkId != null) return;
+        _quietUntil = DateTime.UtcNow.AddSeconds(5);
+        _ = PauseAsync();
+    }
+
     private static async Task PauseAsync()
     {
         try

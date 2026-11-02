@@ -22,6 +22,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -170,7 +171,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     }
     val top: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
-            GlassSegmented(listOf("Mese", "Prossimi", "Studio"), mode, { mode = it }, Modifier.weight(1f))
+            GlassSegmented(listOf("Mese", "Studio"), if (mode == 2) 1 else 0, { mode = if (it == 1) 2 else 0 }, Modifier.weight(1f))
             CButton("Google", { onSub("cals") }, kind = ButtonKind.Secondary)
         }
     }
@@ -188,7 +189,12 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
             "set" -> StudySettings(r) { onSub(null) }
             "cals" -> CalendarsPage(ctx, bridge, granted, cals, hidden, target, { hidden = it; bridge.hidden = it; tick++ }, { target = it; bridge.target = it }, { ask.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }) { onSub(null) }
             else -> Box(Modifier.fillMaxSize()) {
-                when (mode) {
+                androidx.compose.animation.AnimatedContent(
+                    mode,
+                    transitionSpec = { (fadeIn(tween(260, delayMillis = 70)) + androidx.compose.animation.scaleIn(spring(1f, 420f), 0.97f)) togetherWith fadeOut(tween(110)) },
+                    label = "agendaMode",
+                ) { md ->
+                when (md) {
                     0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         Column(Modifier.widthIn(max = 720.dp).fillMaxHeight().padding(top = Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                             Box(Modifier.padding(horizontal = Space.s4)) { top() }
@@ -205,19 +211,11 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             DayDrawer(selected, on(selected), expanded, { expanded = it }, { open(it) }, { remove(it) }, Modifier.weight(1f))
                         }
                     }
-                    1 -> ScreenList("Agenda") {
-                        item { top() }
-                        val days = (0 until 45).map { dayStart(now) + it * DAY }.map { it to on(it) }.filter { it.second.isNotEmpty() }
-                        if (days.isEmpty()) item { Text("Niente nei prossimi giorni", style = CanoneType.footnote, color = c.labelTertiary) }
-                        days.forEach { (day, list) ->
-                            item(key = "h$day") { Text(dayLabel(day), style = CanoneType.bodyMedium, color = c.labelSecondary, modifier = Modifier.padding(top = Space.s2)) }
-                            items(list.size, key = { list[it].key + day }) { i -> SwipeRow(list[i].kind <= 1, { remove(list[i]) }) { EventRow(list[i]) { open(list[i]) } } }
-                        }
-                    }
                     else -> ScreenList("Agenda") {
                         item { top() }
                         studyItems(r, plan) { onSub("set") }
                     }
+                }
                 }
                 if (mode != 2) Fab(Modifier.align(Alignment.BottomEnd).padding(end = Space.s4, bottom = LocalBarInset.current + 4.dp)) { sheet = Sheet(null, newDraft(if (mode == 0) selected else dayStart(now)), true) }
                 sheet?.let { sh ->

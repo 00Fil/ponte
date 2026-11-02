@@ -20,14 +20,14 @@ class PonteService : Service() {
     override fun onCreate() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Relay in esecuzione", NotificationManager.IMPORTANCE_LOW))
+        Notify.channels(this)
         val send = PendingIntent.getActivity(
             this, 0, Intent(this, ClipSendActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val open = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_ponte)
+        val n = Notification.Builder(this, Notify.SERVICE)
+            .setSmallIcon(R.drawable.ic_n_sync)
             .setContentTitle("Relay")
             .setContentText("Collegato ai tuoi dispositivi")
             .setContentIntent(open)

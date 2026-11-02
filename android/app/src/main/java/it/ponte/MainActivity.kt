@@ -1,5 +1,7 @@
 package it.ponte
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -82,8 +84,11 @@ import it.ponte.ui.SettingsScreen
 import it.ponte.ui.Space
 
 class MainActivity : ComponentActivity() {
+    override fun onPause() { super.onPause(); Notify.foreground = false }
+
     override fun onResume() {
         super.onResume()
+        Notify.foreground = true
         Ponte.ensure(this).clipLog.onForeground()
     }
 
@@ -203,7 +208,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         },
                     ) {
                         Text(t, style = CanoneType.title1, color = c.labelPrimary)
-                        if (i == 0) Box(Modifier.fillMaxWidth().padding(top = 4.dp)) { it.ponte.ui.DevicesMorph(r, devOpen) { devOpen = !devOpen } }
+                        if (i == 0) Box(Modifier.fillMaxWidth().padding(top = 4.dp)) { it.ponte.ui.DevicesMorph(r, devOpen, onClose = { devOpen = false }) { devOpen = !devOpen } }
                     }
                 }
             }
@@ -227,6 +232,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     // Scheda dell'aggiornamento: galleggia in basso, non sposta il contenuto.
     val upd by r.updater.ui.collectAsState()
     val sheet: @Composable BoxScope.() -> Unit = {
+        it.ponte.ui.BannerHost()
         androidx.compose.animation.AnimatedVisibility(
             upd != null, Modifier.align(Alignment.BottomCenter),
             enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(1f, 300f)) { it / 2 } + fadeIn(tween(220)),
@@ -239,7 +245,15 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     }
 
     androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalNowPlaying provides np) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(c.bgCanvas).pointerInput(Unit) {
+            // un tocco qualsiasi, in ogni punto, richiude il popup dei dispositivi (senza consumarlo)
+            androidx.compose.foundation.gestures.awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                if (devOpen) devOpen = false
+            }
+        },
+    ) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 Column(Modifier.width(240.dp).fillMaxHeight().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {

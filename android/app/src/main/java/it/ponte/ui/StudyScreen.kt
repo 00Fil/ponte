@@ -118,7 +118,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     }
     val total = (when (t.phase) { "short" -> p.cfg("short", 5); "long" -> p.cfg("long", 15); else -> p.cfg("focus", 25) }) * 60_000L
     val left = if (t.running) (t.endAt - nowMs).coerceIn(0L, total) else total
-    val progress by animateFloatAsState(if (t.running) 1f - left.toFloat() / total else 0f, tween(300), label = "anello")
+    val progress by animateFloatAsState(if (t.running) 1f - left.toFloat() / total else 0f, if (t.running) tween(280, easing = androidx.compose.animation.core.LinearEasing) else spring(0.9f, 220f), label = "anello")
     val focus = t.phase == "focus"
     val tint = if (focus) c.accent else c.positive
     val rounds = p.cfg("rounds", 4)
@@ -137,7 +137,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     val drift by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(16000, easing = androidx.compose.animation.core.LinearEasing)), label = "deriva")
     val breathe by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(3200), androidx.compose.animation.core.RepeatMode.Reverse), label = "respiro")
     val strength by animateFloatAsState(if (t.running) 1f else if (np?.playing == true) 0.7f else 0.4f, tween(900), label = "forza")
-    val shape = RoundedCornerShape(Radius.xl)
+    val shape = RoundedCornerShape(36.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(c.bgSurface)
             .drawBehind {
@@ -150,26 +150,35 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
                     drawCircle(Brush.radialGradient(listOf(cols[i].copy(alpha = a), Color.Transparent), ctr, rad), rad, ctr)
                 }
             }
-            .border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s5),
+            .padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium, color = tint)
+            Text("Studio", style = CanoneType.bodyMedium, color = c.labelSecondary)
             CButton("Durate", onSettings, kind = ButtonKind.Tertiary)
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(232.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(264.dp), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxSize()) {
-                    val w = 14.dp.toPx()
-                    val tl = Offset(w / 2, w / 2); val sz = Size(size.width - w, size.height - w)
-                    drawArc(c.bgSunken, 0f, 360f, false, tl, sz, style = Stroke(w))
-                    if (progress > 0.002f) drawArc(tint, -90f, 360f * progress, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+                    val w = 10.dp.toPx()
+                    val inset = 14.dp.toPx()
+                    val tl = Offset(inset, inset); val sz = Size(size.width - inset * 2, size.height - inset * 2)
+                    drawArc(c.labelPrimary.copy(alpha = 0.07f), 0f, 360f, false, tl, sz, style = Stroke(w))
+                    if (progress > 0.002f) {
+                        val sweep = 360f * progress
+                        // alone morbido sotto l'arco, poi l'arco a gradiente con la testa tonda
+                        drawArc(tint.copy(alpha = 0.22f), -90f, sweep, false, tl - Offset(5.dp.toPx(), 5.dp.toPx()), Size(sz.width + 10.dp.toPx(), sz.height + 10.dp.toPx()), style = Stroke(w + 10.dp.toPx(), cap = StrokeCap.Round))
+                        drawArc(Brush.sweepGradient(listOf(tint.copy(alpha = 0.55f), tint, tint.copy(alpha = 0.55f)), center), -90f, sweep, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+                    }
+                    val ang = Math.toRadians((-90.0 + 360.0 * progress))
+                    val r0 = sz.width / 2
+                    drawCircle(Color.White, w * 0.32f, Offset(center.x + (r0 * kotlin.math.cos(ang)).toFloat(), center.y + (r0 * kotlin.math.sin(ang)).toFloat()))
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 52.sp, lineHeight = 60.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), c.labelPrimary)
+                    RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 64.sp, lineHeight = 72.sp, fontWeight = FontWeight.Light, fontFeatureSettings = "tnum"), c.labelPrimary)
                     Text(
-                        if (t.running && !mine) "su un altro dispositivo" else "Studio",
-                        style = CanoneType.footnote, color = c.labelTertiary,
+                        if (t.running && !mine) "su un altro dispositivo" else when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" },
+                        style = CanoneType.footnote.copy(letterSpacing = 1.2.sp), color = tint,
                     )
                 }
             }
@@ -207,11 +216,11 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            if (t.running) CButton("Ferma", { r.plan.timerStop() }, Modifier.weight(1f))
-            else CButton("Avvia", { r.plan.timerStart("") }, Modifier.weight(1f), kind = ButtonKind.Primary)
+            if (t.running) CButton("Ferma", { r.plan.timerStop() }, Modifier.weight(1f).height(56.dp))
+            else CButton("Avvia", { r.plan.timerStart("") }, Modifier.weight(1f).height(56.dp), kind = ButtonKind.Primary)
             CButton("Salta", {
                 r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus")
-            }, Modifier.weight(1f))
+            }, Modifier.weight(1f).height(56.dp))
         }
     }
 }
@@ -266,11 +275,7 @@ private fun StatsPage(p: PlanState) {
     val week = (6 downTo 0).map { today - it * DAYMS }
     val perDay = week.map { d -> minutesOn(p, d, d + DAYMS) }
     CCard {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
-            Column { Text("Oggi", style = CanoneType.footnote, color = c.labelTertiary); Text(hm(perDay.last()), style = CanoneType.title3, color = c.labelPrimary) }
-            Column { Text("7 giorni", style = CanoneType.footnote, color = c.labelTertiary); Text(hm(perDay.sum()), style = CanoneType.title3, color = c.labelPrimary) }
-            Column { Text("Serie", style = CanoneType.footnote, color = c.labelTertiary); Text("${streak(p)} g", style = CanoneType.title3, color = c.labelPrimary) }
-        }
+        Column { Text("Ultimi 7 giorni", style = CanoneType.footnote, color = c.labelTertiary); Text(hm(perDay.sum()), style = CanoneType.title3, color = c.labelPrimary) }
         val goal = p.cfg("goal", 120)
         val top = maxOf(perDay.max(), goal, 1)
         Canvas(Modifier.fillMaxWidth().height(120.dp)) {
@@ -283,10 +288,6 @@ private fun StatsPage(p: PlanState) {
             drawLine(c.labelTertiary.copy(alpha = 0.6f), Offset(0f, gy), Offset(size.width, gy), 1.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f)))
         }
         Row(Modifier.fillMaxWidth()) { week.forEach { Text(fmt(it, "EEEEE").uppercase(), Modifier.weight(1f), style = CanoneType.footnote, color = c.labelTertiary, textAlign = TextAlign.Center) } }
-    }
-    CCard {
-        Text("Totale", style = CanoneType.footnote, color = c.labelTertiary)
-        Text("${hm(p.sessions.sumOf { it.minutes })} in ${p.sessions.size} pomodori", style = CanoneType.bodyMedium, color = c.labelPrimary)
     }
 }
 

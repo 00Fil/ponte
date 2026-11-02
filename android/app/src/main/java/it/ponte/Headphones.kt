@@ -149,7 +149,10 @@ class Headphones(private val ctx: Context, private val r: Router) {
     fun onFocus(m: JSONObject) {
         val from = m.optString("from").ifEmpty { return }
         lastInputAt[from] = System.currentTimeMillis() - m.optLong("ago", 0)
+        val was = focus.value
         focus.value = computeFocus()
+        // Un altro dispositivo è appena diventato quello principale: qui si smette di suonare, subito.
+        if (focus.value == from && was != from && m.optLong("ago", 0) < 3_000) r.media.yieldTo(from)
     }
 
     /** Il dispositivo in uso è quello con l'input più recente; se nessuno ha toccato nulla da 10 minuti, nessuno. */

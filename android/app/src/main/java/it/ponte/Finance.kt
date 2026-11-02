@@ -23,11 +23,8 @@ data class Money(
     /** Saldo di Revolut alla data [revTs]; poi si sommano i movimenti Revolut più recenti. */
     val revBase: Long = 0, val revTs: Long = 0,
 ) {
-    val cashCents: Long get() = cash.entries.sumOf { it.key.toLong() * it.value }
-    val revolutCents: Long get() = revBase + txs.filter { it.src == "revolut" && it.ts > revTs }.sumOf { it.cents }
-    /** Movimenti inseriti a mano (né contanti né Revolut): un conto "Altro". */
-    val otherCents: Long get() = txs.filter { it.src == "manual" }.sumOf { it.cents }
-    val totalCents: Long get() = cashCents + revolutCents + otherCents
+    /** Un solo patrimonio: la fonte (contanti, Revolut, altro) è solo un colore sul movimento. */
+    val totalCents: Long get() = revBase + txs.sumOf { if (it.src == "revolut" && it.ts <= revTs) 0L else it.cents }
 }
 
 val CATEGORIES = listOf("Cibo", "Casa", "Trasporti", "Svago", "Salute", "Shopping", "Abbonamenti", "Studio", "Altro", "Entrate")
@@ -55,6 +52,15 @@ class Finance(private val ctx: Context, private val r: Router) {
             val o = JSONObject(file.readText())
             if (o.has("tx")) fromJson(o) else migrate(o)
         } catch (_: Exception) {}
+        // Le banconote contate non sono più un conto a parte: ciò che c'era in tasca diventa un movimento "contanti" (una volta sola, uguale su ogni dispositivo).
+        val inv = cash.entries.sumOf { it.key.toLong() * it.value.first }
+        if (inv != 0L || cash.isNotEmpty()) {
+            val past = tx.values.filter { !it.d && it.s == "cash" }.sumOf { it.c }
+            val u = System.currentTimeMillis()
+            if (inv - past != 0L && !tx.containsKey("cash-init")) tx["cash-init"] = Rec(u, inv - past, "Altro", "Contanti iniziali", "cash", u, false)
+            cash.keys.toList().forEach { cash[it] = 0 to u }
+            save()
+        }
         publish()
     }
 
@@ -159,7 +165,14 @@ class Finance(private val ctx: Context, private val r: Router) {
     fun remove(id: String) = mutate { tx[id]?.let { tx[id] = Rec(it.t, it.c, it.k, it.n, it.s, System.currentTimeMillis(), true) } }
     fun bump(denom: Int, by: Int) = mutate { cash[denom] = ((cash[denom]?.first ?: 0) + by).coerceAtLeast(0) to System.currentTimeMillis() }
     fun clearCash() = mutate { val u = System.currentTimeMillis(); cash.keys.toList().forEach { cash[it] = 0 to u } }
-    fun setRevolut(cents: Long) = mutate { rev = Triple(cents, System.currentTimeMillis(), System.currentTimeMillis()) }
+    /** Imposta il saldo totale a mano: la base si calcola sottraendo i movimenti che contano già. */
+    fun setTotal(cents: Long) = mutate {
+        val now = System.currentTimeMillis()
+        rev = Triple(0L, now, now)
+        val rest = tx.values.filter { !it.d }.sumOf { if (it.s == "revolut") 0L else it.c }
+        rev = Triple(cents - rest, now, now)
+    }
+    fun setSource(id: String, src: String) = mutate { tx[id]?.let { tx[id] = Rec(it.t, it.c, it.k, it.n, src, System.currentTimeMillis(), it.d) } }
 
     // ---------------------------------------------------------------- Revolut
     /** Notifica di un pagamento Revolut: "Hai pagato 12,50 € a Esselunga" → spesa. Nessuna API: Revolut non ne ha una per i conti personali. */

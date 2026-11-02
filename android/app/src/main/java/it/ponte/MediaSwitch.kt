@@ -59,6 +59,22 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         r.scope.launch { pause() }
     }
 
+    /** Un altro dispositivo è diventato quello in uso: qui l'audio si ferma subito e un avviso lo dice. */
+    fun yieldTo(from: String) {
+        if (!r.prefs.autoPause || !am.isMusicActive) return
+        if (r.headphones.lockedBy.value == r.deviceId || r.audio.activeSource.value != null) return
+        quietUntil = System.currentTimeMillis() + 5_000
+        r.scope.launch { pause() }
+        Notify.say(ctx, "Ora usi " + r.deviceName(from), "Audio fermato su questo dispositivo", "Riprendi") { play() }
+    }
+
+    private fun play() {
+        try {
+            am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+            am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+        } catch (_: Exception) {}
+    }
+
     private suspend fun pause() {
         var done = false
         try {

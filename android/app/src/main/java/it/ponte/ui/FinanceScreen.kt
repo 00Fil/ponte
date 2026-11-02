@@ -1,5 +1,9 @@
 package it.ponte.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateFormat
@@ -97,6 +101,8 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     var cashMode by remember { mutableIntStateOf(1) }            // 1 ho speso, 2 ho ricevuto
     var tally by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var showNote by remember { mutableStateOf(false) }
+    var src by remember { mutableStateOf("cash") }
+    var srcMenu by remember { mutableStateOf(false) }
 
     fun range(y: Int, mo: Int): Pair<Long, Long> {
         val a = Calendar.getInstance().apply { clear(); set(y, if (mo < 0) 0 else mo, 1) }
@@ -167,7 +173,6 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         CashBar.onBack = { tally = emptyMap(); cat = ""; onSub(null) }
         CashBar.onConfirm = {
             val before = m.totalCents
-            tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (spendNow) -n else n) }
             r.finance.add(if (spendNow) -tallyAll else tallyAll, if (spendNow) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
             Flash.show(before, r.finance.state.value.totalCents - before)
             tally = emptyMap(); cat = ""; onSub(null)
@@ -208,6 +213,23 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 .dropClickable({ cat = k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
                         ) { Text(k.ifEmpty { "Auto" }, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1) }
                     }
+                    Box {
+                        Row(
+                            Modifier.clip(CircleShape).background(srcColor(src).copy(alpha = 0.22f)).dropClickable({ srcMenu = true }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(srcColor(src)))
+                            Text(srcName(src) + " ▾", style = CanoneType.footnote, color = c.labelPrimary, maxLines = 1)
+                        }
+                        androidx.compose.material3.DropdownMenu(srcMenu, { srcMenu = false }) {
+                            SOURCES.forEach { (k, n) ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Box(Modifier.size(10.dp).clip(CircleShape).background(srcColor(k))); Text(n) } },
+                                    onClick = { src = k; srcMenu = false },
+                                )
+                            }
+                        }
+                    }
                     Box(Modifier.clip(CircleShape).background(c.bgSunken).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
                         Text(if (showNote) "Nascondi nota" else "+ Nota", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
                     }
@@ -219,7 +241,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
                     val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
                     val before = r.finance.state.value.totalCents
-                    r.finance.add(if (income) v else -v, k, note.trim())
+                    r.finance.add(if (income) v else -v, k, note.trim(), src)
                     Flash.show(before, if (income) v else -v)
                     amount = ""; note = ""; cat = ""; showNote = false; onSub(null)
                 }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
@@ -250,11 +272,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
                             }
                             PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
-                            Row(horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
-                                Column { Text("Contanti", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.cashCents, CanoneType.body, c.labelPrimary) }
-                                Column { Text("Revolut", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.revolutCents, CanoneType.body, c.labelPrimary) }
-                                Column { Text("Altro", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.otherCents, CanoneType.body, c.labelPrimary) }
-                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) { SOURCES.forEach { (k, n) -> Legend(n, srcColor(k)) } }
                         }
                     }
                     item {
@@ -322,7 +340,6 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             // numero a slot, come nell'animazione a schermo intero
                             RollingText(eur(tallyCents), CanoneType.title1.copy(fontSize = 48.sp, lineHeight = 60.sp, fontWeight = FontWeight.SemiBold), if (tallyCents == 0L) c.labelTertiary else if (spend) c.critical else c.positive, haptic = true)
-                            Text("Nel portafoglio " + eur(m.cashCents), style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
                         }
                     }
                     item {
@@ -330,7 +347,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             NOTES_EUR.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                                     pair.forEach { d ->
-                                        Banknote(d, tally[d] ?: 0, m.cash[d] ?: 0,
+                                        Banknote(d, tally[d] ?: 0, 0,
                                             { tally = tally + (d to (tally[d] ?: 0) + 1) },
                                             { tally = tally + (d to ((tally[d] ?: 0) - 1).coerceAtLeast(0)) },
                                             Modifier.weight(1f))
@@ -379,14 +396,14 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item { Back("Revolut") }
                     item {
                         CCard {
-                            CountUp(m.revolutCents, CanoneType.title1, c.labelPrimary)
+                            CountUp(m.totalCents, CanoneType.title1, c.labelPrimary)
                             CRow("Pagamenti dalle notifiche", "Ogni pagamento che Revolut ti notifica entra da solo") {
                                 GrantMark(listenerEnabled(ctx)) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
                             }
                             CButton("Importa estratto (CSV)", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth())
-                            CField("Imposta il saldo a mano", revInput, { revInput = it }, "0,00", number = true)
+                            CField("Imposta il saldo totale", revInput, { revInput = it }, "0,00", number = true)
                             CButton("Salva saldo", {
-                                r.finance.toCents(revInput)?.let { r.finance.setRevolut(it); revInput = ""; toast(ctx, "Saldo aggiornato") } ?: toast(ctx, "Scrivi un importo")
+                                r.finance.toCents(revInput)?.let { r.finance.setTotal(it); revInput = ""; toast(ctx, "Saldo aggiornato") } ?: toast(ctx, "Scrivi un importo")
                             }, Modifier.fillMaxWidth(), kind = ButtonKind.Secondary)
                             CText(
                                 "Revolut non offre un'API per i conti personali (solo per quelli aziendali). I movimenti arrivano dalle sue notifiche, " +
@@ -419,6 +436,10 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
     }
 }
 
+internal val SOURCES = listOf("cash" to "Contanti", "revolut" to "Revolut", "manual" to "Altro")
+internal fun srcColor(s: String) = when (s) { "cash" -> Color(0xFF34C759); "revolut" -> Color(0xFF3F86FF); else -> Color(0xFFFF9F0A) }
+internal fun srcName(s: String) = SOURCES.firstOrNull { it.first == s }?.second ?: "Altro"
+
 @Composable
 private fun Legend(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
@@ -435,9 +456,10 @@ private fun TxRow(t: Tx, ctx: android.content.Context, onDelete: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(catColor(t.cat)))
+        Box(Modifier.width(4.dp).height(30.dp).clip(CircleShape).background(srcColor(t.src)))
         Column(Modifier.weight(1f)) {
             Text(t.note.ifEmpty { t.cat }, style = CanoneType.body, color = c.labelPrimary, maxLines = 1)
-            Text(t.cat + " · " + DateFormat.getMediumDateFormat(ctx).format(Date(t.ts)) + if (t.src == "revolut") " · Revolut" else "", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+            Text(t.cat + " · " + DateFormat.getMediumDateFormat(ctx).format(Date(t.ts)) + " · " + srcName(t.src), style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
         }
         Text((if (t.cents > 0) "+" else "") + eur(t.cents), style = CanoneType.body, color = if (t.cents > 0) c.positiveOnSubtle else c.labelPrimary, maxLines = 1, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
     }
@@ -678,23 +700,20 @@ private fun AmountPad(value: String, modifier: Modifier = Modifier, onChange: (S
         }
         onChange(next)
     }
-    // Tastierino vero: tre colonne strette e centrate (il blocco non si allarga con lo schermo), righe uguali.
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Column(Modifier.widthIn(max = 276.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    row.forEach { k ->
-                        val t = rememberDropTouch()
-                        val dark = isDark()
-                        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                            val d = minOf(maxWidth, maxHeight, 76.dp)
-                            Box(
-                                Modifier.size(d).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
-                                    .dropDeform(t).drop(dark, press = { t.press.value }, touch = t),
-                                contentAlignment = Alignment.Center,
-                            ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
-                        }
-                    }
+    // Tastierino a tutta larghezza: tasti rettangolari come gli elementi della barra, righe uguali.
+    val c = Canone.colors
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                row.forEach { k ->
+                    val t = rememberDropTouch()
+                    val shape = RoundedCornerShape(Radius.lg)
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)
+                            .dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
+                            .dropDeform(t).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary) }
                 }
             }
         }
