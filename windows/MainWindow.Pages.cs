@@ -145,7 +145,7 @@ public sealed partial class MainWindow
     {
         if (_devDismissHooked) return;
         _devDismissHooked = true;
-        Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
+        Root.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, e) =>
         {
             if (_devOpen == null || _tab != 1) return;
             for (var o = e.OriginalSource as DependencyObject; o != null; o = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(o))
