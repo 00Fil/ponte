@@ -2,7 +2,7 @@ name: Windows check
 
 on:
   push:
-    branches: [windows-port, agenda-studio, studio-in-agenda]
+    branches: [windows-port, agenda-studio, studio-in-agenda, mood-sync]
 
 jobs:
   windows:

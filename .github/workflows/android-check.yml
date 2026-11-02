@@ -2,7 +2,7 @@ name: Android check
 
 on:
   push:
-    branches: [agenda-studio, studio-in-agenda]
+    branches: [agenda-studio, studio-in-agenda, mood-sync]
 
 jobs:
   android:
