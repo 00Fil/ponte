@@ -165,21 +165,22 @@ internal fun Glass(
     magnify: Float,
     blur: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
+    corner: androidx.compose.ui.unit.Dp? = null,
 ) {
     val d = LocalDensity.current
     val margin = 28.dp
-    val effect = remember(width, height, edge, amount, aberr, sat, magnify, blur, d.density) {
+    val effect = remember(width, height, edge, amount, aberr, sat, magnify, blur, corner, d.density) {
         with(d) {
             val m = margin.toPx()
             lensEffect(
                 LensParams(
-                    width.toPx() + 2 * m, height.toPx() + 2 * m, width.toPx(), height.toPx(), height.toPx() / 2f,
+                    width.toPx() + 2 * m, height.toPx() + 2 * m, width.toPx(), height.toPx(), corner?.toPx() ?: (height.toPx() / 2f),
                     edge.toPx(), amount.toPx(), aberr, sat, magnify, blur.toPx(),
                 ),
             )
         }
     }
-    Box(modifier.size(width, height).graphicsLayer { clip = true; shape = CircleShape }, contentAlignment = Alignment.Center) {
+    Box(modifier.size(width, height).graphicsLayer { clip = true; shape = if (corner != null) androidx.compose.foundation.shape.RoundedCornerShape(corner) else CircleShape }, contentAlignment = Alignment.Center) {
         Box(
             Modifier.requiredSize(width + margin * 2, height + margin * 2)
                 .graphicsLayer { renderEffect = effect }
@@ -308,12 +309,7 @@ fun GlassTabBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        TabGlyph(glyphs[i], tint, current == i, Modifier.size(24.dp))
-                        Text(
-                            label, color = tint, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false,
-                            fontWeight = if (nearNow > 0.5f) FontWeight.SemiBold else FontWeight.Medium,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
+                        TabGlyph(glyphs[i], tint, current == i, Modifier.size(28.dp))
                     }
                 }
             }

@@ -68,6 +68,8 @@ import kotlin.math.roundToInt
 /** Cosa sta suonando ora su questo telefono (serve l'accesso alle notifiche, lo stesso usato per le notifiche sul PC). */
 class NowPlaying(val title: String, val artist: String, val app: String, val art: Bitmap?, val playing: Boolean, val controller: MediaController)
 
+val LocalNowPlaying = androidx.compose.runtime.compositionLocalOf<NowPlaying?> { null }
+
 @Composable
 fun rememberNowPlaying(): NowPlaying? {
     val ctx = LocalContext.current

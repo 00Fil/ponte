@@ -218,7 +218,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
 
 
 /** Fino a tre colori vivi e distanti tra loro presi dalla copertina: servono alla luce d'ambiente. */
-private fun moodColors(art: android.graphics.Bitmap?): List<Color> {
+internal fun moodColors(art: android.graphics.Bitmap?): List<Color> {
     if (art == null) return emptyList()
     return try {
         val b = android.graphics.Bitmap.createScaledBitmap(art, 12, 12, true)

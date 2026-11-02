@@ -61,6 +61,7 @@ import androidx.compose.runtime.collectAsState
 import it.ponte.ui.Onboarding
 import it.ponte.ui.UpdateDone
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -76,7 +77,6 @@ import androidx.core.content.ContextCompat
 import it.ponte.ui.ShareScreen
 import it.ponte.ui.Canone
 import it.ponte.ui.CanoneType
-import it.ponte.ui.AudioScreen
 import it.ponte.ui.PonteTheme
 import it.ponte.ui.SettingsScreen
 import it.ponte.ui.Space
@@ -97,9 +97,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Impostazioni")
 /** Icona di ogni scheda (indici di TabGlyph). */
-private val GLYPHS = listOf(0, 1, 6, 11, 4, 5)
+private val GLYPHS = listOf(0, 1, 6, 11, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -110,25 +110,13 @@ private fun PonteApp(r: Router) {
     // 0 = prima installazione, 1 = appena aggiornata, 2 = app. Un aggiornamento salta i permessi: una sola pagina.
     var mode by remember { mutableIntStateOf(if (!r.prefs.onboarded) 0 else if (r.prefs.seenVersion != code) 1 else 2) }
     // Passaggio tra onboarding e app: dissolvenza lunga e morbida.
-    AnimatedContent(mode, transitionSpec = { fadeIn(tween(600)).togetherWith(fadeOut(tween(400))) }, label = "avvio") { m ->
+    AnimatedContent(mode, transitionSpec = { fadeIn(tween(180)).togetherWith(fadeOut(tween(120))) }, label = "avvio") { m ->
         when (m) {
             0 -> Onboarding(r) { r.prefs.seenVersion = code; mode = 2 }
             1 -> UpdateDone(name) { r.prefs.seenVersion = code; mode = 2 }
             else -> {
                 var page by remember { mutableIntStateOf(0) } // 0 nessuna, 1 backup, 2 dispositivi
-                // Caricamento vero: si mostra solo se il server si sta ancora collegando. Se è già tutto pronto si entra direttamente.
-                val hub by r.hubState.collectAsState()
-                var timedOut by remember { mutableStateOf(false) }
-                var minShown by remember { mutableStateOf(false) }
-                androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(1700); minShown = true; kotlinx.coroutines.delay(1800); timedOut = true }
-                val configured = remember { r.prefs.wsUrl() != null && r.prefs.token.isNotEmpty() }
-                val ready = minShown && (!configured || (hub != "Connessione in corso" && hub != "Non configurato") || timedOut)
-                if (!ready) {
-                    val c = Canone.colors
-                    Box(Modifier.fillMaxSize().background(c.bgCanvas), contentAlignment = Alignment.Center) {
-                        it.ponte.ui.Star3D(Modifier.size(260.dp))
-                    }
-                } else Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize()) {
                     MainShell(r, onBackup = { page = 1 }) { r.prefs.onboarded = false; mode = 0 }
                     if (page == 1) it.ponte.ui.BackupScreen(r) { page = 0 }
                     it.ponte.ui.FlashHost()
@@ -166,7 +154,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     var setSub by remember { mutableStateOf<String?>(null) }
     var agSub by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(
-        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 5 && setSub != null) || (pager.currentPage == 3 && agSub != null),
+        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 4 && setSub != null) || (pager.currentPage == 3 && agSub != null),
     ) {
         when (pager.currentPage) { 2 -> finSub = null; 3 -> agSub = null; else -> setSub = null }
     }
@@ -177,22 +165,25 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     "devices" -> select(1)
                     "clips", "images" -> { shareSub = to; select(1) }
                     "finance" -> { finSub = null; select(2) }
-                    "audio" -> select(4)
                     "agenda" -> { agSub = null; select(3) }
                     "studio" -> { agSub = "study"; select(3) }
-                    "perm" -> { setSub = "perm"; select(5) }
-                    else -> { setSub = null; select(5) }
+                    "perm" -> { setSub = "perm"; select(4) }
+                    else -> { setSub = null; select(4) }
                 }
             }
             1 -> ShareScreen(r, shareSub, { shareSub = it }, onBackup)
             2 -> it.ponte.ui.FinanceScreen(r, finSub) { finSub = it }
             3 -> it.ponte.ui.AgendaScreen(r, agSub) { agSub = it }
-            4 -> AudioScreen(r) { setSub = "audio"; select(5) }
             else -> SettingsScreen(r, setSub, { setSub = it }, replayOnboarding)
         }
     }
 
-    val headerDevices by r.devices.collectAsState()
+    var devOpen by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(600); devOpen = true }
+    androidx.compose.runtime.LaunchedEffect(devOpen) { if (devOpen) { kotlinx.coroutines.delay(7000); devOpen = false } }
+    val np = it.ponte.ui.rememberNowPlaying()
+    var dock by remember { mutableIntStateOf(0) } // 0 niente, 1 estensione della barra, 2 schermo intero
+    if (np == null && dock != 0) dock = 0
     // Testata: fibra ottica dietro e titoli che scorrono con le pagine, in parallasse.
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(132.dp)) {
@@ -201,26 +192,14 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = Space.s5, vertical = Space.s3)) {
                 TABS.forEachIndexed { i, t ->
                     Column(
-                        Modifier.graphicsLayer {
+                        Modifier.fillMaxWidth().graphicsLayer {
                             val d = i - pos()
                             alpha = (1f - kotlin.math.abs(d) * 1.6f).coerceIn(0f, 1f)
                             translationX = -d * 72.dp.toPx()
                         },
                     ) {
                         Text(t, style = CanoneType.title1, color = c.labelPrimary)
-                        if (i == 0) {
-                            val n = headerDevices.size
-                            Text(
-                                if (n == 0) androidx.compose.ui.text.buildAnnotatedString { append("Solo questo dispositivo") }
-                                else androidx.compose.ui.text.buildAnnotatedString {
-                                    append("Collegato con ")
-                                    pushStyle(androidx.compose.ui.text.SpanStyle(color = c.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
-                                    append(if (n == 1) "1 dispositivo" else "$n dispositivi")
-                                    pop()
-                                },
-                                style = CanoneType.footnote, color = c.labelSecondary,
-                            )
-                        }
+                        if (i == 0) Box(Modifier.fillMaxWidth().padding(top = 4.dp)) { it.ponte.ui.DevicesMorph(r, devOpen) { devOpen = !devOpen } }
                     }
                 }
             }
@@ -255,6 +234,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         }
     }
 
+    androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalNowPlaying provides np) {
     BoxWithConstraints(Modifier.fillMaxSize().background(c.bgCanvas)) {
         if (maxWidth >= 1024.dp) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -267,7 +247,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.fillMaxSize()) {
-                        header()
+                        Box(Modifier.zIndex(2f)) { header() }
                         pages(Modifier.weight(1f).fillMaxWidth())
                     }
                     sheet()
@@ -275,7 +255,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.statusBarsPadding()) { header() }
+                Box(Modifier.statusBarsPadding().zIndex(2f)) { header() }
                 val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 val inset = 66.dp + 10.dp + navBottom
@@ -292,11 +272,31 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
                         Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom),
                     )
+                    if (np != null && !cashOn) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            dock == 1, Modifier.align(Alignment.BottomCenter),
+                            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.85f, 340f)) { it / 2 } + androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(0.9f, 340f)) + fadeIn(tween(180)),
+                            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it / 2 } + androidx.compose.animation.shrinkVertically(tween(200)) + fadeOut(tween(140)),
+                        ) {
+                            it.ponte.ui.MiniPlayer(np, layer, { dock = 2 }, { dock = 0 }, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom + 66.dp + 6.dp))
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            dock == 0, Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 10.dp + navBottom + 66.dp + 8.dp),
+                            enter = androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.7f, 380f)) + fadeIn(tween(160)), exit = androidx.compose.animation.scaleOut(tween(140)) + fadeOut(tween(120)),
+                        ) { it.ponte.ui.CoverBubble(np, { dock = 1 }) }
+                    }
                 }
             }
         }
+        androidx.compose.animation.AnimatedVisibility(
+            dock == 2 && np != null, Modifier.fillMaxSize().zIndex(5f),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.9f, 320f)) { it } + fadeIn(tween(160)),
+            exit = androidx.compose.animation.slideOutVertically(tween(240)) { it } + fadeOut(tween(200)),
+        ) { if (np != null) it.ponte.ui.FullPlayer(np) { dock = 1 } }
+    }
     }
 }
+
 
 /** Voce della barra laterale (finestre larghe): icona e testo, sfondo tenue quando è attiva. */
 @Composable

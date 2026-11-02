@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
@@ -239,11 +240,13 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     // ------------------------------------------------ cruscotto: solo grafici e tasti
                     item {
                         CCard {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
-                                EyeToggle(r)
+                            Column {
+                                Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
+                                    Box(Modifier.requiredHeight(28.dp), contentAlignment = Alignment.Center) { EyeToggle(r) }
+                                }
+                                CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
                             }
-                            CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
                             PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
                                 Column { Text("Contanti", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.cashCents, CanoneType.body, c.labelPrimary) }
@@ -257,7 +260,6 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             Action("−", "Spesa", true) { income = false; onSub("add") }
                             Action("+", "Entrata", false) { income = true; onSub("add") }
                             Action("€", "Contanti", false) { cashMode = 1; tally = emptyMap(); onSub("cash") }
-                            Action("R", "Revolut", false) { onSub("revolut") }
                             Action("≡", "Movimenti", false) { onSub("moves") }
                         }
                     }

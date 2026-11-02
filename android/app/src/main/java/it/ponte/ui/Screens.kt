@@ -236,9 +236,8 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = Space.s5 + LocalBarInset.current),
             horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
-            item(key = "dev", span = { GridItemSpan(maxLineSpan) }) { DevicesCard(r) }
             item(key = "act", span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Row(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally)) {
                     Action("", "Invia appunti", true, glyph = 2) { toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare") }
                     Action("", "Invia file", false, glyph = 7) { picker.launch(arrayOf("*/*")) }
                     Action("", "Backup", false, glyph = 8) { onBackup() }
@@ -249,7 +248,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             }
             if (tab == 0) {
                 if (history.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
-                    Box(tabFx) { CText("Niente per ora. Copia su un altro dispositivo e arriva qui.", tertiary = true) }
+                    Box(tabFx) { CText("Niente per ora", tertiary = true) }
                 }
                 items(grouped, key = { (d, h) -> if (h == null) "d$d" else "c" + h.ts + h.text.hashCode() }, span = { GridItemSpan(maxLineSpan) }) { (day, h) ->
                     if (h == null) {
@@ -311,9 +310,9 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                 }
                 if (list.isEmpty()) item(key = "nonef", span = { GridItemSpan(maxLineSpan) }) {
                     CText(
-                        if (folder != null) "Cartella vuota. Tieni premuto un elemento per spostarlo qui."
-                        else if (tab == 1) "Nessuna immagine. Fai uno screenshot su un dispositivo collegato e arriva qui."
-                        else "Nessun file. Mandane uno da qualsiasi dispositivo.",
+                        if (folder != null) "Cartella vuota"
+                        else if (tab == 1) "Nessuna immagine"
+                        else "Nessun file",
                         tertiary = true,
                     )
                 }
@@ -423,7 +422,7 @@ private fun StatusBubble(label: String, tone: Tone, on: Boolean) {
  * Toccando un dispositivo la scheda si allunga e dal suo bordo inferiore esce un cassetto grigio con i dettagli, dentro lo stesso contorno.
  */
 @Composable
-private fun DevicesCard(r: Router) {
+fun DevicesCard(r: Router, bare: Boolean = false) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val devices by r.devices.collectAsState()
@@ -440,8 +439,8 @@ private fun DevicesCard(r: Router) {
     var last by remember { mutableStateOf<Device?>(null) }
     rows.firstOrNull { it.id == open }?.let { last = it }
 
-    Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(horizontal = Space.s3, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+    Column(if (bare) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
+        Column(Modifier.fillMaxWidth().then(if (bare) Modifier else Modifier.background(c.bgSurface)).padding(horizontal = Space.s3, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             // testata compatta: titolo e conteggio su una riga, stato di server e P2P a destra
             Row(Modifier.fillMaxWidth().padding(horizontal = Space.s1), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 Text("Dispositivi", style = CanoneType.bodyMedium, color = c.labelPrimary)
@@ -509,128 +508,6 @@ private fun DevicesCard(r: Router) {
     }
 }
 
-
-// ---------------------------------------------------------------- Audio
-/**
- * Audio: le cuffie con l'immagine del dispositivo e la batteria, cosa sta suonando con i controlli, il volume,
- * dove esce l'audio e l'ascolto dal PC. Le regole tecniche stanno in Impostazioni → Audio.
- */
-@Composable
-fun AudioScreen(r: Router, openSettings: () -> Unit = {}) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
-    val devices by r.devices.collectAsState()
-    val active by r.audio.activeSource.collectAsState()
-    val sources = devices.filter { "audio-src" in it.caps }
-    val hps by r.headphones.list.collectAsState()
-    val holder by r.headphones.holder.collectAsState()
-    val lockedBy by r.headphones.lockedBy.collectAsState()
-    val preferred = r.prefs.preferredHp
-    val np = rememberNowPlaying()
-    val am = remember { ctx.getSystemService(android.media.AudioManager::class.java) }
-    val maxVol = remember { am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var vol by remember { mutableIntStateOf(am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
-    var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(4000); tick++; vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) } }
-    val connected = hps.firstOrNull { it.connected && (it.address == preferred || it.address in r.prefs.headphones) } ?: hps.firstOrNull { it.connected }
-    val battery = remember(connected?.address, tick) { connected?.let { headphonesBattery(ctx, it.address) } }
-    val out = remember(tick, holder) { outputName(ctx) }
-    fun who(id: String?) = when (id) { null -> "Libere"; r.deviceId -> "Su questo telefono"; else -> "Su " + r.deviceName(id) }
-    val glow by androidx.compose.animation.core.animateFloatAsState(if (holder == r.deviceId) 1f else 0f, androidx.compose.animation.core.tween(500), label = "luce")
-    val pic = DevicePics.rememberPic(holder)
-
-    ScreenList("Audio") {
-        // ------------------------------------------------ cuffie
-        item {
-            val shape = RoundedCornerShape(Radius.xl)
-            Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-                Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
-                        Box(
-                            Modifier.size(92.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.10f + 0.25f * glow), c.bgSunken))),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
-                            else TabGlyph(4, c.accentOnSubtle, false, Modifier.size(40.dp))
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(connected?.name ?: "Cuffie", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-                            Text(who(holder), style = CanoneType.title3, color = c.labelPrimary, maxLines = 2)
-                            if (battery != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                Box(Modifier.size(28.dp, 12.dp).clip(RoundedCornerShape(3.dp)).background(c.bgSunken)) {
-                                    Box(Modifier.fillMaxHeight().fillMaxWidth(battery / 100f).background(if (battery < 20) c.critical else c.positive))
-                                }
-                                RollingText("$battery%", CanoneType.footnote, c.labelSecondary)
-                            }
-                            if (lockedBy != null) Text("Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() }, style = CanoneType.footnote, color = c.labelTertiary)
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        CButton(if (lockedBy == r.deviceId) "Sblocca" else "Tienile qui", { r.headphones.toggleLock() },
-                            Modifier.weight(1f), kind = if (lockedBy == r.deviceId) ButtonKind.Secondary else ButtonKind.Primary)
-                        if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
-                            CButton("Portale qui", { r.headphones.connectHere(preferred) }, Modifier.weight(1f))
-                        }
-                    }
-                }
-                Row(Modifier.fillMaxWidth().background(c.bgSunken).padding(horizontal = Space.s4, vertical = Space.s3), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Esce da", style = CanoneType.footnote, color = c.labelTertiary)
-                    Text(out, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
-                }
-            }
-        }
-        // ------------------------------------------------ player (copertina, comandi e volume in una sola scheda)
-        item {
-            if (np != null) PlayerCard(np) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Esce da", style = CanoneType.footnote, color = c.labelTertiary)
-                    Text(out, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
-                }
-            } else CCard {
-                SectionTitle("In riproduzione")
-                if (listenerEnabled(ctx)) CText("Fai partire la musica: qui compaiono copertina, comandi e volume.", tertiary = true)
-                else {
-                    CText("Per vedere e comandare la musica serve l'accesso alle notifiche.", tertiary = true)
-                    CButton("Consenti", { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, kind = ButtonKind.Primary)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
-                    DropSlider(vol.toFloat() / maxVol, { f ->
-                        val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
-                        if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
-                    }, Modifier.weight(1f))
-                    SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
-                }
-            }
-        }
-        // ------------------------------------------------ dal PC (solo se c'è un PC che trasmette)
-        if (sources.isNotEmpty()) item {
-            CCard {
-                SectionTitle("Ascolta dal PC")
-                if (sources.isEmpty()) {
-                    CText("Apri Relay sul PC e il suo audio compare qui. Il ritardo è di circa 100 ms.", tertiary = true)
-                } else {
-                    sources.forEach { d ->
-                        val dp = DevicePics.rememberPic(d.id)
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                            Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
-                                if (dp != null) Image(dp, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(1, c.labelTertiary, false, Modifier.size(20.dp))
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text(d.name, style = CanoneType.body, color = c.labelPrimary, maxLines = 1)
-                                Text(if (active == d.id) "In ascolto qui" else "Disponibile", style = CanoneType.footnote, color = c.labelTertiary)
-                            }
-                            if (active == d.id) CButton("Ferma", { r.audio.stopListening(d.id) })
-                            else CButton("Ascolta", { r.audio.listenTo(d.id) }, kind = ButtonKind.Primary)
-                        }
-                    }
-                }
-            }
-        }
-        item { CButton("Impostazioni audio", openSettings, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary) }
-    }
-}
 
 // ---------------------------------------------------------------- Impostazioni
 
