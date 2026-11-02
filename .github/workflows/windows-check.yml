@@ -13,5 +13,5 @@ jobs:
         with: { dotnet-version: 8.0.x }
       - name: Build
         working-directory: windows
-        run: dotnet build Ponte.csproj -c Release -r win-x64 -p:Platform=x64 -warnaserror- 2>&1 | Tee-Object build.log; if ($LASTEXITCODE -ne 0) { exit 1 }
+        run: dotnet build Ponte.csproj -c Release -r win-x64 -p:Platform=x64
         shell: pwsh
