@@ -199,3 +199,54 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
         )
     }
 }
+
+/** Riga di lista: titolo, nota, elemento finale. */
+@Composable
+fun CRow(title: String, note: String? = null, modifier: Modifier = Modifier, mono: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+    val c = Canone.colors
+    Row(modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (note != null) Text(note, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        trailing?.invoke()
+    }
+}
+
+@Composable
+fun CDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Canone.colors.lineSeparator))
+}
+
+/** Campo di testo: etichetta sempre sopra e visibile, segnaposto solo come esempio. */
+@Composable
+fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, mono: Boolean = false, secret: Boolean = false) {
+    val c = Canone.colors
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Text(label, style = CanoneType.footnote, color = c.labelSecondary)
+        BasicTextField(
+            value = value, onValueChange = onChange, singleLine = true,
+            textStyle = (if (mono) CanoneType.figure else CanoneType.body).copy(color = c.labelPrimary),
+            cursorBrush = SolidColor(c.accent),
+            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else KeyboardType.Uri),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                Box(
+                    Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(Radius.md)).background(c.bgSurface)
+                        .border(BorderStroke(1.5.dp, c.lineStrong), RoundedCornerShape(Radius.md)).padding(horizontal = Space.s4),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (value.isEmpty()) Text(placeholder, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelTertiary, maxLines = 1)
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+fun CText(text: String, tertiary: Boolean = false, modifier: Modifier = Modifier) {
+    val c = Canone.colors
+    Text(text, style = CanoneType.footnote, color = if (tertiary) c.labelTertiary else c.labelSecondary, modifier = modifier)
+}
