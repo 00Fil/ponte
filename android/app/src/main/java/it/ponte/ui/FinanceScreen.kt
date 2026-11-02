@@ -83,6 +83,9 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     var cat by remember { mutableStateOf("") }
     var income by remember { mutableStateOf(false) }
     var revInput by remember { mutableStateOf("") }
+    var cashMode by remember { mutableIntStateOf(0) }            // 0 conta, 1 ho speso, 2 ho ricevuto
+    var tally by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var showNote by remember { mutableStateOf(false) }
 
     fun range(y: Int, mo: Int): Pair<Long, Long> {
         val a = Calendar.getInstance().apply { clear(); set(y, if (mo < 0) 0 else mo, 1) }
@@ -227,15 +230,47 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item { Back("Contanti") }
                     item {
                         CCard {
-                            CountUp(m.cashCents, CanoneType.title1, c.labelPrimary)
-                            CText("Tocca una banconota per ogni pezzo che hai. Tieni premuto per toglierne una.", tertiary = true)
+                            GlassSegmented(listOf("Conta", "Ho speso", "Ho ricevuto"), cashMode, { cashMode = it; tally = emptyMap() })
+                            val tallyCents = tally.entries.sumOf { it.key.toLong() * it.value }
+                            CountUp(if (cashMode == 0) m.cashCents else tallyCents, CanoneType.title1, if (cashMode == 1 && tallyCents > 0) c.criticalOnSubtle else c.labelPrimary)
+                            CText(
+                                when (cashMode) {
+                                    0 -> "Tocca una banconota per ogni pezzo che hai. Tieni premuto per toglierne una."
+                                    1 -> "Tocca le banconote che hai dato: escono dal portafoglio e diventano una spesa."
+                                    else -> "Tocca le banconote che hai preso: entrano nel portafoglio e diventano un'entrata."
+                                },
+                                tertiary = true,
+                            )
                             NOTES_EUR.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                    pair.forEach { d -> Banknote(d, m.cash[d] ?: 0, { r.finance.bump(d, 1) }, { r.finance.bump(d, -1) }, Modifier.weight(1f)) }
+                                    pair.forEach { d ->
+                                        val n = if (cashMode == 0) m.cash[d] ?: 0 else tally[d] ?: 0
+                                        Banknote(d, n,
+                                            { if (cashMode == 0) r.finance.bump(d, 1) else tally = tally + (d to (tally[d] ?: 0) + 1) },
+                                            { if (cashMode == 0) r.finance.bump(d, -1) else tally = tally + (d to ((tally[d] ?: 0) - 1).coerceAtLeast(0)) },
+                                            Modifier.weight(1f))
+                                    }
                                     if (pair.size == 1) Box(Modifier.weight(1f))
                                 }
                             }
-                            if (m.cashCents > 0) CButton("Azzera", { r.finance.clearCash() }, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
+                            if (cashMode == 0) {
+                                if (m.cashCents > 0) CButton("Azzera", { r.finance.clearCash() }, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
+                            } else {
+                                if (cashMode == 1) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                                    CATEGORIES.dropLast(1).forEach { k ->
+                                        val sel = cat == k
+                                        Box(Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken).dropClickable({ cat = if (sel) "" else k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                                            Text(k, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1)
+                                        }
+                                    }
+                                }
+                                CButton(if (cashMode == 1) "Registra spesa" else "Registra entrata", {
+                                    if (tallyCents == 0L) { toast(ctx, "Tocca almeno una banconota"); return@CButton }
+                                    tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (cashMode == 1) -n else n) }
+                                    r.finance.add(if (cashMode == 1) -tallyCents else tallyCents, if (cashMode == 1) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
+                                    tally = emptyMap(); cat = ""; cashMode = 0
+                                }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+                            }
                         }
                     }
                 }
@@ -243,25 +278,40 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                 "add" -> {
                     item { Back(if (income) "Nuova entrata" else "Nuova spesa") }
                     item {
-                        CCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
                             GlassSegmented(listOf("Spesa", "Entrata"), if (income) 1 else 0, { income = it == 1 })
-                            CField("Importo", amount, { amount = it }, "0,00", number = true)
-                            CField("Descrizione", note, { note = it }, "Dove o cosa")
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(58.dp))
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "€" + amount.ifEmpty { "0" },
+                                        style = CanoneType.title1.copy(fontSize = 56.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+                                        color = if (amount.isEmpty()) c.labelTertiary else c.labelPrimary, maxLines = 1,
+                                    )
+                                }
+                                // pagare o incassare con le banconote: si passa alla cassa e il risultato diventa il movimento
+                                Action("", "Banconote", false, glyph = 9) { cashMode = if (income) 2 else 1; tally = emptyMap(); onSub("cash") }
+                            }
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                (listOf("") + CATEGORIES).forEach { k ->
+                                (if (income) listOf("Entrate") else CATEGORIES.dropLast(1)).let { listOf("") + it }.forEach { k ->
                                     val sel = cat == k
                                     Box(
                                         Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken)
                                             .dropClickable({ cat = k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
                                     ) { Text(k.ifEmpty { "Auto" }, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1) }
                                 }
+                                Box(Modifier.clip(CircleShape).background(c.bgSunken).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                                    Text(if (showNote) "Nascondi nota" else "+ Nota", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+                                }
                             }
+                            if (showNote) CField("Nota", note, { note = it }, "Dove o cosa")
+                            AmountPad(amount) { amount = it }
                             CButton(if (income) "Aggiungi entrata" else "Aggiungi spesa", {
                                 val v = r.finance.toCents(amount)
                                 if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
                                 val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
                                 r.finance.add(if (income) v else -v, k, note.trim())
-                                amount = ""; note = ""; cat = ""; onSub(null)
+                                amount = ""; note = ""; cat = ""; showNote = false; onSub(null)
                             }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                         }
                     }
@@ -476,3 +526,36 @@ private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
     }
 }
 
+
+/** Tastierino numerico: tasti-goccia grandi, virgola e cancella (tieni premuto per azzerare). Massimo due decimali. */
+@Composable
+private fun AmountPad(value: String, onChange: (String) -> Unit) {
+    fun press(k: String) {
+        val next = when (k) {
+            "," -> if (',' in value) value else if (value.isEmpty()) "0," else "$value,"
+            else -> {
+                val dec = value.substringAfter(',', "")
+                if (',' in value && dec.length >= 2) value
+                else if (value == "0") k
+                else if (value.length >= 9) value
+                else value + k
+            }
+        }
+        onChange(next)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf(",", "0", "⌫")).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                row.forEach { k ->
+                    val t = rememberDropTouch()
+                    val dark = isDark()
+                    Box(
+                        Modifier.weight(1f).height(58.dp).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
+                            .dropDeform(t).drop(dark, corner = 22.dp, press = { t.press.value }),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
+                }
+            }
+        }
+    }
+}

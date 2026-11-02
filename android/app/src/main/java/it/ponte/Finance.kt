@@ -4,12 +4,17 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/** Un movimento. [cents] è negativo per le spese. [src]: manual, revolut. */
-data class Tx(val id: Long, val ts: Long, val cents: Long, val cat: String, val note: String, val src: String)
+/** Un movimento. [cents] è negativo per le spese. [src]: manual, cash, revolut. */
+data class Tx(val id: String, val ts: Long, val cents: Long, val cat: String, val note: String, val src: String)
 
 data class Money(
     val txs: List<Tx> = emptyList(),
@@ -25,42 +30,133 @@ data class Money(
 val CATEGORIES = listOf("Cibo", "Casa", "Trasporti", "Svago", "Salute", "Shopping", "Abbonamenti", "Studio", "Altro", "Entrate")
 val NOTES_EUR = listOf(500, 1000, 2000, 5000, 10000, 20000, 50000)
 
-/** Finanze: contanti contati a banconote, movimenti, Revolut (notifiche ed estratto CSV). Tutto resta su questo telefono, in un file JSON. */
-class Finance(private val ctx: Context) {
-    private val file = File(ctx.filesDir, "finance.json")
-    val state = MutableStateFlow(load())
+private class Rec(val t: Long, val c: Long, val k: String, val n: String, val s: String, val u: Long, val d: Boolean)
 
-    private fun load(): Money = try {
-        val o = JSONObject(file.readText())
+/**
+ * Finanze: contanti contati a banconote, movimenti, Revolut (notifiche ed estratto CSV).
+ * Ogni voce è un registro "l'ultimo che scrive vince" con la sua data di modifica: i dispositivi si scambiano il documento
+ * dal server (principale) e, se il server non c'è, direttamente tra loro su rete locale, Bluetooth e Wi-Fi Direct.
+ * Lo stesso formato è usato dal server (server/src/finance.js).
+ */
+class Finance(private val ctx: Context, private val r: Router) {
+    private val file = File(ctx.filesDir, "finance.json")
+    private val tx = HashMap<String, Rec>()
+    private val cash = HashMap<Int, Pair<Int, Long>>()
+    private var rev = Triple(0L, 0L, 0L)
+    val state = MutableStateFlow(Money())
+    private val http = okhttp3.OkHttpClient.Builder().connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS).readTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
+    private var syncJob: kotlinx.coroutines.Job? = null
+
+    init {
+        try {
+            val o = JSONObject(file.readText())
+            if (o.has("tx")) fromJson(o) else migrate(o)
+        } catch (_: Exception) {}
+        publish()
+    }
+
+    /** Formato del primo rilascio (elenco di movimenti e banconote senza date): lo porto al nuovo. */
+    private fun migrate(o: JSONObject) {
+        val now = System.currentTimeMillis()
         val t = o.optJSONArray("txs") ?: JSONArray()
-        val c = o.optJSONObject("cash") ?: JSONObject()
-        Money(
-            (0 until t.length()).map { t.getJSONObject(it).let { j -> Tx(j.getLong("id"), j.getLong("ts"), j.getLong("c"), j.getString("cat"), j.optString("n"), j.optString("s", "manual")) } },
-            c.keys().asSequence().associate { it.toInt() to c.getInt(it) },
-            o.optLong("revBase"), o.optLong("revTs"),
+        for (i in 0 until t.length()) t.getJSONObject(i).let { j ->
+            tx[j.getLong("id").toString()] = Rec(j.getLong("ts"), j.getLong("c"), j.getString("cat"), j.optString("n"), j.optString("s", "manual"), now, false)
+        }
+        o.optJSONObject("cash")?.let { c -> c.keys().forEach { k -> cash[k.toInt()] = c.getInt(k) to now } }
+        rev = Triple(o.optLong("revBase"), o.optLong("revTs"), now)
+    }
+
+    private fun publish() {
+        state.value = Money(
+            tx.entries.filter { !it.value.d }.map { (id, v) -> Tx(id, v.t, v.c, v.k, v.n, v.s) }.sortedByDescending { it.ts },
+            cash.filter { it.value.first > 0 }.mapValues { it.value.first },
+            rev.first, rev.second,
         )
-    } catch (_: Exception) { Money() }
+    }
+
+    private fun toJson(): JSONObject {
+        val o = JSONObject()
+        o.put("tx", JSONObject().also { j -> tx.forEach { (id, v) -> j.put(id, JSONObject().put("t", v.t).put("c", v.c).put("k", v.k).put("n", v.n).put("s", v.s).put("u", v.u).put("d", if (v.d) 1 else 0)) } })
+        o.put("cash", JSONObject().also { j -> cash.forEach { (k, v) -> j.put(k.toString(), JSONArray().put(v.first).put(v.second)) } })
+        o.put("rev", JSONArray().put(rev.first).put(rev.second).put(rev.third))
+        return o
+    }
+
+    /** Unisce un documento ricevuto: per ogni voce vince la modifica più recente. Ritorna true se qualcosa è cambiato. */
+    @Synchronized
+    private fun fromJson(o: JSONObject): Boolean {
+        var changed = false
+        o.optJSONObject("tx")?.let { j -> j.keys().forEach { id ->
+            val v = j.getJSONObject(id)
+            val u = v.optLong("u")
+            if ((tx[id]?.u ?: -1L) < u) { tx[id] = Rec(v.optLong("t"), v.optLong("c"), v.optString("k", "Altro"), v.optString("n"), v.optString("s", "manual"), u, v.optInt("d") == 1); changed = true }
+        } }
+        o.optJSONObject("cash")?.let { j -> j.keys().forEach { k ->
+            val a = j.getJSONArray(k)
+            if ((cash[k.toInt()]?.second ?: -1L) < a.getLong(1)) { cash[k.toInt()] = a.getInt(0) to a.getLong(1); changed = true }
+        } }
+        o.optJSONArray("rev")?.let { a -> if (a.getLong(2) > rev.third) { rev = Triple(a.getLong(0), a.getLong(1), a.getLong(2)); changed = true } }
+        return changed
+    }
 
     @Synchronized
-    private fun update(f: (Money) -> Money) {
-        val m = f(state.value)
-        state.value = m
-        val o = JSONObject()
-        o.put("txs", JSONArray().also { a -> m.txs.forEach { a.put(JSONObject().put("id", it.id).put("ts", it.ts).put("c", it.cents).put("cat", it.cat).put("n", it.note).put("s", it.src)) } })
-        o.put("cash", JSONObject().also { j -> m.cash.forEach { (k, v) -> if (v > 0) j.put(k.toString(), v) } })
-        o.put("revBase", m.revBase).put("revTs", m.revTs)
-        try { file.writeText(o.toString()) } catch (_: Exception) {}
+    private fun save() { try { file.writeText(toJson().toString()) } catch (_: Exception) {} }
+
+    @Synchronized
+    private fun mutate(f: () -> Unit) {
+        f(); publish(); save()
+        syncJob?.cancel()
+        syncJob = r.scope.launch { kotlinx.coroutines.delay(1200); push() }
     }
 
-    fun add(cents: Long, cat: String, note: String, src: String = "manual", ts: Long = System.currentTimeMillis()) = update { m ->
-        // Stesso importo, stessa descrizione, entro due minuti: è lo stesso movimento (notifica doppia).
-        if (m.txs.any { it.src == src && it.cents == cents && it.note == note && kotlin.math.abs(it.ts - ts) < 120_000 }) m
-        else m.copy(txs = (m.txs + Tx(ts * 1000 + (m.txs.size % 1000), ts, cents, cat, note, src)).sortedByDescending { it.ts })
+    // ---------------------------------------------------------------- sincronizzazione
+    /** Server (principale): invia il documento e riceve quello unito. */
+    suspend fun syncServer(): Boolean {
+        val base = r.prefs.httpBase()?.toHttpUrlOrNull()?.newBuilder()?.addPathSegments("api/finance")?.build() ?: return false
+        return try {
+            val body = toJson().toString().toRequestBody("application/json".toMediaType())
+            http.newCall(Request.Builder().url(base).header("Authorization", "Bearer ${r.prefs.token}").post(body).build()).execute().use { resp ->
+                if (!resp.isSuccessful) return false
+                val changed = fromJson(JSONObject(resp.body!!.string()))
+                if (changed) { publish(); save() }
+                true
+            }
+        } catch (_: Exception) { false }
     }
-    fun remove(id: Long) = update { it.copy(txs = it.txs.filter { t -> t.id != id }) }
-    fun bump(denom: Int, by: Int) = update { m -> m.copy(cash = m.cash + (denom to ((m.cash[denom] ?: 0) + by).coerceAtLeast(0))) }
-    fun clearCash() = update { it.copy(cash = emptyMap()) }
-    fun setRevolut(cents: Long) = update { it.copy(revBase = cents, revTs = System.currentTimeMillis()) }
+
+    /** Messaggio ai dispositivi raggiungibili (server come relè, rete locale, Bluetooth, Wi-Fi Direct): il fallback quando il server non risponde. */
+    private fun broadcast() {
+        val doc = toJson()
+        if (doc.toString().length < 400_000) r.send(newMsg("fin", "doc" to doc))
+    }
+
+    suspend fun push() { syncServer(); broadcast() }
+
+    fun onRemote(doc: JSONObject?) {
+        if (doc != null && fromJson(doc)) { publish(); save() }
+    }
+
+    fun start() {
+        r.scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(2 * 60_000L)
+                if (r.screenOn) push()
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- operazioni
+    fun add(cents: Long, cat: String, note: String, src: String = "manual", ts: Long = System.currentTimeMillis()) {
+        // Stesso importo e descrizione entro due minuti: è lo stesso movimento (notifica doppia, anche da due dispositivi).
+        if (tx.values.any { !it.d && it.s == src && it.c == cents && it.n == note && kotlin.math.abs(it.t - ts) < 120_000 }) return
+        val id = if (src == "revolut") "r" + java.lang.Long.toHexString((src + cents + note + ts / 120_000).hashCode().toLong() and 0xffffffffL) + java.lang.Long.toHexString(ts / 120_000)
+        else java.util.UUID.randomUUID().toString().take(12)
+        mutate { tx[id] = Rec(ts, cents, cat, note, src, System.currentTimeMillis(), false) }
+    }
+    fun remove(id: String) = mutate { tx[id]?.let { tx[id] = Rec(it.t, it.c, it.k, it.n, it.s, System.currentTimeMillis(), true) } }
+    fun bump(denom: Int, by: Int) = mutate { cash[denom] = ((cash[denom]?.first ?: 0) + by).coerceAtLeast(0) to System.currentTimeMillis() }
+    fun clearCash() = mutate { val u = System.currentTimeMillis(); cash.keys.toList().forEach { cash[it] = 0 to u } }
+    fun setRevolut(cents: Long) = mutate { rev = Triple(cents, System.currentTimeMillis(), System.currentTimeMillis()) }
 
     // ---------------------------------------------------------------- Revolut
     /** Notifica di un pagamento Revolut: "Hai pagato 12,50 € a Esselunga" → spesa. Nessuna API: Revolut non ne ha una per i conti personali. */
@@ -120,9 +216,8 @@ class Finance(private val ctx: Context) {
     fun importCsv(text: String): Int {
         val rows = text.lineSequence().drop(1).filter { it.isNotBlank() }.map { splitCsv(it) }.filter { it.size >= 9 }.toList()
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        var added = 0
         var lastTs = 0L; var lastBal: Long? = null
-        val before = state.value.txs.size
+        val before = state.value.txs.count { it.src == "revolut" }
         for (c in rows) {
             if (!c[8].uppercase().startsWith("COMPLET")) continue
             val ts = try { fmt.parse(c[3].ifBlank { c[2] })?.time } catch (_: Exception) { null } ?: continue
@@ -134,9 +229,8 @@ class Finance(private val ctx: Context) {
             add(cents, guess(note, cents > 0), note, "revolut", ts)
             if (ts >= lastTs) { lastTs = ts; lastBal = c.getOrNull(9)?.let { toCents(it.removePrefix("-"))?.let { v -> if (it.trim().startsWith("-")) -v else v } } }
         }
-        added = state.value.txs.size - before
-        if (lastBal != null) update { it.copy(revBase = lastBal!!, revTs = lastTs) }
-        return added
+        if (lastBal != null) mutate { rev = Triple(lastBal!!, lastTs, System.currentTimeMillis()) }
+        return state.value.txs.count { it.src == "revolut" } - before
     }
 
     private fun splitCsv(line: String): List<String> {

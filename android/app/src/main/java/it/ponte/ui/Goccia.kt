@@ -33,6 +33,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.geometry.Size
@@ -263,7 +265,7 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
         val itemW = (maxWidth - pad * 2) / n
         val h = maxHeight - pad * 2
         // Pista ed etichette vengono registrate: la goccia le rifrange con la stessa lente della barra.
-        Box(Modifier.fillMaxSize().drawWithContent { segLayer.record { this@drawWithContent.drawContent() }; drawLayer(segLayer) }.drop(dark)) {
+        Box(Modifier.fillMaxSize().drawWithContent { segLayer.record { this@drawWithContent.drawContent() }; drawLayer(segLayer) }.clip(androidx.compose.foundation.shape.CircleShape).background(c.bgCanvas).drop(dark)) {
         Box(Modifier.fillMaxSize().padding(pad)) {
             Row(
                 Modifier.fillMaxSize().pointerInput(n) {

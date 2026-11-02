@@ -60,6 +60,8 @@ private val ICONS: List<List<String>> = listOf(
     listOf("M12 3v12", "m17 8-5-5-5 5", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"),
     // hard-drive
     listOf("M22 12H2", "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z", "M6 16h.01", "M10 16h.01"),
+    // banknote
+    listOf(rr(2f, 6f, 20f, 12f, 2f), circ(12f, 12f, 2f), "M6 12h.01", "M18 12h.01"),
 )
 
 @Composable

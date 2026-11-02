@@ -45,7 +45,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     val clipboard = ClipboardSync(ctx, this)
     val files = FileStore(ctx, this)
-    val finance = Finance(ctx)
+    val finance = Finance(ctx, this)
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
     val media = MediaSwitch(ctx, this)
@@ -83,6 +83,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         clipLog.start()
         bt.start()
         updater.start()
+        finance.start()
         p2p.start()
         screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)
@@ -106,6 +107,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     suspend fun syncAll() {
         files.catchUp()
         clipboard.catchUp()
+        finance.push()
     }
 
     /** Da chiamare dopo ogni cambio di impostazioni. */
@@ -228,6 +230,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "focus" -> headphones.onFocus(m)
             "audio.lock" -> headphones.onLock(m)
             "media.take" -> media.onTake(m)
+            "fin" -> finance.onRemote(m.optJSONObject("doc"))
         }
     }
 
