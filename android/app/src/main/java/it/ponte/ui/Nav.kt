@@ -91,7 +91,7 @@ fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = 
     val t = rememberDropTouch()
     Column(modifier.dropGestures(t, onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Box(
-            Modifier.size(58.dp).dropDeform(t).drop(dark, tint = if (accent) c.accent.copy(alpha = if (dark) 0.38f else 0.26f) else Color.Unspecified, press = { t.press.value }),
+            Modifier.size(58.dp).dropDeform(t).drop(dark, tint = if (accent) c.accent.copy(alpha = if (dark) 0.38f else 0.26f) else Color.Unspecified, press = { t.press.value }, touch = t),
             contentAlignment = Alignment.Center,
         ) {
             val fg = if (accent) c.accentOnSubtle else c.labelPrimary

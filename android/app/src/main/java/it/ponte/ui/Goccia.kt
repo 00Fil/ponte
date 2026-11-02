@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.drawWithContent
@@ -81,6 +82,11 @@ object Goccia {
     const val INFLATE_X = 0.07f
     const val INFLATE_Y = 0.02f
 
+    /** Corpo opaco e colorato del vetro: stesso azzurro del tocco su un dispositivo (accentSubtle), non bianco. */
+    fun body(dark: Boolean) = if (dark) Color(0xFF1A2F63) else Color(0xFFD3E2FF)
+    /** Rilascio "liquido": rimbalza oltre lo zero e si assesta, la goccia ondeggia. */
+    val release = spring<Float>(dampingRatio = 0.42f, stiffness = 260f)
+
     fun ink(dark: Boolean) = if (dark) Color.White else Color(0xFF14204A)
     fun edge(dark: Boolean) = ink(dark).copy(alpha = if (dark) 0.14f else 0.10f)
 }
@@ -121,10 +127,10 @@ half4 main(float2 fc) {
   float shift = 0.9;
   float wr = edgeW(depth - shift);
   float wb = edgeW(depth + shift);
-  float disp = (max(lit, 0.0) + 0.35) * strength;
+  float disp = (max(lit, 0.0) + 0.45) * strength * (1.0 + press);
   float3 fringe = float3(wr - w, 0.0, wb - w) * disp;
-  float a = (hi + lo) * strength * (1.0 + 0.5 * press);
-  float3 rgb = float3(1.0) * a + fringe * 0.8;
+  float a = (hi + lo) * strength * (1.0 + 1.6 * press);
+  float3 rgb = float3(1.0) * a + fringe * (0.9 + 1.4 * press);
   float alpha = clamp(a + abs(fringe.r) + abs(fringe.b), 0.0, 1.0);
   return half4(half3(clamp(rgb, 0.0, 1.0)), half(alpha));
 }
@@ -137,17 +143,21 @@ fun Modifier.drop(
     fill: Brush? = null,
     tint: Color = Color.Unspecified,
     press: () -> Float = { 0f },
+    touch: DropTouch? = null,
 ): Modifier = this.drawWithCache {
     val r = corner?.toPx() ?: (size.minDimension / 2f)
     val cr = CornerRadius(r)
     val ink = Goccia.ink(dark)
     val white = Color.White
-    val base = if (tint != Color.Unspecified) tint else ink.copy(alpha = if (dark) 0.10f else 0.07f)
+    val base = if (tint != Color.Unspecified) lerp(Goccia.body(dark), tint.copy(alpha = 1f), tint.alpha.coerceIn(0f, 1f) * 1.6f) else Goccia.body(dark)
     val spot = Brush.radialGradient(
-        listOf(white.copy(alpha = if (dark) 0.22f else 0.60f), Color.Transparent),
-        center = Offset(size.width * 0.26f, size.height * 0.20f), radius = size.height * 1.15f,
+        listOf(white.copy(alpha = if (dark) 0.16f else 0.34f), Color.Transparent),
+        center = Offset(size.width * 0.26f, size.height * 0.20f), radius = size.height * 1.0f,
     )
-    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.06f else 0.22f), startY = 0f, endY = size.height)
+    val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.04f else 0.10f), startY = 0f, endY = size.height)
+    // lucido: una fascia di luce nitida sul bordo alto, come il vetro curvo
+    val gloss = Brush.verticalGradient(0f to white.copy(alpha = if (dark) 0.26f else 0.55f), 0.38f to Color.Transparent, startY = 0f, endY = size.height)
+    val glossInset = 2.dp.toPx()
     val wall = 2.dp.toPx()
     val hair = 1.dp.toPx()
     val edge = Goccia.edge(dark)
@@ -164,8 +174,17 @@ fun Modifier.drop(
         if (fill != null) drawRoundRect(fill, cornerRadius = cr) else drawRoundRect(base, cornerRadius = cr)
         drawRoundRect(lift, cornerRadius = cr)
         drawRoundRect(spot, cornerRadius = cr)
+        drawRoundRect(gloss, Offset(glossInset, glossInset), Size(size.width - 2 * glossInset, size.height - 2 * glossInset), CornerRadius((r - glossInset).coerceAtLeast(0f)))
         val p = press()
-        if (p > 0.01f) drawRoundRect(white.copy(alpha = (if (dark) 0.12f else 0.22f) * p), cornerRadius = cr)
+        if (p > 0.01f) {
+            // bagliore alla pressione: la luce rifratta si accende dove tocchi e si allarga come un liquido
+            val at = touch?.pos?.takeIf { it.isSpecified } ?: Offset(size.width * 0.5f, size.height * 0.5f)
+            val glow = Brush.radialGradient(
+                listOf(white.copy(alpha = (if (dark) 0.50f else 0.85f) * p.coerceAtMost(1.2f)), Goccia.body(dark).copy(alpha = 0.18f * p.coerceAtMost(1f)), Color.Transparent),
+                center = at, radius = maxOf(size.width, size.height) * (0.55f + 0.5f * p.coerceAtMost(1f)),
+            )
+            drawRoundRect(glow, cornerRadius = cr)
+        }
         if (brush != null && Build.VERSION.SDK_INT >= 33) {
             shader!!.setFloatUniform("press", p)
             drawRoundRect(brush, cornerRadius = cr)
@@ -179,6 +198,7 @@ fun Modifier.drop(
 /** Stato del tocco di una goccia: quanto è premuta (0..1). Letto solo in fase di disegno. */
 class DropTouch {
     val press = Animatable(0f)
+    var pos by mutableStateOf(Offset.Unspecified)
 }
 
 @Composable
@@ -203,7 +223,8 @@ fun Modifier.dropGestures(
         .pointerInput(enabled) {
             if (!enabled) return@pointerInput
             awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
+                val down = awaitFirstDown(requireUnconsumed = false)
+                t.pos = down.position
                 scope.launch { t.press.animateTo(1f, Goccia.press) }
                 var fired = false
                 val timer = scope.launch {
@@ -213,7 +234,7 @@ fun Modifier.dropGestures(
                 }
                 val up = waitForUpOrCancellation()
                 timer.cancel()
-                scope.launch { t.press.animateTo(0f, Goccia.settle) }
+                scope.launch { t.press.animateTo(0f, Goccia.release) }
                 if (up != null && !fired) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     click()
@@ -225,18 +246,66 @@ fun Modifier.dropGestures(
 /** Il solo contenitore si gonfia appena quando è premuto; l'etichetta e il contenuto restano fermi. */
 fun Modifier.dropDeform(t: DropTouch): Modifier = this.graphicsLayer {
     val p = t.press.value
-    scaleX = 1f + 0.035f * p
-    scaleY = 1f + 0.012f * p
+    scaleX = 1f + 0.06f * p
+    scaleY = 1f + 0.03f * p
 }
 
-/** Riga/scheda cliccabile: non si muove; il contenitore si illumina appena mentre lo premi. */
+/** Bagliore di luce rifratta che si accende dove tocchi una scheda e si allarga come un liquido. */
+fun Modifier.pressGlow(t: DropTouch, dark: Boolean, corner: Dp): Modifier = this.drawBehind {
+    val p = t.press.value
+    if (p > 0.01f) {
+        drawRoundRect(Goccia.ink(dark).copy(alpha = 0.05f * p), cornerRadius = CornerRadius(corner.toPx()))
+        val at = t.pos.takeIf { it.isSpecified } ?: Offset(size.width / 2, size.height / 2)
+        drawRoundRect(
+            Brush.radialGradient(listOf(Color.White.copy(alpha = (if (dark) 0.24f else 0.60f) * p.coerceAtMost(1f)), Color(0xFF5C9DFF).copy(alpha = 0.10f * p.coerceAtMost(1f)), Color.Transparent), center = at, radius = maxOf(size.width, size.height) * (0.5f + 0.4f * p.coerceAtMost(1f))),
+            cornerRadius = CornerRadius(corner.toPx()),
+        )
+    }
+}
+
+/** Riga/scheda cliccabile: non si muove; il contenitore si illumina dove lo premi. */
 fun Modifier.dropClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null, corner: Dp = Radius.xl): Modifier = composed {
     val t = rememberDropTouch()
     val dark = isDark()
-    this.drawBehind {
-        val p = t.press.value
-        if (p > 0.01f) drawRoundRect(Goccia.ink(dark).copy(alpha = 0.07f * p), cornerRadius = CornerRadius(corner.toPx()))
-    }.dropGestures(t, onClick, onLongClick)
+    this.pressGlow(t, dark, corner).dropGestures(t, onClick, onLongClick)
+}
+
+/** Un tocco e doppio tocco distinti (il primo copia, il secondo apre), con lo stesso bagliore. */
+fun Modifier.dropTaps(onTap: () -> Unit, onDouble: () -> Unit, corner: Dp = Radius.xl): Modifier = composed {
+    val t = rememberDropTouch()
+    val dark = isDark()
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val tap by rememberUpdatedState(onTap)
+    val dbl by rememberUpdatedState(onDouble)
+    this.pressGlow(t, dark, corner).pointerInput(Unit) {
+        androidx.compose.foundation.gestures.detectTapGestures(
+            onPress = { o ->
+                t.pos = o
+                scope.launch { t.press.animateTo(1f, Goccia.press) }
+                tryAwaitRelease()
+                scope.launch { t.press.animateTo(0f, Goccia.release) }
+            },
+            onTap = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); tap() },
+            onDoubleTap = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); dbl() },
+        )
+    }
+}
+
+/** "Copiato" a tutta scheda: una velatura di marca sale sopra la scheda, il testo si assesta con una molla, poi sparisce. [trigger] > 0 la fa partire. */
+@Composable
+fun CopiedOverlay(trigger: Int, modifier: Modifier = Modifier) {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(trigger) { if (trigger > 0) { show = true; kotlinx.coroutines.delay(950); show = false } }
+    androidx.compose.animation.AnimatedVisibility(
+        show, modifier,
+        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(140)) + androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.6f, 380f), initialScale = 0.92f),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300)),
+    ) {
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Brand.sky.copy(alpha = 0.96f), Brand.mid.copy(alpha = 0.97f), Brand.royal.copy(alpha = 0.98f)))), contentAlignment = Alignment.Center) {
+            Text("Copiato", style = CanoneType.title3, color = Color.White)
+        }
+    }
 }
 
 /**

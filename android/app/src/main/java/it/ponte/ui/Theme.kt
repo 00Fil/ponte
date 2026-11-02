@@ -58,9 +58,10 @@ private val Blue900 = Color(0xFF11244F)
 
 /** Il gradiente di Ponte, per i pochi punti di colore: pulsante principale, indicatori, spunte. */
 object Brand {
-    val royal = Color(0xFF2547F0)
-    val mid = Color(0xFF3C7BFF)
-    val sky = Color(0xFF6FB4FF)
+    // Il blu profondo del tocco su un dispositivo (Blue900) è il colore di marca: icona, pulsanti, indicatori.
+    val royal = Color(0xFF11244F)
+    val mid = Color(0xFF1F44CC)
+    val sky = Color(0xFF5C9DFF)
     val ice = Color(0xFFB8C2FF)
     val gradient = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(sky, mid, royal))
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -164,7 +165,25 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
     var folder by remember { mutableStateOf<String?>(null) }
     var newFolder by remember { mutableStateOf<String?>(null) }
     var peek by remember { mutableStateOf<FileEntry?>(null) }
+    // passaggio tra le schede: il contenuto nuovo entra sfocato e si mette a fuoco (non scatta)
+    val fx = remember { androidx.compose.animation.core.Animatable(1f) }
+    val firstRun = remember { booleanArrayOf(true) }
+    androidx.compose.runtime.LaunchedEffect(tab) {
+        if (firstRun[0]) { firstRun[0] = false; return@LaunchedEffect }
+        fx.snapTo(0f); fx.animateTo(1f, androidx.compose.animation.core.tween(460, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
+    val tabFx = Modifier.graphicsLayer {
+        val v = fx.value
+        alpha = 0.2f + 0.8f * v
+        if (v < 1f && android.os.Build.VERSION.SDK_INT >= 31) { val b = (1f - v) * 26f + 0.01f; renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) }
+    }
     val filter = if (tab == 1) "screenshot" else "file"
+    val grouped = remember(history) {
+        val fmt = java.text.SimpleDateFormat("d MMMM", java.util.Locale.ITALY)
+        val today = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
+        fun label(ts: Long) = if (ts >= today) "Oggi" else if (ts >= today - 86_400_000L) "Ieri" else fmt.format(java.util.Date(ts))
+        buildList<Pair<String?, it.ponte.ClipItem?>> { var last = ""; history.forEach { h -> val d = label(h.ts); if (d != last) { add(d to null); last = d }; add(null to h) } }
+    }
     val list = if (tab == 0) emptyList() else all.filter { it.kind == filter && (folder == null || placed[it.fid] == folder) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -218,20 +237,48 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             }
             if (tab == 0) {
                 if (history.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
-                    CText("Niente per ora. Copia su un altro dispositivo e arriva qui.", tertiary = true)
+                    Box(tabFx) { CText("Niente per ora. Copia su un altro dispositivo e arriva qui.", tertiary = true) }
                 }
-                items(history, key = { "c" + it.ts + it.text.hashCode() }, span = { GridItemSpan(maxLineSpan) }) { h ->
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).dropClickable({ r.clipboard.copyLocal(h.text); toast(ctx, "Copiato") }, corner = Radius.lg).padding(Space.s3),
-                        verticalArrangement = Arrangement.spacedBy(Space.s1),
-                    ) {
-                        Text(h.text, style = CanoneType.body, color = c.labelPrimary, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                        Text((if (h.mine) "Da qui" else r.deviceName(h.from)) + " · " + time(h.ts, ctx) + " · tocca per copiare", style = CanoneType.footnote, color = c.labelTertiary)
+                items(grouped, key = { (d, h) -> if (h == null) "d$d" else "c" + h.ts + h.text.hashCode() }, span = { GridItemSpan(maxLineSpan) }) { (day, h) ->
+                    if (h == null) {
+                        Text(day ?: "", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelTertiary, modifier = Modifier.then(tabFx).padding(top = Space.s2, start = Space.s1))
+                    } else {
+                        var n by remember { mutableIntStateOf(0) }
+                        val tone = deviceTone(if (h.mine) "me" else h.from)
+                        val pic = DevicePics.rememberPic(if (h.mine) r.deviceId else h.from)
+                        val link = h.text.trim().let { (it.startsWith("http://") || it.startsWith("https://")) && !it.contains(' ') }
+                        val code = !link && h.text.trim().length in 4..12 && h.text.trim().none { it == ' ' } && h.text.trim().count { it.isDigit() } >= 4
+                        val kind = when { link -> "Link"; code -> "Codice"; h.text.count { it == '\n' } >= 2 -> "Testo lungo"; else -> "Testo" }
+                        val shape2 = RoundedCornerShape(Radius.lg)
+                        Box(
+                            Modifier.then(tabFx).fillMaxWidth().clip(shape2).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape2)
+                                .dropClickable({ r.clipboard.copyLocal(h.text); n++ }, corner = Radius.lg),
+                        ) {
+                            Row(Modifier.padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                Box(Modifier.size(40.dp).drop(isDark(), tint = tone.copy(alpha = 0.34f)), contentAlignment = Alignment.Center) {
+                                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp).clip(androidx.compose.foundation.shape.CircleShape), contentScale = ContentScale.Fit)
+                                    else TabGlyph(if (h.mine) 0 else 1, c.labelPrimary, false, Modifier.size(20.dp))
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                                        Text(if (h.mine) "Questo telefono" else r.deviceName(h.from), style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelSecondary, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                                        Text("· $kind", style = CanoneType.footnote, color = if (link) c.accent else c.labelTertiary, maxLines = 1)
+                                        Spacer(Modifier.weight(1f))
+                                        Text(time(h.ts, ctx), style = CanoneType.footnote, color = c.labelTertiary)
+                                    }
+                                    Text(
+                                        h.text, style = if (code) CanoneType.figure else CanoneType.body, color = if (link) c.accent else c.labelPrimary,
+                                        maxLines = if (link) 1 else 3, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            CopiedOverlay(n, Modifier.matchParentSize())
+                        }
                     }
                 }
             } else {
                 item(key = "folders", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    Row(Modifier.then(tabFx).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                         (listOf<String?>(null) + folders).forEach { f ->
                             val on = folder == f
                             Box(
@@ -260,7 +307,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             }
             items(list, key = { it.fid }) { e ->
                 Column(
-                    Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
+                    Modifier.then(tabFx).clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
                         .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
                         .dropClickable({ open(e) }, { peek = e }, Radius.lg).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
@@ -515,57 +562,32 @@ fun AudioScreen(r: Router, openSettings: () -> Unit = {}) {
                 }
             }
         }
-        // ------------------------------------------------ in riproduzione
+        // ------------------------------------------------ player (copertina, comandi e volume in una sola scheda)
         item {
-            CCard {
-                if (np == null) {
-                    SectionTitle("In riproduzione")
-                    if (listenerEnabled(ctx)) CText("Fai partire la musica: qui compaiono titolo, copertina e controlli.", tertiary = true)
-                    else {
-                        CText("Per vedere e comandare la musica serve l'accesso alle notifiche.", tertiary = true)
-                        CButton("Consenti", { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, kind = ButtonKind.Primary)
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                        Box(Modifier.size(64.dp).clip(RoundedCornerShape(Radius.md)).background(c.bgSunken), contentAlignment = Alignment.Center) {
-                            np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(28.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(np.artist, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(np.app, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        val tc = np.controller.transportControls
-                        listOf(0 to { tc.skipToPrevious() }, (if (np.playing) 2 else 1) to { if (np.playing) tc.pause() else tc.play() }, 3 to { tc.skipToNext() }).forEach { (k, act) ->
-                            val t = rememberDropTouch()
-                            val big = k == 1 || k == 2
-                            Box(
-                                Modifier.size(if (big) 64.dp else 52.dp).dropGestures(t, act).dropDeform(t)
-                                    .drop(isDark(), tint = if (big) c.accent.copy(alpha = 0.32f) else Color.Unspecified, press = { t.press.value }),
-                                contentAlignment = Alignment.Center,
-                            ) { MediaIcon(k, c.labelPrimary, Modifier.size(if (big) 24.dp else 20.dp)) }
-                        }
-                    }
+            if (np != null) PlayerCard(np) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Esce da", style = CanoneType.footnote, color = c.labelTertiary)
+                    Text(out, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
+                }
+            } else CCard {
+                SectionTitle("In riproduzione")
+                if (listenerEnabled(ctx)) CText("Fai partire la musica: qui compaiono copertina, comandi e volume.", tertiary = true)
+                else {
+                    CText("Per vedere e comandare la musica serve l'accesso alle notifiche.", tertiary = true)
+                    CButton("Consenti", { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, kind = ButtonKind.Primary)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
+                    DropSlider(vol.toFloat() / maxVol, { f ->
+                        val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
+                        if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
+                    }, Modifier.weight(1f))
+                    SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
                 }
             }
         }
-        // ------------------------------------------------ volume
-        item {
-            CCard {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    SectionTitle("Volume")
-                    RollingText("${vol * 100 / maxVol}%", CanoneType.footnote, c.labelSecondary)
-                }
-                DropSlider(vol.toFloat() / maxVol, { f ->
-                    val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
-                    if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
-                })
-            }
-        }
-        // ------------------------------------------------ dal PC
-        item {
+        // ------------------------------------------------ dal PC (solo se c'è un PC che trasmette)
+        if (sources.isNotEmpty()) item {
             CCard {
                 SectionTitle("Ascolta dal PC")
                 if (sources.isEmpty()) {
@@ -614,7 +636,7 @@ private fun Category(icon: Int, title: String, note: String, tint: Color, onClic
     val t = rememberDropTouch()
     Box(Modifier.fillMaxWidth().dropGestures(t, onClick)) {
         Row(
-            Modifier.fillMaxWidth().dropDeform(t).drop(dark, corner = Radius.xl, press = { t.press.value }).padding(Space.s3),
+            Modifier.fillMaxWidth().dropDeform(t).drop(dark, corner = Radius.xl, press = { t.press.value }, touch = t).padding(Space.s3),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
             Box(Modifier.size(46.dp).drop(dark, tint = tint.copy(alpha = if (dark) 0.42f else 0.30f)), contentAlignment = Alignment.Center) {
@@ -867,4 +889,10 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
             }
         }
     }
+}
+
+/** Un colore stabile per dispositivo, per distinguere a colpo d'occhio da dove arriva ogni copia. */
+internal fun deviceTone(id: String): Color {
+    val palette = listOf(Color(0xFF5C9DFF), Color(0xFF34C7A5), Color(0xFFF0A54A), Color(0xFFB38CFF), Color(0xFFFF7AA8), Color(0xFF7BD66B))
+    return if (id == "me") palette[0] else palette[(id.hashCode() and 0x7fffffff) % (palette.size - 1) + 1]
 }

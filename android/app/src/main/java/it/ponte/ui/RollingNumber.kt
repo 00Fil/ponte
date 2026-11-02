@@ -2,6 +2,7 @@ package it.ponte.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,7 +86,7 @@ private fun RollDigit(digit: Int, style: TextStyle, color: Color, index: Int, up
         val cur = pos.value.roundToInt()
         if (mod10(cur) == digit) return@LaunchedEffect
         val delta = if (up) mod10(digit - mod10(cur)) else -mod10(mod10(cur) - digit)
-        pos.animateTo((cur + delta).toFloat(), tween(1100, delayMillis = minOf(index, 8) * 55, easing = SPRING))
+        pos.animateTo((cur + delta).toFloat(), tween(380, delayMillis = minOf(index, 4) * 28, easing = FastOutSlowInEasing))
     }
     if (haptic) LaunchedEffect(Unit) {
         androidx.compose.runtime.snapshotFlow { floor(pos.value).toInt() }.collect {
@@ -101,5 +103,33 @@ private fun RollDigit(digit: Int, style: TextStyle, color: Color, index: Int, up
         Text("0", style = style, color = color, modifier = Modifier.alpha(0f), maxLines = 1)
         Text(mod10(base).toString(), style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { translationY = -frac * lhPx })
         if (frac > 0.001f) Text(mod10(base + 1).toString(), style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { translationY = (1f - frac) * lhPx })
+    }
+}
+
+
+/**
+ * Morphing: il testo nuovo sostituisce il vecchio con una dissolvenza sfocata e un leggero ingrandimento, senza cifre che girano.
+ * Per i numeri grandi e isolati (il saldo), dove il rotolo risulterebbe lungo e confuso.
+ */
+@Composable
+fun MorphText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, haptic: Boolean = false) {
+    val st = style.copy(fontFeatureSettings = "tnum")
+    val view = androidx.compose.ui.platform.LocalView.current
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(text) {
+        if (first) first = false
+        else if (haptic) view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+    }
+    androidx.compose.animation.AnimatedContent(
+        text, modifier,
+        transitionSpec = {
+            (androidx.compose.animation.fadeIn(tween(260, 60)) + androidx.compose.animation.scaleIn(tween(260, 60), initialScale = 0.9f))
+                .togetherWith(androidx.compose.animation.fadeOut(tween(160)) + androidx.compose.animation.scaleOut(tween(160), targetScale = 1.08f))
+                .using(androidx.compose.animation.SizeTransform(clip = false))
+        },
+        label = "morph",
+    ) { t ->
+        val b by transition.animateFloat({ tween(240) }, label = "sfoca") { if (it == androidx.compose.animation.EnterExitState.Visible) 0f else 10f }
+        Text(t, style = st, color = color, maxLines = 1, softWrap = false, modifier = Modifier.then(if (b > 0.3f) Modifier.blur(b.dp) else Modifier))
     }
 }

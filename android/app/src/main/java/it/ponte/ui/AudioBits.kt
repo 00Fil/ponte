@@ -13,6 +13,14 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -133,6 +141,98 @@ fun MediaIcon(kind: Int, color: Color, modifier: Modifier = Modifier) {
             2 -> { drawRoundRect(color, Offset(w * 0.25f, h * 0.2f), androidx.compose.ui.geometry.Size(w * 0.17f, h * 0.6f), androidx.compose.ui.geometry.CornerRadius(3f)); drawRoundRect(color, Offset(w * 0.58f, h * 0.2f), androidx.compose.ui.geometry.Size(w * 0.17f, h * 0.6f), androidx.compose.ui.geometry.CornerRadius(3f)) }
             3 -> { drawPath(tri(w * 0.15f, w * 0.6f), color); drawRect(color, Offset(w * 0.66f, h * 0.2f), androidx.compose.ui.geometry.Size(w * 0.12f, h * 0.6f)) }
             else -> { drawPath(Path().apply { moveTo(w * 0.85f, h * 0.2f); lineTo(w * 0.4f, h * 0.5f); lineTo(w * 0.85f, h * 0.8f); close() }, color); drawRect(color, Offset(w * 0.22f, h * 0.2f), androidx.compose.ui.geometry.Size(w * 0.12f, h * 0.6f)) }
+        }
+    }
+}
+
+
+@Composable
+fun SpeakerIcon(loud: Boolean, color: Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val w = size.width; val h = size.height
+        drawPath(Path().apply { moveTo(w * .1f, h * .38f); lineTo(w * .32f, h * .38f); lineTo(w * .56f, h * .18f); lineTo(w * .56f, h * .82f); lineTo(w * .32f, h * .62f); lineTo(w * .1f, h * .62f); close() }, color)
+        if (loud) drawArc(color, -42f, 84f, false, Offset(w * .42f, h * .24f), androidx.compose.ui.geometry.Size(w * .46f, h * .52f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * .08f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+    }
+}
+
+private fun clock(ms: Long): String { val s = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(s / 60, s % 60) }
+
+/**
+ * Player in stile iOS, una sola scheda: copertina grande con sfondo sfocato dalla copertina, titolo e artista, avanzamento, comandi
+ * e volume in fondo. [footer] aggiunge una riga (dove esce l'audio, ecc.).
+ */
+@Composable
+fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composable () -> Unit)? = null) {
+    val c = Canone.colors
+    val ctx = LocalContext.current
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl)
+    val am = remember { ctx.getSystemService(android.media.AudioManager::class.java) }
+    val maxVol = remember { am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var vol by remember { androidx.compose.runtime.mutableIntStateOf(am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1200); vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) } }
+    val dur = np.controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+    var pos by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    androidx.compose.runtime.LaunchedEffect(np.controller, np.title, np.playing) {
+        while (true) {
+            val st = np.controller.playbackState
+            pos = when {
+                st == null -> 0L
+                st.state == android.media.session.PlaybackState.STATE_PLAYING -> st.position + ((android.os.SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+                else -> st.position
+            }.coerceIn(0L, if (dur > 0) dur else Long.MAX_VALUE)
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    val tc = np.controller.transportControls
+    Box(modifier.fillMaxWidth().clip(shape).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape)) {
+        Box(Modifier.matchParentSize().background(c.bgSurface))
+        np.art?.let {
+            androidx.compose.foundation.Image(
+                it.asImageBitmap(), null,
+                Modifier.matchParentSize().then(if (android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(46.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle) else Modifier).alpha(0.55f),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+            Box(Modifier.matchParentSize().background(c.bgSurface.copy(alpha = 0.45f)))
+        }
+        Column(Modifier.fillMaxWidth().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                Box(Modifier.size(84.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                    np.art?.let { androidx.compose.foundation.Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                        ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(32.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    androidx.compose.material3.Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.callout.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.labelPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    androidx.compose.material3.Text(np.artist, style = CanoneType.body, color = c.labelSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    androidx.compose.material3.Text(np.app, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+                }
+            }
+            if (dur > 0) Column {
+                DropSlider(pos.toFloat() / dur, { f -> pos = (f * dur).toLong(); tc.seekTo(pos) })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    androidx.compose.material3.Text(clock(pos), style = CanoneType.footnote, color = c.labelTertiary)
+                    androidx.compose.material3.Text("−" + clock(dur - pos), style = CanoneType.footnote, color = c.labelTertiary)
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                listOf(0 to { tc.skipToPrevious() }, (if (np.playing) 2 else 1) to { if (np.playing) tc.pause() else tc.play() }, 3 to { tc.skipToNext() }).forEach { (k, act) ->
+                    val t = rememberDropTouch()
+                    val big = k == 1 || k == 2
+                    Box(
+                        Modifier.size(if (big) 68.dp else 54.dp).dropGestures(t, act).dropDeform(t)
+                            .drop(isDark(), tint = if (big) c.accent.copy(alpha = 0.32f) else Color.Unspecified, press = { t.press.value }, touch = t),
+                        contentAlignment = Alignment.Center,
+                    ) { MediaIcon(k, c.labelPrimary, Modifier.size(if (big) 26.dp else 20.dp)) }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
+                DropSlider(vol.toFloat() / maxVol, { f ->
+                    val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
+                    if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
+                }, Modifier.weight(1f))
+                SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
+            }
+            footer?.invoke()
         }
     }
 }

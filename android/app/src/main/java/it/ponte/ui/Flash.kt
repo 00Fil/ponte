@@ -23,6 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,7 @@ import kotlinx.coroutines.delay
 object MoneyPrivacy {
     var hidden by mutableStateOf(false)
     const val MASK = "€ ••••"
+    const val BLUR = 12
 }
 
 /** Animazione a schermo intero dopo un'entrata o un'uscita: il saldo al centro, sotto l'operazione in verde o rosso, poi il saldo rotola al risultato. */
@@ -50,9 +54,9 @@ fun FlashHost() {
         val e = last ?: return@AnimatedVisibility
         var shown by remember(e.id) { mutableLongStateOf(e.before) }
         LaunchedEffect(e.id) {
-            delay(700)
+            delay(450)
             shown = e.before + e.delta
-            delay(2300)
+            delay(1100)
             if (Flash.ev?.id == e.id) Flash.ev = null
         }
         Box(
@@ -73,3 +77,8 @@ fun FlashHost() {
         }
     }
 }
+
+
+/** Importi nascosti: sfocatura al posto dei puntini. Con Android < 12 (niente blur) il testo si fa quasi trasparente. */
+fun Modifier.blurIf(on: Boolean): Modifier = if (!on) this else if (android.os.Build.VERSION.SDK_INT >= 31)
+    this.blur(MoneyPrivacy.BLUR.dp) else this.graphicsLayer { alpha = 0.08f }

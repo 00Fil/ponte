@@ -84,6 +84,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     val active by r.audio.activeSource.collectAsState()
     val money by r.finance.state.collectAsState()
     val missing = missingPerms(ctx)
+    val np = rememberNowPlaying()
 
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -93,17 +94,17 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
         ) {
             if (missing > 0) item { FixWidget(missing) { go("perm") } }
             item { MoneyWidget(r, money.totalCents, money.txs) { go("finance") } }
+            if (np != null) item { PlayerCard(np) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     ShotWidget(r, files.firstOrNull { it.mime.startsWith("image/") }, Modifier.weight(1f)) { go("images") }
                     ClipWidget(r, clips.firstOrNull()?.text, Modifier.weight(1f)) { go("clips") }
                 }
             }
-            item { FlowWidget(money.txs) }
             item {
-                val audioOn = holder != null || active != null
+                val audioOn = np == null && (holder != null || active != null)
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    ActivityWidget(clips.map { it.ts }, files.map { it.ts }, Modifier.weight(1f))
+                    ActivityWidget(clips.map { it.ts }, files.map { it.ts }, if (audioOn) Modifier.weight(1f) else Modifier.fillMaxWidth())
                     if (audioOn) AudioWidget(r, holder, active, Modifier.weight(1f)) { go("audio") }
                 }
             }
@@ -113,12 +114,12 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
 
 /** Contenitore dei widget: stesso bordo e raggio ovunque. */
 @Composable
-private fun Widget(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+private fun Widget(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, onTap: (() -> Unit)? = null, onDouble: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Box(
         modifier.clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
-            .then(if (onClick != null) Modifier.dropClickable(onClick) else Modifier),
+            .then(if (onTap != null && onDouble != null) Modifier.dropTaps(onTap, onDouble) else if (onClick != null) Modifier.dropClickable(onClick) else Modifier),
     ) { content() }
 }
 
@@ -144,12 +145,16 @@ private fun MoneyWidget(r: Router, total: Long, txs: List<Tx>, onClick: () -> Un
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        Column(Modifier.fillMaxWidth().background(c.bgSurface).dropClickable(onClick).padding(Space.s4)) {
+        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
                 EyeToggle(r)
             }
-            CountUp(total, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+            Box(Modifier.clip(RoundedCornerShape(Radius.md)).dropClickable(onClick, corner = Radius.md)) {
+                CountUp(total, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+            }
+            // entrate e uscite del mese nello stesso riquadro, da sfogliare
+            FlowPager(txs)
         }
         // il cassetto con le ultime operazioni, a scorrimento dall'alto verso il basso e dissolvenza ai bordi
         Box(Modifier.fillMaxWidth().background(c.bgSunken).padding(horizontal = Space.s4)) { OpsTicker(txs.take(8)) }
@@ -192,8 +197,9 @@ private fun OpsTicker(ops: List<Tx>) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(catColor(t.cat)))
                 Text(t.note.ifEmpty { t.cat }, style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    if (MoneyPrivacy.hidden) "••" else (if (t.cents > 0) "+" else "") + eur(t.cents),
+                    (if (t.cents > 0) "+" else "") + eur(t.cents),
                     style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = if (t.cents > 0) c.positive else c.labelPrimary,
+                    modifier = Modifier.blurIf(MoneyPrivacy.hidden),
                 )
             }
         }
@@ -206,45 +212,42 @@ private fun OpsTicker(ops: List<Tx>) {
 private fun ShotWidget(r: Router, e: it.ponte.FileEntry?, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
     val ctx = LocalContext.current
-    Widget(modifier.height(190.dp), onClick) {
+    var n by remember { mutableIntStateOf(0) }
+    val copy = {
+        if (e != null) {
+            val cm = ctx.getSystemService(ClipboardManager::class.java)
+            cm.setPrimaryClip(ClipData.newUri(ctx.contentResolver, e.name, r.files.uriFor(e)))
+            n++
+        }
+    }
+    Widget(modifier.height(190.dp), onTap = copy, onDouble = onClick) {
         val bmp by produceState<Bitmap?>(null, e?.path) {
             value = e?.let { withContext(Dispatchers.IO) { thumb(it.path) } }
         }
         bmp?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.65f))))
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(Space.s3)) {
             Text(if (e == null) "Nessuno screenshot" else "Ultimo screenshot", style = CanoneType.footnote, color = if (bmp != null) Color.White else c.labelTertiary)
-            if (e != null) MiniButton("Copia") {
-                val cm = ctx.getSystemService(ClipboardManager::class.java)
-                cm.setPrimaryClip(ClipData.newUri(ctx.contentResolver, e.name, r.files.uriFor(e)))
-                toast(ctx, "Immagine copiata")
-            }
+            if (e != null) Text("Tocca per copiare · due volte per aprire", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
         }
+        CopiedOverlay(n, Modifier.matchParentSize())
     }
 }
 
 @Composable
 private fun ClipWidget(r: Router, text: String?, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
-    val ctx = LocalContext.current
-    Widget(modifier.height(190.dp), onClick) {
+    var n by remember { mutableIntStateOf(0) }
+    Widget(modifier.height(190.dp), onTap = { if (text != null) { r.clipboard.copyLocal(text); n++ } }, onDouble = onClick) {
         Column(Modifier.fillMaxSize().padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(Space.s1)) {
                 Text("Ultimo copiato", style = CanoneType.footnote, color = c.labelTertiary)
                 Text(text ?: "Niente per ora", style = CanoneType.body, color = if (text == null) c.labelTertiary else c.labelPrimary, maxLines = 5, overflow = TextOverflow.Ellipsis)
             }
-            if (text != null) MiniButton("Copia") { r.clipboard.copyLocal(text); toast(ctx, "Copiato") }
+            if (text != null) Text("Tocca per copiare · due volte per aprire", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 2)
         }
+        CopiedOverlay(n, Modifier.matchParentSize())
     }
-}
-
-@Composable
-private fun MiniButton(label: String, onClick: () -> Unit) {
-    val t = rememberDropTouch()
-    Box(
-        Modifier.height(34.dp).dropGestures(t, onClick).dropDeform(t).drop(isDark(), tint = Canone.colors.accent.copy(alpha = 0.32f), press = { t.press.value }).padding(horizontal = Space.s4),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
 }
 
 private fun thumb(path: String): Bitmap? {
@@ -260,27 +263,27 @@ private fun thumb(path: String): Bitmap? {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FlowWidget(txs: List<Tx>) {
+private fun FlowPager(txs: List<Tx>) {
     val c = Canone.colors
     val cal = Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
     val month = txs.filter { it.ts >= cal.timeInMillis }
     val pager = rememberPagerState { 2 }
     val scope = rememberCoroutineScope()
-    Widget(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Questo mese", style = CanoneType.title3, color = c.labelPrimary)
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    listOf("Uscite", "Entrate").forEachIndexed { i, l ->
-                        val on = pager.currentPage == i
-                        Box(
-                            Modifier.clip(CircleShape).background(if (on) c.accentSubtle else Color.Transparent)
-                                .dropClickable({ scope.launch { pager.animateScrollToPage(i) } }, corner = 100.dp).padding(horizontal = Space.s3, vertical = 4.dp),
-                        ) { Text(l, style = CanoneType.footnote, color = if (on) c.accentOnSubtle else c.labelTertiary) }
-                    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Questo mese", style = CanoneType.footnote, color = c.labelTertiary)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                listOf("Uscite", "Entrate").forEachIndexed { i, l ->
+                    val on = pager.currentPage == i
+                    Box(
+                        Modifier.clip(CircleShape).background(if (on) c.accentSubtle else Color.Transparent)
+                            .dropClickable({ scope.launch { pager.animateScrollToPage(i) } }, corner = 100.dp).padding(horizontal = Space.s3, vertical = 4.dp),
+                    ) { Text(l, style = CanoneType.footnote, color = if (on) c.accentOnSubtle else c.labelTertiary) }
                 }
             }
-            HorizontalPager(pager, Modifier.fillMaxWidth()) { p ->
+        }
+        HorizontalPager(pager, Modifier.fillMaxWidth()) { p ->
+            Box(Modifier.blurIf(MoneyPrivacy.hidden)) {
                 CategoryDonut(month.filter { if (p == 0) it.cents < 0 else it.cents > 0 }, if (p == 0) "Nessuna uscita questo mese." else "Nessuna entrata questo mese.")
             }
         }

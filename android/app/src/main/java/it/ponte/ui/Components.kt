@@ -85,9 +85,9 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
     }
     val touch = rememberDropTouch()
     val glass = when (kind) {
-        ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { touch.press.value })
-        ButtonKind.Secondary -> Modifier.drop(dark, press = { touch.press.value })
-        ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { touch.press.value })
+        ButtonKind.Primary -> Modifier.drop(dark, fill = Brand.gradient, press = { touch.press.value }, touch = touch)
+        ButtonKind.Secondary -> Modifier.drop(dark, press = { touch.press.value }, touch = touch)
+        ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { touch.press.value }, touch = touch)
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * touch.press.value)) }
     }
     Box(

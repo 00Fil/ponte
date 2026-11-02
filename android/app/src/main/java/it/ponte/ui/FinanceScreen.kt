@@ -154,7 +154,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 EyeToggle(r)
                             }
                             CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
-                            Trend(trend, c.accent, Modifier.fillMaxWidth().height(96.dp))
+                            Trend(trend, c.accent, Modifier.fillMaxWidth().height(96.dp).blurIf(MoneyPrivacy.hidden))
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
                                 Column { Text("Contanti", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.cashCents, CanoneType.body, c.labelPrimary) }
                                 Column { Text("Revolut", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.revolutCents, CanoneType.body, c.labelPrimary) }
@@ -208,14 +208,14 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 val l = m.txs.filter { it.ts in a until b }
                                 Triple(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[mo], l.filter { it.cents > 0 }.sumOf { it.cents }, -l.filter { it.cents < 0 }.sumOf { it.cents })
                             }
-                            BarChart(bars, c.accent, c.labelTertiary)
+                            Box(Modifier.blurIf(MoneyPrivacy.hidden)) { BarChart(bars, c.accent, c.labelTertiary) }
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) { Legend("Entrate", c.accent); Legend("Uscite", c.labelTertiary) }
                         }
                     }
                     item {
                         CCard {
                             SectionTitle("Dove vanno i soldi")
-                            CategoryDonut(inPeriod.filter { it.cents < 0 }, "Nessuna spesa in questo periodo.")
+                            Box(Modifier.blurIf(MoneyPrivacy.hidden)) { CategoryDonut(inPeriod.filter { it.cents < 0 }, "Nessuna spesa in questo periodo.") }
                         }
                     }
                 }
@@ -228,7 +228,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             CountUp(tallyCents, CanoneType.title1.copy(fontSize = 48.sp, fontWeight = FontWeight.SemiBold), if (tallyCents == 0L) c.labelTertiary else if (spend) c.critical else c.positive)
-                            Text("Nel portafoglio " + eur(m.cashCents), style = CanoneType.footnote, color = c.labelTertiary)
+                            Text("Nel portafoglio " + eur(m.cashCents), style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
                         }
                     }
                     item {
@@ -397,7 +397,7 @@ private fun TxRow(t: Tx, ctx: android.content.Context, onDelete: () -> Unit) {
             Text(t.note.ifEmpty { t.cat }, style = CanoneType.body, color = c.labelPrimary, maxLines = 1)
             Text(t.cat + " · " + DateFormat.getMediumDateFormat(ctx).format(Date(t.ts)) + if (t.src == "revolut") " · Revolut" else "", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
         }
-        Text((if (t.cents > 0) "+" else "") + eur(t.cents), style = CanoneType.body, color = if (t.cents > 0) c.positiveOnSubtle else c.labelPrimary, maxLines = 1)
+        Text((if (t.cents > 0) "+" else "") + eur(t.cents), style = CanoneType.body, color = if (t.cents > 0) c.positiveOnSubtle else c.labelPrimary, maxLines = 1, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
     }
 }
 
@@ -450,8 +450,8 @@ private fun rememberGrow(key: Any): Float {
 /** Cifra in euro che rotola verso il nuovo valore. */
 @Composable
 internal fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, color: Color) {
-    if (MoneyPrivacy.hidden) Text(MoneyPrivacy.MASK, style = style, color = color, maxLines = 1)
-    else RollingText(eur(cents), style, color, haptic = true)
+    // importi nascosti = sfocati (non puntini); il valore resta reale sotto la sfocatura
+    Box(Modifier.blurIf(MoneyPrivacy.hidden)) { MorphText(eur(cents), style, color, haptic = true) }
 }
 
 /** Occhio per nascondere o mostrare gli importi (vale per Home e Finanze). */
@@ -460,7 +460,7 @@ internal fun EyeToggle(r: Router) {
     val c = Canone.colors
     val t = rememberDropTouch()
     Box(
-        Modifier.size(36.dp).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).dropDeform(t).drop(isDark(), press = { t.press.value }),
+        Modifier.size(36.dp).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(20.dp)) {
@@ -521,8 +521,8 @@ private fun BarChart(bars: List<Triple<String, Long, Long>>, income: Color, spen
             if (s == null) Text("Tocca una colonna", style = CanoneType.footnote, color = c.labelTertiary)
             else {
                 Text(bars[s].first, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
-                Text("+" + if (MoneyPrivacy.hidden) "••" else eur(bars[s].second), style = CanoneType.footnote, color = income)
-                Text("−" + if (MoneyPrivacy.hidden) "••" else eur(bars[s].third), style = CanoneType.footnote, color = c.labelSecondary)
+                Text("+" + eur(bars[s].second), style = CanoneType.footnote, color = income, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
+                Text("−" + eur(bars[s].third), style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
             }
         }
         Canvas(Modifier.fillMaxWidth().height(130.dp).pointerInput(bars) {
@@ -612,9 +612,9 @@ private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
         }
         val s = sel
         if (s != null) Text(
-            "${s + 1} · " + (if (MoneyPrivacy.hidden) "••" else eur((points[s] * 100).toLong())),
+            "${s + 1} · " + eur((points[s] * 100).toLong()),
             style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary,
-            modifier = Modifier.align(Alignment.TopStart).clip(RoundedCornerShape(Radius.sm)).background(c.bgSunken).padding(horizontal = Space.s2, vertical = 2.dp),
+            modifier = Modifier.align(Alignment.TopStart).clip(RoundedCornerShape(Radius.sm)).background(c.bgSunken).padding(horizontal = Space.s2, vertical = 2.dp).blurIf(MoneyPrivacy.hidden),
         )
     }
 }
@@ -643,7 +643,7 @@ private fun AmountPad(value: String, onChange: (String) -> Unit) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         Box(
                             Modifier.size(70.dp).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
-                                .dropDeform(t).drop(dark, press = { t.press.value }),
+                                .dropDeform(t).drop(dark, press = { t.press.value }, touch = t),
                             contentAlignment = Alignment.Center,
                         ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
                     }
