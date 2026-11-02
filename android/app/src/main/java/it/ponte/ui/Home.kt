@@ -95,6 +95,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
         ) {
             if (missing > 0) item { FixWidget(missing) { go("perm") } }
             item { MoneyWidget(r, money.totalCents, money.txs) { go("finance") } }
+            item { PlanWidgets(r, go) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     ShotWidget(r, files.firstOrNull { it.mime.startsWith("image/") }, Modifier.weight(1f)) { go("images") }
