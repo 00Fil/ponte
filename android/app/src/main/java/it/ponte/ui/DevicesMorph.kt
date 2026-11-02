@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
@@ -50,11 +51,12 @@ fun DevicesMorph(r: Router, open: Boolean, onToggle: () -> Unit) {
     val d = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxWidth().height(30.dp)) {
         val maxW = maxWidth
-        val w = lerp(206.dp, maxW, p)
+        val bleed = 8.dp
+        val w = lerp(206.dp, maxW + bleed * 2, p)
         val h = lerp(30.dp, with(d) { full.toDp() }.coerceAtLeast(120.dp), p)
         val shape = RoundedCornerShape(lerp(15.dp, Radius.xl, p))
         Box(
-            Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).size(w, h).clip(shape).background(c.bgSurface)
+            Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).offset(x = lerp(0.dp, -bleed, p)).size(w, h).clip(shape).background(c.bgSurface)
                 .border(BorderStroke(1.dp, c.lineSeparator), shape)
                 .then(if (p < 0.5f) Modifier.dropClickable(onToggle, corner = 15.dp) else Modifier),
         ) {
@@ -68,7 +70,7 @@ fun DevicesMorph(r: Router, open: Boolean, onToggle: () -> Unit) {
                 )
             }
             if (p > 0.05f) Box(
-                Modifier.width(maxW).graphicsLayer { alpha = ((p - 0.45f) * 2f).coerceIn(0f, 1f) }
+                Modifier.width(maxW + bleed * 2).graphicsLayer { alpha = ((p - 0.45f) * 2f).coerceIn(0f, 1f) }
                     .layout { m, cs ->
                         val pl = m.measure(Constraints(cs.maxWidth, cs.maxWidth, 0, Constraints.Infinity))
                         if (full != pl.height) full = pl.height

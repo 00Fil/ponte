@@ -198,13 +198,21 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
     }
     val list = if (tab == 0) emptyList() else all.filter { it.kind == filter && (folder == null || placed[it.fid] == folder) }
 
+    val uiScope = androidx.compose.runtime.rememberCoroutineScope()
+    var fileSt by remember { mutableIntStateOf(0) }
+    var clipSt by remember { mutableIntStateOf(0) }
+    var assign by remember { mutableStateOf<FileEntry?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val name = ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                 ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "file"
             val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
-            toast(ctx, "File in invio")
-            r.scope.launch { r.files.sendUri(uri, name, mime, "file") }
+            fileSt = 1
+            uiScope.launch {
+                try { withContext(Dispatchers.IO) { r.files.sendUri(uri, name, mime, "file") }; fileSt = 2; kotlinx.coroutines.delay(1000) }
+                catch (_: Exception) { toast(ctx, "Invio non riuscito") }
+                fileSt = 0
+            }
         }
     }
 
@@ -218,12 +226,8 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
         try { ctx.startActivity(Intent.createChooser(send, e.name)) } catch (_: ActivityNotFoundException) { toast(ctx, "Nessuna app può riceverlo") }
     }
     fun open(e: FileEntry) {
-        if (e.mime.startsWith("image/")) { viewing = images.indexOfFirst { it.fid == e.fid }.coerceAtLeast(0); return }
-        try {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(r.files.uriFor(e), e.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        } catch (_: ActivityNotFoundException) {
-            toast(ctx, "Nessuna app può aprire questo file")
-        }
+        val view = Intent(Intent.ACTION_VIEW).setDataAndType(r.files.uriFor(e), e.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { ctx.startActivity(Intent.createChooser(view, e.name).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) } catch (_: ActivityNotFoundException) { toast(ctx, "Nessuna app può aprirlo") }
     }
     fun place(e: FileEntry, f: String?) {
         placed = if (f == null) placed - e.fid else placed + (e.fid to f)
@@ -238,8 +242,16 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
         ) {
             item(key = "act", span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally)) {
-                    Action("", "Invia appunti", true, glyph = 2) { toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare") }
-                    Action("", "Invia file", false, glyph = 7) { picker.launch(arrayOf("*/*")) }
+                    Action("", "Invia appunti", true, glyph = 2, state = clipSt) {
+                        if (clipSt == 0) uiScope.launch {
+                            clipSt = 1
+                            val ok = r.clipboard.sendCurrent()
+                            kotlinx.coroutines.delay(700)
+                            if (ok) { clipSt = 2; kotlinx.coroutines.delay(1000) } else toast(ctx, "Negli appunti non c'è niente")
+                            clipSt = 0
+                        }
+                    }
+                    Action("", "Invia file", false, glyph = 7, state = fileSt) { if (fileSt == 0) picker.launch(arrayOf("*/*")) }
                     Action("", "Backup", false, glyph = 8) { onBackup() }
                 }
             }
@@ -290,22 +302,15 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                 }
             } else {
                 item(key = "folders", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.then(tabFx).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    Row(Modifier.then(tabFx).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                         (listOf<String?>(null) + folders).forEach { f ->
-                            val on = folder == f
-                            Box(
-                                Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.accent else c.bgSunken)
-                                    .dropClickable({ folder = f }, if (f != null) ({
-                                        folders = folders - f; r.prefs.folders = folders
-                                        placed = placed.filterValues { it != f }; r.prefs.fileFolders = placed
-                                        if (folder == f) folder = null
-                                        toast(ctx, "Cartella $f eliminata")
-                                    }) else null, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
-                            ) { Text(f ?: "Tutte", style = CanoneType.footnote, color = if (on) Color.White else c.labelSecondary, maxLines = 1) }
+                            FolderTile(f ?: "Tutte", folder == f, Ico.FOLDER, { folder = f }, if (f != null) ({
+                                folders = folders - f; r.prefs.folders = folders
+                                placed = placed.filterValues { it != f }; r.prefs.fileFolders = placed
+                                if (folder == f) folder = null
+                            }) else null)
                         }
-                        Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken).dropClickable({ newFolder = "" }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
-                            Text("+ Cartella", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
-                        }
+                        FolderTile("Nuova", false, Ico.FOLDER_PLUS, { newFolder = "" }, null)
                     }
                 }
                 if (list.isEmpty()) item(key = "nonef", span = { GridItemSpan(maxLineSpan) }) {
@@ -342,7 +347,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
 
     viewing?.let { i -> PhotoViewer(images, i, onShare = { share(it) }, onClose = { viewing = null }) }
 
-    peek?.let { e -> Peek(e, folders, placed[e.fid], onShare = { share(e) }, onFolder = { f -> place(e, f) }, onDelete = { r.files.delete(e); peek = null }) { peek = null } }
+    peek?.let { e -> Peek(e, folders, placed[e.fid], onShare = { share(e) }, onOpen = { open(e) }, onFolder = { f -> place(e, f) }, onNew = { assign = e; peek = null; newFolder = "" }, onDelete = { r.files.delete(e); peek = null }) { peek = null } }
 
     newFolder?.let { name ->
         AlertDialog(
@@ -355,7 +360,8 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             confirmButton = {
                 CButton("Crea", {
                     val n = name.trim()
-                    if (n.isNotEmpty() && n !in folders) { folders = folders + n; r.prefs.folders = folders; folder = n }
+                    if (n.isNotEmpty() && n !in folders) { folders = folders + n; r.prefs.folders = folders; assign?.let { place(it, n) } ?: run { folder = n } }
+                    assign = null
                     newFolder = null
                 }, kind = ButtonKind.Primary)
             },
@@ -363,41 +369,65 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
     }
 }
 
-/** Anteprima tenendo premuto: l'immagine si apre con una molla al centro, sotto le azioni e le cartelle. Tocca fuori per chiudere. */
+/** Una cartella come icona con il nome sotto. Premuta a lungo (dove ha senso) si elimina. */
 @Composable
-private fun Peek(e: FileEntry, folders: List<String>, current: String?, onShare: () -> Unit, onFolder: (String?) -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+private fun FolderTile(name: String, on: Boolean, icon: Int, onClick: () -> Unit, onLong: (() -> Unit)?) {
+    val c = Canone.colors
+    val bg by androidx.compose.animation.animateColorAsState(if (on) c.accent else c.bgSunken, androidx.compose.animation.core.spring(1f, 500f), label = "cartella")
+    Column(Modifier.width(68.dp).dropClickable(onClick, onLong, corner = Radius.lg).padding(vertical = Space.s1), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(54.dp).clip(RoundedCornerShape(Radius.lg)).background(bg), contentAlignment = Alignment.Center) {
+            Icon24(icon, if (on) Color.White else c.labelSecondary, Modifier.size(28.dp))
+        }
+        Text(name, style = CanoneType.footnote, color = if (on) c.labelPrimary else c.labelSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun RoundIcon(icon: Int, tint: Color, onClick: () -> Unit) {
+    val t = rememberDropTouch()
+    Box(Modifier.size(56.dp).dropGestures(t, onClick), contentAlignment = Alignment.Center) {
+        Box(Modifier.matchParentSize().dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t))
+        Icon24(icon, tint, Modifier.size(26.dp))
+    }
+}
+
+/** Anteprima tenendo premuto: l'elemento si apre grande al centro; sotto, le cartelle e le azioni, tutte a icone. Tocca fuori per chiudere. */
+@Composable
+private fun Peek(e: FileEntry, folders: List<String>, current: String?, onShare: () -> Unit, onOpen: () -> Unit, onFolder: (String?) -> Unit, onNew: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
     val c = Canone.colors
     val view = androidx.compose.ui.platform.LocalView.current
     LaunchedEffect(e.fid) { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
     val bmp by produceState<Bitmap?>(null, e.path) { value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null }
-    val grow = remember { androidx.compose.animation.core.Animatable(0.82f) }
-    LaunchedEffect(e.fid) { grow.animateTo(1f, androidx.compose.animation.core.spring(0.7f, 320f)) }
+    val grow = remember { androidx.compose.animation.core.Animatable(0.86f) }
+    LaunchedEffect(e.fid) { grow.animateTo(1f, androidx.compose.animation.core.spring(0.8f, 420f)) }
     androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onClose),
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onClose),
             contentAlignment = Alignment.Center,
         ) {
             Column(
-                Modifier.fillMaxSize().systemBarsPadding().padding(Space.s5).graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.82f) / 0.18f).coerceIn(0f, 1f) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4, Alignment.CenterVertically),
+                Modifier.fillMaxSize().systemBarsPadding().padding(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s6 + Space.s4)
+                    .graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.86f) / 0.14f).coerceIn(0f, 1f) },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3),
             ) {
-                // l'anteprima prende solo lo spazio che avanza: nome, cartelle e tasti restano sempre sullo schermo
-                Box(Modifier.fillMaxWidth().weight(1f, fill = false).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
-                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxWidth().fillMaxHeight(), contentScale = ContentScale.Fit) }
+                Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
+                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
                         ?: Text(e.name, style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s6))
                 }
                 Text(e.name, style = CanoneType.footnote, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (folders.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    (listOf<String?>(null) + folders).forEach { f ->
-                        val on = current == f
-                        Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.accent else c.bgSurface).dropClickable({ onFolder(f) }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
-                            Text(f ?: "Nessuna cartella", style = CanoneType.footnote, color = if (on) Color.White else c.labelSecondary, maxLines = 1)
-                        }
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}.padding(Space.s3),
+                    verticalArrangement = Arrangement.spacedBy(Space.s2),
+                ) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        (listOf<String?>(null) + folders).forEach { f -> FolderTile(f ?: "Nessuna", current == f, Ico.FOLDER, { onFolder(f) }, null) }
+                        FolderTile("Nuova", false, Ico.FOLDER_PLUS, onNew, null)
                     }
-                }
-                Row(Modifier.clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface).padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
-                    Action("↗", "Condividi", true, onClick = onShare)
-                    Action("✕", "Elimina", false, onClick = onDelete)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        RoundIcon(Ico.SHARE, c.labelPrimary, onShare)
+                        RoundIcon(Ico.OPEN, c.labelPrimary, onOpen)
+                        RoundIcon(Ico.TRASH, c.critical, onDelete)
+                    }
                 }
             }
         }

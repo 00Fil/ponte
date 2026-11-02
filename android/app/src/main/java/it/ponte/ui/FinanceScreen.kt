@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -243,7 +244,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             Column {
                                 Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
-                                    Box(Modifier.requiredHeight(28.dp), contentAlignment = Alignment.Center) { EyeToggle(r) }
+                                    EyeToggle(r, 28.dp)
                                 }
                                 CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
                             }
@@ -501,22 +502,14 @@ internal fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, col
 
 /** Occhio per nascondere o mostrare gli importi (vale per Home e Finanze). */
 @Composable
-internal fun EyeToggle(r: Router) {
+internal fun EyeToggle(r: Router, size: androidx.compose.ui.unit.Dp = 36.dp) {
     val c = Canone.colors
     val t = rememberDropTouch()
     Box(
-        Modifier.size(36.dp).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t),
+        Modifier.size(size).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).drawBehind { drawCircle(c.labelPrimary.copy(alpha = 0.10f * t.press.value)) },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(20.dp)) {
-            val w = size.width; val h = size.height
-            val eye = androidx.compose.ui.graphics.Path().apply {
-                moveTo(w * 0.05f, h * 0.5f); quadraticTo(w * 0.5f, h * 0.05f, w * 0.95f, h * 0.5f); quadraticTo(w * 0.5f, h * 0.95f, w * 0.05f, h * 0.5f); close()
-            }
-            drawPath(eye, c.labelSecondary, style = Stroke(w * 0.08f))
-            drawCircle(c.labelSecondary, w * 0.14f, Offset(w / 2, h / 2), style = Stroke(w * 0.08f))
-            if (MoneyPrivacy.hidden) drawLine(c.labelSecondary, Offset(w * 0.12f, h * 0.12f), Offset(w * 0.88f, h * 0.88f), w * 0.08f, StrokeCap.Round)
-        }
+        Icon24(if (MoneyPrivacy.hidden) Ico.EYE_OFF else Ico.EYE, c.labelSecondary, Modifier.size(size * 0.62f))
     }
 }
 

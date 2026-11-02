@@ -74,7 +74,7 @@ fun CCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
  * Tutto il movimento sta nella fase di disegno: nessuna ricomposizione mentre lo premi.
  */
 @Composable
-fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, kind: ButtonKind = ButtonKind.Secondary, enabled: Boolean = true) {
+fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, kind: ButtonKind = ButtonKind.Secondary, enabled: Boolean = true, busy: Boolean = false) {
     val c = Canone.colors
     val dark = isDark()
     val fg = when (kind) {
@@ -91,12 +91,15 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * touch.press.value)) }
     }
     Box(
-        modifier.minimumInteractiveComponentSize().height(44.dp).dropGestures(touch, onClick, enabled = enabled).alpha(if (enabled) 1f else 0.4f),
+        modifier.minimumInteractiveComponentSize().height(44.dp).dropGestures(touch, onClick, enabled = enabled && !busy).alpha(if (enabled) 1f else 0.4f),
         contentAlignment = Alignment.Center,
     ) {
         // il vetro si deforma, l'etichetta resta ferma
         Box(Modifier.matchParentSize().dropDeform(touch).then(glass))
-        Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5), maxLines = 1)
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5).alpha(if (busy) 0f else 1f), maxLines = 1)
+            if (busy) BusyArc(fg, Modifier.size(22.dp))
+        }
     }
 }
 

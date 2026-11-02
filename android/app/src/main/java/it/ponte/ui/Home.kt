@@ -147,8 +147,8 @@ private fun BalanceCard(r: Router, total: Long, modifier: Modifier, onClick: () 
 }
 
 /**
- * Ultimo screenshot e ultimo copiato, piccoli e vicini in un cubetto. Il tocco copia e quel riquadro si allarga su tutto il cubetto
- * seppellendo l'altro: mostra l'anteprima con i bordi di vetro che rifrangono, poi si ritira. Due tocchi aprono la pagina.
+ * Ultimo screenshot e ultimo copiato, piccoli e vicini in un cubetto. Il tocco copia: quel riquadro si allarga su tutto il cubetto,
+ * seppellendo l'altro, e mostra l'anteprima con "Copiato"; poi si ritira. Due tocchi aprono la pagina.
  */
 @Composable
 private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (String) -> Unit, modifier: Modifier) {
@@ -158,41 +158,47 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
     val p = remember { Animatable(0f) }
     var which by remember { mutableIntStateOf(0) }
     var job by remember { mutableStateOf<Job?>(null) }
-    fun close() { job?.cancel(); job = scope.launch { p.animateTo(0f, spring(0.9f, 320f)); which = 0 } }
+    val open = spring<Float>(1f, 700f)
+    val shut = spring<Float>(1f, 600f)
+    fun close() { job?.cancel(); job = scope.launch { p.animateTo(0f, shut); which = 0 } }
     fun expand(w: Int) {
         job?.cancel()
         job = scope.launch {
             which = w
-            p.animateTo(1f, spring(0.82f, 300f))
-            delay(1800)
-            p.animateTo(0f, spring(0.9f, 320f)); which = 0
+            p.animateTo(1f, open)
+            delay(1100)
+            p.animateTo(0f, shut); which = 0
         }
     }
-    val layerA = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    val layerB = androidx.compose.ui.graphics.rememberGraphicsLayer()
     BoxWithConstraints(modifier) {
         val w = maxWidth; val hh = maxHeight
         val gap = Space.s2
         val tileH = (hh - gap) / 2
         @Composable
-        fun Tile(id: Int, baseY: Dp, layer: androidx.compose.ui.graphics.layer.GraphicsLayer, onTap: () -> Unit, onDouble: () -> Unit, content: @Composable () -> Unit) {
+        fun Tile(id: Int, baseY: Dp, onTap: () -> Unit, onDouble: () -> Unit, content: @Composable () -> Unit) {
             val mine = which == id
             val f = if (mine) p.value else 0f
             val shape = RoundedCornerShape(lerp(Radius.lg, Radius.xl, f))
             Box(
                 Modifier.offset(y = lerp(baseY, 0.dp, f)).size(w, lerp(tileH, hh, f)).zIndex(if (mine) 2f else 1f)
-                    .graphicsLayer { val o = if (!mine && which != 0) p.value else 0f; alpha = 1f - 0.6f * o; scaleX = 1f - 0.06f * o; scaleY = 1f - 0.06f * o }
+                    .graphicsLayer { val o = if (!mine && which != 0) p.value else 0f; alpha = 1f - 0.7f * o; scaleX = 1f - 0.05f * o; scaleY = 1f - 0.05f * o }
                     .clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
                     .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg),
             ) {
-                Box(Modifier.matchParentSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }) { content() }
-                if (mine && f > 0.55f && android.os.Build.VERSION.SDK_INT >= 33) Box(Modifier.size(w, hh).graphicsLayer { alpha = ((p.value - 0.55f) / 0.45f).coerceIn(0f, 1f) }) {
-                    Glass(layer, { Offset.Zero }, w, hh, edge = 18.dp, amount = 14.dp, aberr = 0.30f, sat = 1.25f, magnify = 0f, blur = 0.dp, corner = Radius.xl)
-                    Box(Modifier.size(w, hh).clip(RoundedCornerShape(Radius.xl)).border(BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)), RoundedCornerShape(Radius.xl)))
+                content()
+                if (mine) Box(Modifier.matchParentSize().graphicsLayer { alpha = ((p.value - 0.35f) / 0.5f).coerceIn(0f, 1f) }) {
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.45f))))
+                    Row(
+                        Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s3).clip(CircleShape).background(c.bgSurface.copy(alpha = 0.92f)).padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon24(Ico.CHECK, c.positive, Modifier.size(16.dp))
+                        Text("Copiato", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
+                    }
                 }
             }
         }
-        Tile(1, 0.dp, layerA, {
+        Tile(1, 0.dp, {
             if (shot != null) {
                 val cm = ctx.getSystemService(ClipboardManager::class.java)
                 cm.setPrimaryClip(ClipData.newUri(ctx.contentResolver, shot.name, r.files.uriFor(shot)))
@@ -202,12 +208,12 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
             val bmp by produceState<Bitmap?>(null, shot?.path) { value = shot?.let { withContext(Dispatchers.IO) { thumb(it.path) } } }
             bmp?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { TabGlyph(7, c.labelTertiary, false, Modifier.size(22.dp)) }
         }
-        Tile(2, tileH + gap, layerB, {
+        Tile(2, tileH + gap, {
             if (clip != null) { r.clipboard.copyLocal(clip); expand(2) }
         }, { go("clips") }) {
             Box(Modifier.fillMaxSize().padding(Space.s3), contentAlignment = Alignment.CenterStart) {
                 if (clip == null) TabGlyph(2, c.labelTertiary, false, Modifier.size(22.dp))
-                else Text(clip, style = CanoneType.body, color = c.labelPrimary, maxLines = if (which == 2 && p.value > 0.4f) 9 else 2, overflow = TextOverflow.Ellipsis)
+                else Text(clip, style = CanoneType.body, color = c.labelPrimary, maxLines = if (which == 2 && p.value > 0.4f) 7 else 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }

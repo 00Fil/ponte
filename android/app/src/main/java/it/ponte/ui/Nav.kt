@@ -85,7 +85,7 @@ val TINT_D = listOf(Color(0xFF5B7BFF), Color(0xFF2F5FFF))
 
 /** Tasto tondo della dashboard: una goccia con simbolo (o icona) e nome sotto, stessa fisica degli altri controlli. */
 @Composable
-fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = Modifier, glyph: Int? = null, onClick: () -> Unit) {
+fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = Modifier, glyph: Int? = null, state: Int = 0, onClick: () -> Unit) {
     val c = Canone.colors
     val dark = isDark()
     val t = rememberDropTouch()
@@ -95,7 +95,11 @@ fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = 
             contentAlignment = Alignment.Center,
         ) {
             val fg = if (accent) c.accentOnSubtle else c.labelPrimary
-            if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) else Text(symbol, style = CanoneType.title2, color = fg)
+            when (state) {
+                1 -> { BusyArc(c.accent, Modifier.size(58.dp).padding(3.dp)); if (glyph != null) TabGlyph(glyph, fg.copy(alpha = 0.45f), false, Modifier.size(24.dp)) }
+                2 -> Icon24(Ico.CHECK, c.positive, Modifier.size(26.dp))
+                else -> if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) else Text(symbol, style = CanoneType.title2, color = fg)
+            }
         }
         Text(label, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
     }

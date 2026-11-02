@@ -34,59 +34,48 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import it.ponte.Router
 
-/** Le cuffie: immagine del dispositivo che le ha, batteria, blocco. Compare solo se c'è qualcosa da mostrare. */
+/** Le cuffie: l'immagine del dispositivo dentro l'anello della batteria, il nome e dove sono collegate. Compare solo se ci sono. */
 @Composable
 fun HeadphonesCard(r: Router) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val hps by r.headphones.list.collectAsState()
     val holder by r.headphones.holder.collectAsState()
-    val lockedBy by r.headphones.lockedBy.collectAsState()
     val preferred = r.prefs.preferredHp
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(4000); tick++ } }
     val connected = hps.firstOrNull { it.connected && (it.address == preferred || it.address in r.prefs.headphones) } ?: hps.firstOrNull { it.connected }
     if (connected == null && holder == null) return
     val battery = remember(connected?.address, tick) { connected?.let { headphonesBattery(ctx, it.address) } }
-    val out = remember(tick, holder) { outputName(ctx) }
-    fun who(id: String?) = when (id) { null -> "Libere"; r.deviceId -> "Su questo telefono"; else -> "Su " + r.deviceName(id) }
-    val glow by androidx.compose.animation.core.animateFloatAsState(if (holder == r.deviceId) 1f else 0f, androidx.compose.animation.core.tween(500), label = "luce")
     val pic = DevicePics.rememberPic(holder)
+    val level by androidx.compose.animation.core.animateFloatAsState((battery ?: 0) / 100f, androidx.compose.animation.core.spring(1f, 120f), label = "batteria")
     val shape = RoundedCornerShape(Radius.xl)
-    Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
-                Box(
-                    Modifier.size(92.dp).clip(CircleShape).background(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.10f + 0.25f * glow), c.bgSunken))),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
-                    else TabGlyph(4, c.accentOnSubtle, false, Modifier.size(40.dp))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(connected?.name ?: "Cuffie", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-                    Text(who(holder), style = CanoneType.title3, color = c.labelPrimary, maxLines = 2)
-                    if (battery != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        Box(Modifier.size(28.dp, 12.dp).clip(RoundedCornerShape(3.dp)).background(c.bgSunken)) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(battery / 100f).background(if (battery < 20) c.critical else c.positive))
-                        }
-                        RollingText("$battery%", CanoneType.footnote, c.labelSecondary)
-                    }
-                    if (lockedBy != null) Text("Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() }, style = CanoneType.footnote, color = c.labelTertiary)
-                }
+    val ring = if ((battery ?: 100) < 20) c.critical else c.positive
+    Row(
+        Modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s3),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
+    ) {
+        Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+                val w = 4.dp.toPx()
+                val tl = androidx.compose.ui.geometry.Offset(w / 2, w / 2)
+                val sz = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+                drawArc(c.bgSunken, 0f, 360f, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+                if (battery != null) drawArc(ring, -90f, 360f * level, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                CButton(if (lockedBy == r.deviceId) "Sblocca" else "Tienile qui", { r.headphones.toggleLock() },
-                    Modifier.weight(1f), kind = if (lockedBy == r.deviceId) ButtonKind.Secondary else ButtonKind.Primary)
-                if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
-                    CButton("Portale qui", { r.headphones.connectHere(preferred) }, Modifier.weight(1f))
-                }
+            Box(Modifier.size(52.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
+                else TabGlyph(4, c.labelSecondary, false, Modifier.size(24.dp))
             }
         }
-        Row(Modifier.fillMaxWidth().background(c.bgSunken).padding(horizontal = Space.s4, vertical = Space.s3), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Esce da", style = CanoneType.footnote, color = c.labelTertiary)
-            Text(out, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(connected?.name ?: "Cuffie", style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                when (holder) { null -> "Libere"; r.deviceId -> "Questo telefono"; else -> r.deviceName(holder ?: "") },
+                style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
+        if (battery != null) RollingText("$battery%", CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
     }
 }
 

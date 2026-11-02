@@ -116,8 +116,10 @@ private fun PonteApp(r: Router) {
             1 -> UpdateDone(name) { r.prefs.seenVersion = code; mode = 2 }
             else -> {
                 var page by remember { mutableIntStateOf(0) } // 0 nessuna, 1 backup, 2 dispositivi
+                var splash by remember { mutableStateOf(true) }
                 Box(Modifier.fillMaxSize()) {
                     MainShell(r, onBackup = { page = 1 }) { r.prefs.onboarded = false; mode = 0 }
+                    if (splash) it.ponte.ui.Splash { splash = false }
                     if (page == 1) it.ponte.ui.BackupScreen(r) { page = 0 }
                     it.ponte.ui.FlashHost()
                 }
@@ -183,7 +185,11 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     androidx.compose.runtime.LaunchedEffect(devOpen) { if (devOpen) { kotlinx.coroutines.delay(7000); devOpen = false } }
     val np = it.ponte.ui.rememberNowPlaying()
     var dock by remember { mutableIntStateOf(0) } // 0 niente, 1 estensione della barra, 2 schermo intero
-    if (np == null && dock != 0) dock = 0
+    var dismissed by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(np?.title, np?.playing) {
+        if (np == null) dock = 0
+        else if (np.playing && dismissed != np.title && dock == 0) dock = 1
+    }
     // Testata: fibra ottica dietro e titoli che scorrono con le pagine, in parallasse.
     val header: @Composable () -> Unit = {
         Box(Modifier.fillMaxWidth().height(132.dp)) {
@@ -267,24 +273,60 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
                     // Nei contanti la barra diventa il tasto di conferma (indietro + scorri per registrare).
                     val cashOn = it.ponte.ui.CashBar.on && pager.currentPage == 2
+                    if (np != null && !cashOn) {
+                        val dens = androidx.compose.ui.platform.LocalDensity.current
+                        val rise = remember { androidx.compose.animation.core.Animatable(0f) }
+                        val settle = remember { androidx.compose.animation.core.Animatable(0f) }
+                        androidx.compose.runtime.LaunchedEffect(dock != 0) {
+                            if (dock != 0) {
+                                settle.snapTo(0f)
+                                rise.animateTo(1f, tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                                settle.animateTo(1f, androidx.compose.animation.core.spring(0.55f, 320f))
+                            } else { settle.snapTo(1f); rise.animateTo(0f, tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+                        }
+                        // quanto sta sopra il bordo alto della barra (dp): parte dentro la barra, sale oltre il punto di distacco e ricade nella sua posizione
+                        val upDp = { -61f + (40f + 61f) * rise.value + (14f - 40f) * settle.value }
+                        val barBottom = 10.dp + navBottom
+                        if (rise.value > 0.01f || dock != 0) {
+                            // il collo d'acqua tra la barra e la goccia, che si assottiglia fino a staccarsi
+                            androidx.compose.foundation.Canvas(Modifier.align(Alignment.BottomCenter).padding(bottom = barBottom + 66.dp).size(220.dp, 90.dp)) {
+                                val up = upDp()
+                                val gate = 1f - settle.value
+                                val k = ((1f - up / 30f).coerceIn(0f, 1f)) * gate
+                                if (up > 0f && k > 0.02f) {
+                                    val d = dens.density
+                                    val cx = size.width / 2f
+                                    val yB = size.height + 2f * d
+                                    val yT = size.height - up * d
+                                    val ym = (yB + yT) / 2f
+                                    val hw = 30f * d * k * k
+                                    val fl = 18f * d * k
+                                    val path = androidx.compose.ui.graphics.Path().apply {
+                                        moveTo(cx - hw - fl, yB); quadraticTo(cx - hw, yB, cx - hw, ym); quadraticTo(cx - hw, yT, cx - hw - fl, yT)
+                                        lineTo(cx + hw + fl, yT); quadraticTo(cx + hw, yT, cx + hw, ym); quadraticTo(cx + hw, yB, cx + hw + fl, yB); close()
+                                    }
+                                    drawPath(path, c.bgCanvas.copy(alpha = 0.62f))
+                                    drawPath(path, c.lineSeparator, style = androidx.compose.ui.graphics.drawscope.Stroke(1f * d))
+                                }
+                            }
+                            it.ponte.ui.MiniPlayer(
+                                np, layer, { dock = 2 }, { dismissed = np.title; dock = 0 },
+                                Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = barBottom + 66.dp + 14.dp)
+                                    .graphicsLayer {
+                                        val up = upDp()
+                                        translationY = -(up - 14f) * dens.density
+                                        val s = ((up + 61f) / 75f).coerceIn(0f, 1f)
+                                        scaleX = 0.5f + 0.5f * s; scaleY = 0.7f + 0.3f * s
+                                        alpha = (s * 2.5f).coerceIn(0f, 1f)
+                                    },
+                            )
+                        }
+                    }
                     if (cashOn) it.ponte.ui.CashConfirmBar(layer, Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
                     else it.ponte.ui.GlassTabBar(
                         layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
                         Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom),
                     )
-                    if (np != null && !cashOn) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            dock == 1, Modifier.align(Alignment.BottomCenter),
-                            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.85f, 340f)) { it / 2 } + androidx.compose.animation.expandVertically(androidx.compose.animation.core.spring(0.9f, 340f)) + fadeIn(tween(180)),
-                            exit = androidx.compose.animation.slideOutVertically(tween(200)) { it / 2 } + androidx.compose.animation.shrinkVertically(tween(200)) + fadeOut(tween(140)),
-                        ) {
-                            it.ponte.ui.MiniPlayer(np, layer, { dock = 2 }, { dock = 0 }, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom + 66.dp + 6.dp))
-                        }
-                        androidx.compose.animation.AnimatedVisibility(
-                            dock == 0, Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 10.dp + navBottom + 66.dp + 8.dp),
-                            enter = androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.7f, 380f)) + fadeIn(tween(160)), exit = androidx.compose.animation.scaleOut(tween(140)) + fadeOut(tween(120)),
-                        ) { it.ponte.ui.CoverBubble(np, { dock = 1 }) }
-                    }
                 }
             }
         }
