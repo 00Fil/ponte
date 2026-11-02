@@ -86,8 +86,8 @@ fun CashConfirmBar(layer: GraphicsLayer, modifier: Modifier = Modifier) {
         Box(Modifier.size(barH).dropGestures(t, { CashBar.onBack() }).graphicsLayer {
             val p = t.press.value; scaleX = 1f + 0.10f * p; scaleY = 1f + 0.10f * p
         }) {
-            Glass(layer, { origin }, barH, barH, edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 4.dp)
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.22f), 1f to Color.White.copy(alpha = if (dark) 0.03f else 0.06f)), CircleShape))
+            Glass(layer, { origin }, barH, barH, edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 14.dp)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f), 1f to c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f)), CircleShape))
             Box(Modifier.fillMaxSize().drop(dark, tint = Color.Transparent, press = { t.press.value }, touch = t))
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("‹", style = CanoneType.title2, color = c.labelPrimary) }
         }
@@ -95,8 +95,8 @@ fun CashConfirmBar(layer: GraphicsLayer, modifier: Modifier = Modifier) {
         // ---- capsula di conferma
         Box(Modifier.padding(start = barH + gap).size(slideW, barH)) {
             Box(Modifier.fillMaxSize().drawWithContent { trackLayer.record { this@drawWithContent.drawContent() }; drawLayer(trackLayer) }) {
-                Glass(layer, { Offset(origin.x + with(dens) { (barH + gap).toPx() }, origin.y) }, slideW, barH, edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 4.dp)
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.22f), 1f to Color.White.copy(alpha = if (dark) 0.03f else 0.06f)), CircleShape))
+                Glass(layer, { Offset(origin.x + with(dens) { (barH + gap).toPx() }, origin.y) }, slideW, barH, edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 14.dp)
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f), 1f to c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f)), CircleShape))
                 // il percorso già fatto si colora del blu di marca
                 Box(
                     Modifier.fillMaxSize().clip(CircleShape).drawBehind {

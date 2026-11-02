@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -94,7 +95,6 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
         ) {
             if (missing > 0) item { FixWidget(missing) { go("perm") } }
             item { MoneyWidget(r, money.totalCents, money.txs) { go("finance") } }
-            if (np != null) item { PlayerCard(np) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     ShotWidget(r, files.firstOrNull { it.mime.startsWith("image/") }, Modifier.weight(1f)) { go("images") }
@@ -104,8 +104,14 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
             item {
                 val audioOn = np == null && (holder != null || active != null)
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    ActivityWidget(clips.map { it.ts }, files.map { it.ts }, if (audioOn) Modifier.weight(1f) else Modifier.fillMaxWidth())
-                    if (audioOn) AudioWidget(r, holder, active, Modifier.weight(1f)) { go("audio") }
+                    if (np != null) {
+                        // musica in un quadrato, accanto l'attività della settimana della stessa altezza
+                        MusicSquare(np, Modifier.weight(1f).aspectRatio(1f)) { go("audio") }
+                        ActivityWidget(clips.map { it.ts }, files.map { it.ts }, Modifier.weight(1f).aspectRatio(1f))
+                    } else {
+                        ActivityWidget(clips.map { it.ts }, files.map { it.ts }, if (audioOn) Modifier.weight(1f).height(150.dp) else Modifier.fillMaxWidth().height(150.dp))
+                        if (audioOn) AudioWidget(r, holder, active, Modifier.weight(1f)) { go("audio") }
+                    }
                 }
             }
         }
@@ -153,8 +159,6 @@ private fun MoneyWidget(r: Router, total: Long, txs: List<Tx>, onClick: () -> Un
             Box(Modifier.dropClickable(onClick, corner = Radius.md).padding(vertical = 2.dp)) {
                 CountUp(total, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
             }
-            // entrate e uscite del mese nello stesso riquadro, da sfogliare
-            FlowPager(txs)
         }
         // il cassetto con le ultime operazioni, a scorrimento dall'alto verso il basso e dissolvenza ai bordi
         Box(Modifier.fillMaxWidth().background(c.bgSunken).padding(horizontal = Space.s4)) { OpsTicker(txs.take(8)) }
@@ -304,7 +308,7 @@ private fun ActivityWidget(clipTs: List<Long>, fileTs: List<Long>, modifier: Mod
     val counts = (6 downTo 0).map { k -> val a = today - k * day; (clipTs + fileTs).count { it >= a && it < a + day } }
     val max = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
     var sel by remember(counts) { mutableIntStateOf(6) }
-    Widget(modifier.height(150.dp)) {
+    Widget(modifier) {
         Column(Modifier.fillMaxSize().padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text(if (sel == 6) "Oggi" else if (sel == 5) "Ieri" else "${6 - sel} giorni fa", style = CanoneType.footnote, color = c.labelTertiary)

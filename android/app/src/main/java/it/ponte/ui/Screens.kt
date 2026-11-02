@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -377,11 +379,12 @@ private fun Peek(e: FileEntry, folders: List<String>, current: String?, onShare:
             contentAlignment = Alignment.Center,
         ) {
             Column(
-                Modifier.padding(Space.s5).graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.82f) / 0.18f).coerceIn(0f, 1f) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4),
+                Modifier.fillMaxSize().systemBarsPadding().padding(Space.s5).graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.82f) / 0.18f).coerceIn(0f, 1f) },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4, Alignment.CenterVertically),
             ) {
-                Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
-                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxWidth(), contentScale = ContentScale.Fit) }
+                // l'anteprima prende solo lo spazio che avanza: nome, cartelle e tasti restano sempre sullo schermo
+                Box(Modifier.fillMaxWidth().weight(1f, fill = false).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
+                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxWidth().fillMaxHeight(), contentScale = ContentScale.Fit) }
                         ?: Text(e.name, style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s6))
                 }
                 Text(e.name, style = CanoneType.footnote, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -438,34 +441,38 @@ private fun DevicesCard(r: Router) {
     rows.firstOrNull { it.id == open }?.let { last = it }
 
     Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("Dispositivi", style = CanoneType.title3, color = c.labelPrimary)
-                    RollingText(if (devices.isEmpty()) "Solo questo" else "${devices.size + 1} collegati", CanoneType.footnote, c.labelTertiary)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    StatusBubble(if (hub == "Connesso") "Server" else "Server off", if (hub == "Connesso") Tone.Positive else if (hub == "Non configurato") Tone.Neutral else Tone.Caution, hub == "Connesso")
-                    StatusBubble(if (near > 0) "P2P $near" else "P2P", if (near > 0) Tone.Positive else Tone.Neutral, near > 0)
-                }
+        Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(horizontal = Space.s3, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            // testata compatta: titolo e conteggio su una riga, stato di server e P2P a destra
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.s1), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Text("Dispositivi", style = CanoneType.bodyMedium, color = c.labelPrimary)
+                RollingText("${devices.size + 1}", CanoneType.footnote, c.labelTertiary)
+                Spacer(Modifier.weight(1f))
+                StatusBubble(if (hub == "Connesso") "Server" else "Server off", if (hub == "Connesso") Tone.Positive else if (hub == "Non configurato") Tone.Neutral else Tone.Caution, hub == "Connesso")
+                StatusBubble(if (near > 0) "P2P $near" else "P2P", if (near > 0) Tone.Positive else Tone.Neutral, near > 0)
             }
-            rows.forEach { d ->
-                val pic = DevicePics.rememberPic(d.id)
-                val sel = open == d.id
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(if (sel) c.accentSubtle else Color.Transparent)
-                        .dropClickable({ open = if (sel) null else d.id }, corner = Radius.lg).padding(Space.s2),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
-                ) {
-                    Box(Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
-                        if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
-                        else TabGlyph(1, c.labelTertiary, false, Modifier.size(22.dp))
+            // i dispositivi in fila: bolle con l'immagine e il nome sotto; tocca per i dettagli
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                rows.forEach { d ->
+                    val pic = DevicePics.rememberPic(d.id)
+                    val sel = open == d.id
+                    val t = rememberDropTouch()
+                    Column(
+                        Modifier.width(76.dp).dropGestures(t, { open = if (sel) null else d.id }).padding(vertical = Space.s1),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Box(
+                            Modifier.size(56.dp).dropDeform(t).drop(isDark(), tint = if (sel) c.accent.copy(alpha = 0.22f) else Color.Transparent, press = { t.press.value }, touch = t),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp), contentScale = ContentScale.Fit)
+                            else TabGlyph(1, if (sel) c.accent else c.labelTertiary, false, Modifier.size(24.dp))
+                            if (d.id != r.deviceId) Box(
+                                Modifier.align(Alignment.BottomEnd).padding(3.dp).size(10.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(when (d.via) { "lan" -> c.positive; "bt" -> c.accent; else -> c.labelDisabled }),
+                            )
+                        }
+                        Text(if (d.id == r.deviceId) "Questo" else d.name, style = CanoneType.footnote, color = if (sel) c.labelPrimary else c.labelSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(d.name + if (d.id == r.deviceId) " (questo)" else "", style = CanoneType.body, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (d.id == r.deviceId) "Android · questo" else (if (d.platform == "windows") "Windows" else "Android") + " · " + when (d.via) { "lan" -> "diretto"; "bt" -> "Bluetooth"; else -> "server" }, style = CanoneType.footnote, color = c.labelTertiary)
-                    }
-                    Text(if (sel) "⌃" else "⌄", style = CanoneType.body, color = c.labelTertiary)
                 }
             }
         }
@@ -646,8 +653,9 @@ private fun Category(icon: Int, title: String, note: String, tint: Color, onClic
     val dark = isDark()
     val t = rememberDropTouch()
     Box(Modifier.fillMaxWidth().dropGestures(t, onClick)) {
+        // niente contenitore: solo la goccia con l'icona, il testo e lo spazio; premuta si illumina dove tocchi
         Row(
-            Modifier.fillMaxWidth().dropDeform(t).drop(dark, corner = Radius.xl, press = { t.press.value }, touch = t).padding(Space.s3),
+            Modifier.fillMaxWidth().pressGlow(t, dark, Radius.xl).padding(horizontal = Space.s1, vertical = Space.s2),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
             // la goccia come la pillola della barra: vetro limpido con bordo di luce; il colore sta solo nell'icona, smorzato

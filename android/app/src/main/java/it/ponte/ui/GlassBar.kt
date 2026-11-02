@@ -253,14 +253,14 @@ fun GlassTabBar(
             // 1) il vetro della barra: rifrazione, sfocatura poca, colori vivi
             Glass(
                 layer, { origin }, barW, barH,
-                edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 4.dp,
+                edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 14.dp,
             )
-            // 2) velo appena percettibile (non grigio): serve solo a dare corpo
+            // 2) velo: dà corpo e leggibilità alle icone sopra uno sfondo sfocato più denso
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(
-                        0f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                        1f to white.copy(alpha = if (dark) 0.03f else 0.06f),
+                        0f to c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f),
+                        1f to c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f),
                     ),
                     shape,
                 ),

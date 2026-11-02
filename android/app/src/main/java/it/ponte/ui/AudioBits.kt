@@ -13,6 +13,9 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,22 +88,38 @@ fun rememberNowPlaying(): NowPlaying? {
                 )
             }
         }
-        val cb = object : MediaController.Callback() {
-            override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
-            override fun onPlaybackStateChanged(state: PlaybackState?) = refresh()
-            override fun onSessionDestroyed() { ctrl = null; refresh() }
+        // Una callback su OGNI sessione attiva: quando una qualsiasi parte, si ferma o cambia brano si ri-sceglie quella giusta
+        // (prima quella che suona). Così il player segue davvero quello che senti, anche se cambi app.
+        var all: List<MediaController> = emptyList()
+        val cbs = HashMap<MediaController, MediaController.Callback>()
+        fun choose() {
+            ctrl = all.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+                ?: all.firstOrNull { it.packageName == ctrl?.packageName } ?: all.firstOrNull()
+            refresh()
         }
         fun pick(list: List<MediaController>?) {
-            ctrl?.unregisterCallback(cb)
-            ctrl = list?.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list?.firstOrNull()
-            ctrl?.registerCallback(cb, main)
-            refresh()
+            cbs.forEach { (c, cb) -> try { c.unregisterCallback(cb) } catch (_: Exception) {} }
+            cbs.clear()
+            all = list.orEmpty()
+            all.forEach { c ->
+                val cb = object : MediaController.Callback() {
+                    override fun onMetadataChanged(metadata: MediaMetadata?) = choose()
+                    override fun onPlaybackStateChanged(state: PlaybackState?) = choose()
+                    override fun onSessionDestroyed() { all = all - c; choose() }
+                }
+                c.registerCallback(cb, main); cbs[c] = cb
+            }
+            choose()
         }
         val l = MediaSessionManager.OnActiveSessionsChangedListener { pick(it) }
         try { msm.addOnActiveSessionsChangedListener(l, comp, main); pick(msm.getActiveSessions(comp)) } catch (_: SecurityException) {}
+        // rete di sicurezza: alcune app non avvisano dei cambi, si riallinea ogni 3 secondi
+        val poll = object : Runnable { override fun run() { try { pick(msm.getActiveSessions(comp)) } catch (_: Exception) {}; main.postDelayed(this, 3000) } }
+        main.postDelayed(poll, 3000)
         onDispose {
+            main.removeCallbacks(poll)
             try { msm.removeOnActiveSessionsChangedListener(l) } catch (_: Exception) {}
-            ctrl?.unregisterCallback(cb)
+            cbs.forEach { (c, cb) -> try { c.unregisterCallback(cb) } catch (_: Exception) {} }
         }
     }
     return np
@@ -299,7 +318,11 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
         }
     }
     val tc = np.controller.transportControls
-    Box(modifier.fillMaxWidth().clip(shape).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape)) {
+    val cardLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    var cardPos by remember { mutableStateOf(Offset.Zero) }
+    Box(modifier.fillMaxWidth().onGloballyPositioned { cardPos = it.positionInRoot() }.clip(shape).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape)) {
+      // sfondo registrato: le bolle dei comandi lo rifrangono come la bolla della barra
+      Box(Modifier.matchParentSize().drawWithContent { cardLayer.record { this@drawWithContent.drawContent() }; drawLayer(cardLayer) }) {
         Box(Modifier.matchParentSize().background(c.bgSurface))
         np.art?.let {
             androidx.compose.foundation.Image(
@@ -309,6 +332,7 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
             )
             Box(Modifier.matchParentSize().background(c.bgSurface.copy(alpha = 0.45f)))
         }
+      }
         Column(Modifier.fillMaxWidth().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                 Box(Modifier.size(84.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg)).background(c.bgSunken), contentAlignment = Alignment.Center) {
@@ -331,10 +355,10 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
                     androidx.compose.material3.Text("−" + clock(dur - pos), style = CanoneType.footnote, color = c.labelTertiary)
                 }
             }
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                GlassTransport(listOf(0, if (np.playing) 2 else 1, 3), { i ->
-                    when (i) { 0 -> tc.skipToPrevious(); 1 -> if (np.playing) tc.pause() else tc.play(); else -> tc.skipToNext() }
-                })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                BubbleButton(cardLayer, { cardPos }, 0, 52.dp) { tc.skipToPrevious() }
+                BubbleButton(cardLayer, { cardPos }, if (np.playing) 2 else 1, 68.dp) { if (np.playing) tc.pause() else tc.play() }
+                BubbleButton(cardLayer, { cardPos }, 3, 52.dp) { tc.skipToNext() }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
@@ -345,6 +369,56 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
                 SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
             }
             footer?.invoke()
+        }
+    }
+}
+
+
+/**
+ * Tasto-bolla: costruito come la bolla della barra sulla pagina corrente. È una lente rotonda che rifrange lo sfondo registrato in [layer]
+ * (la scheda), con il bordo di vetro sopra e l'icona; premuta si gonfia con la molla della barra.
+ */
+@Composable
+fun BubbleButton(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, layerPos: () -> Offset, kind: Int, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val c = Canone.colors
+    val dark = isDark()
+    val t = rememberDropTouch()
+    var pos by remember { mutableStateOf(Offset.Zero) }
+    Box(
+        Modifier.size(size).onGloballyPositioned { pos = it.positionInRoot() }.dropGestures(t, onClick)
+            .graphicsLayer { val p = t.press.value; val s = 1f + 0.20f * p; scaleX = s; scaleY = 1f + 0.16f * p },
+        contentAlignment = Alignment.Center,
+    ) {
+        Glass(layer, { pos - layerPos() }, size, size, edge = 10.dp, amount = 8.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp)
+        Box(Modifier.size(size).drop(dark, tint = Color.Transparent, press = { t.press.value }, touch = t))
+        MediaIcon(kind, c.labelPrimary, Modifier.size(size * 0.36f))
+    }
+}
+
+/** Musica in un quadrato per la Home: copertina sfocata sullo sfondo, titolo e tre tasti-bolla. Un tocco fuori dai tasti apre Audio. */
+@Composable
+fun MusicSquare(np: NowPlaying, modifier: Modifier = Modifier, onOpen: () -> Unit) {
+    val c = Canone.colors
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(Radius.xl)
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    var cardPos by remember { mutableStateOf(Offset.Zero) }
+    val tc = np.controller.transportControls
+    Box(modifier.onGloballyPositioned { cardPos = it.positionInRoot() }.clip(shape).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape).dropClickable(onOpen)) {
+        Box(Modifier.matchParentSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }) {
+            Box(Modifier.matchParentSize().background(c.bgSurface))
+            np.art?.let {
+                androidx.compose.foundation.Image(it.asImageBitmap(), null, Modifier.matchParentSize().alpha(0.85f), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.25f to Color.Transparent, 1f to c.bgSurface.copy(alpha = 0.92f))))
+            }
+        }
+        Column(Modifier.matchParentSize().padding(Space.s3), verticalArrangement = Arrangement.Bottom) {
+            androidx.compose.material3.Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            androidx.compose.material3.Text(np.artist, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth().padding(top = Space.s2), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                BubbleButton(layer, { cardPos }, 0, 38.dp) { tc.skipToPrevious() }
+                BubbleButton(layer, { cardPos }, if (np.playing) 2 else 1, 48.dp) { if (np.playing) tc.pause() else tc.play() }
+                BubbleButton(layer, { cardPos }, 3, 38.dp) { tc.skipToNext() }
+            }
         }
     }
 }
