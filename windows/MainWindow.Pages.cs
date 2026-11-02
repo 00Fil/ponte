@@ -54,6 +54,7 @@ public sealed partial class MainWindow
         acts.Children.Add(ActionBubble("", "Invia file", false, async () => await PickFilesAsync()));
         h.Children.Add(acts);
 
+        h.Children.Add(DriveUsage());
         h.Children.Add(Segmented("share", new[] { "Appunti", "Immagini", "File" }, _shareTab, i => { _shareTab = i; _folder = null; RenderShareAnimated(); }));
         var body = new StackPanel { Spacing = 10 };
         if (_shareTab == 0) BuildClips(body); else BuildFiles(body);
@@ -62,6 +63,58 @@ public sealed partial class MainWindow
     }
 
     private StackPanel? _shareBody;
+
+    private const long DriveCap = 50L * 1024 * 1024 * 1024;
+
+    private static string Size(long n) => n switch { >= 1L << 30 => (n / (double)(1L << 30)).ToString("0.0", It) + " GB", >= 1L << 20 => (n / (double)(1L << 20)).ToString("0.#", It) + " MB", >= 1L << 10 => (n / 1024.0).ToString("0", It) + " KB", _ => n + " B" };
+
+    /// <summary>Lo spazio condiviso: una barra con immagini, file e appunti rispetto ai 50 GB.</summary>
+    private Border DriveUsage()
+    {
+        var items = _r.Files.Items;
+        var img = items.Where(f => f.Mime.StartsWith("image/")).Sum(f => f.Size);
+        var oth = items.Sum(f => f.Size) - img;
+        var clip = _r.Clip.History.Sum(c => (long)c.Text.Length);
+        var used = img + oth + clip;
+        var col = new StackPanel { Spacing = 12 };
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var big = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        big.Children.Add(T(Size(used), 22, "LabelPrimary", true));
+        var of = T("di 50 GB", 12, "LabelTertiary"); of.VerticalAlignment = VerticalAlignment.Bottom; of.Margin = new Thickness(0, 0, 0, 3);
+        big.Children.Add(of);
+        head.Children.Add(big);
+        var cnt = T(items.Count + " elementi", 12, "LabelTertiary"); Grid.SetColumn(cnt, 1); cnt.VerticalAlignment = VerticalAlignment.Bottom;
+        head.Children.Add(cnt);
+        col.Children.Add(head);
+
+        var parts = new (string Name, long V, Windows.UI.Color Col)[] { ("Immagini", img, C("AccentDefault")), ("File", oth, Argb(255, 0xFF, 0x9F, 0x0A)), ("Appunti", clip, Argb(255, 0x34, 0xC7, 0x59)) };
+        var bar = new Grid { Height = 10, CornerRadius = new CornerRadius(5), Background = B("BgSunken") };
+        var barRow = new Grid { CornerRadius = new CornerRadius(5) };
+        foreach (var p in parts)
+        {
+            if (p.V <= 0) continue;
+            barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max((double)p.V / DriveCap, 0.004), GridUnitType.Star) });
+            var seg = new Border { Background = Sb(p.Col) };
+            Grid.SetColumn(seg, barRow.ColumnDefinitions.Count - 1);
+            barRow.Children.Add(seg);
+        }
+        barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1.0 - (double)used / DriveCap, 0.0001), GridUnitType.Star) });
+        bar.Children.Add(barRow);
+        col.Children.Add(bar);
+
+        var leg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        foreach (var p in parts)
+        {
+            var l = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            l.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(p.Col), VerticalAlignment = VerticalAlignment.Center });
+            l.Children.Add(T(p.Name + " " + Size(p.V), 12, "LabelSecondary"));
+            leg.Children.Add(l);
+        }
+        col.Children.Add(leg);
+        return Widget(col);
+    }
 
     /// <summary>Cambio scheda morbido: il contenuto vecchio sfuma, il nuovo entra sfumando e salendo appena.</summary>
     private async void RenderShareAnimated()

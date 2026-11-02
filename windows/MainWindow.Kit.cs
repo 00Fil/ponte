@@ -106,11 +106,11 @@ public sealed partial class MainWindow
         return g;
     }
 
-    /// <summary>Scheda (widget): superficie, raggio 20, bordo di vetro.</summary>
+    /// <summary>Scheda (widget): superficie, raggio 28 come su Android, bordo di vetro.</summary>
     private Border Widget(UIElement child, double? height = null, Thickness? pad = null) => new()
     {
         Background = B("BgSurface"), BorderBrush = GlassEdge(), BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(20), Padding = pad ?? new Thickness(16), Child = child,
+        CornerRadius = new CornerRadius(28), Padding = pad ?? new Thickness(20), Child = child,
         Height = height ?? double.NaN,
     };
 

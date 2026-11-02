@@ -81,6 +81,7 @@ public sealed class MediaSwitch
         if (_r.Hp.LockedBy == _r.DeviceId || _r.Audio.SinkId != null) return;
         _quietUntil = DateTime.UtcNow.AddSeconds(5);
         _ = PauseAsync();
+        _r.Notify.Show("Relay", "Ora usi " + _r.DeviceName(from), "Audio fermato su questo dispositivo");
     }
 
     private static async Task PauseAsync()
