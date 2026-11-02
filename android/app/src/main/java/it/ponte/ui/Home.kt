@@ -80,7 +80,7 @@ fun HomeScreen(r: Router, go: (Int) -> Unit) {
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    Tile(3, "Archivio", "${files.size}", if (shots > 0) "$shots screenshot" else "file condivisi",
+                    Tile(3, "Immagini e file", "${files.size}", if (shots > 0) "$shots screenshot" else "condivisi",
                         listOf(Color(0xFF3F86FF), Color(0xFF7DB4FF)), Modifier.weight(1f)) { go(3) }
                     Tile(4, "Cuffie", audio, "dove suonano ora",
                         listOf(Color(0xFF5B7BFF), Color(0xFF2F5FFF)), Modifier.weight(1f)) { go(4) }

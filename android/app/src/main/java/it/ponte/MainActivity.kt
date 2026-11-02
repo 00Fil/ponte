@@ -73,10 +73,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import it.ponte.ui.ArchiveScreen
+import it.ponte.ui.ShareScreen
 import it.ponte.ui.Canone
 import it.ponte.ui.CanoneType
-import it.ponte.ui.ClipScreen
 import it.ponte.ui.DevicesScreen
 import it.ponte.ui.AudioScreen
 import it.ponte.ui.PonteTheme
@@ -98,9 +97,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Appunti", "Archivio", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Condividi", "Audio", "Impostazioni")
 /** Icona di ogni scheda (indici di TabGlyph). */
-private val GLYPHS = listOf(0, 2, 3, 4, 5)
+private val GLYPHS = listOf(0, 1, 4, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -149,13 +148,13 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
     val pos = { pager.currentPage + pager.currentPageOffsetFraction }
 
+    var shareTab by remember { mutableIntStateOf(0) }
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
             // Home usa la vecchia numerazione: 1 Dispositivi (pagina a parte), 2 Appunti, 3 Archivio, 4 Audio
-            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> select(1); 3 -> select(2); 4 -> select(3); else -> select(0) } }
-            1 -> ClipScreen(r)
-            2 -> ArchiveScreen(r)
-            3 -> AudioScreen(r) { select(4) }
+            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> { shareTab = 0; select(1) }; 3 -> { shareTab = 1; select(1) }; 4 -> select(2); else -> select(0) } }
+            1 -> ShareScreen(r, shareTab) { shareTab = it }
+            2 -> AudioScreen(r) { select(3) }
             else -> SettingsScreen(r, replayOnboarding, onBackup)
         }
     }
