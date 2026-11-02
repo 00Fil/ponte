@@ -63,7 +63,7 @@ public sealed partial class MainWindow
             var s = Loc(e.Start); var en = e.AllDay ? Loc(e.End) : Loc(e.End);
             if (s < to && (en > from || s >= from)) list.Add(new AgItem("r" + e.Id, 0, string.IsNullOrWhiteSpace(e.Title) ? "(senza titolo)" : e.Title, s, en, e.AllDay, PColor(e.Color), e.Place, false, e));
         }
-        foreach (var e in _r.Plan.External)
+        foreach (var e in _r.Plan.AllExternal)
         {
             var s = Loc(e.Start); var en = Loc(e.End);
             if (s < to && en > from) list.Add(new AgItem("g" + e.Start + e.Title, 1, e.Title, s, en, e.AllDay, Argb(255, 0x1A, 0x73, 0xE8), e.Place, false, e));
@@ -113,7 +113,6 @@ public sealed partial class MainWindow
         {
             var c = new StackPanel { Spacing = 8 };
             c.Children.Add(T("Collega Google Calendar", 15, "LabelPrimary", true));
-            c.Children.Add(Text("Incolla l'indirizzo segreto iCal del tuo calendario: gli eventi compaiono qui (sola lettura).", "Footnote"));
             c.Children.Add(Btn("Collega", () => AgGo("ics"), "PrimaryButton"));
             h.Children.Add(Widget(c));
         }
@@ -363,8 +362,6 @@ public sealed partial class MainWindow
     {
         h.Children.Add(BackRow("Agenda", "Google Calendar", () => AgGo(null)));
         var c = new StackPanel { Spacing = 12 };
-        c.Children.Add(Text("Su Windows Google Calendar si legge dall'indirizzo segreto iCal (sola lettura). Gli eventi nuovi li crei qui, in Relay, e si sincronizzano con il telefono; sul telefono puoi anche scriverli direttamente su Google.", "Footnote"));
-        c.Children.Add(Text("Dove trovarlo: Google Calendar sul web → Impostazioni → il tuo calendario → Integra calendario → «Indirizzo segreto in formato iCal».", "Footnote"));
         var url = new TextBox { Text = _r.S.IcsUrl, PlaceholderText = "https://calendar.google.com/calendar/ical/…/basic.ics" };
         c.Children.Add(Field("Indirizzo iCal", url));
         var status = Text(_r.Plan.ExternalStatus.Length > 0 ? _r.Plan.ExternalStatus : "Non collegato", "Footnote");

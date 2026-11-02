@@ -157,6 +157,12 @@ public sealed partial class MainWindow
         Grid.SetColumn(skip, 1);
         btns.Children.Add(main); btns.Children.Add(skip);
         c.Children.Add(btns);
+        if (t.Running && focus)
+        {
+            var song = Btn("⏭  +1:00", () => { _r.Np.Next(); _r.Plan.TimerPenalty(60_000); });
+            song.HorizontalAlignment = HorizontalAlignment.Center;
+            c.Children.Add(song);
+        }
         return Widget(c, null, new Thickness(20));
     }
 

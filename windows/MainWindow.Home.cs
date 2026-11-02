@@ -81,7 +81,7 @@ public sealed partial class MainWindow
         var subj = p.Subjects.ToDictionary(s => s.Id);
         var next = new List<(string Title, DateTime When, bool AllDay, Windows.UI.Color Color)>();
         next.AddRange(p.Events.Where(e => Loc(e.End) > now).Select(e => (string.IsNullOrWhiteSpace(e.Title) ? "(senza titolo)" : e.Title, Loc(e.Start), e.AllDay, PColor(e.Color))));
-        next.AddRange(_r.Plan.External.Where(e => Loc(e.End) > now && Loc(e.Start) < now.AddDays(14)).Select(e => (e.Title, Loc(e.Start), e.AllDay, Argb(255, 0x1A, 0x73, 0xE8))));
+        next.AddRange(_r.Plan.AllExternal.Where(e => Loc(e.End) > now && Loc(e.Start) < now.AddDays(14)).Select(e => (e.Title, Loc(e.Start), e.AllDay, Argb(255, 0x1A, 0x73, 0xE8))));
         next.AddRange(p.Exams.Where(e => Loc(e.Date) > now).Select(e => ("Esame: " + e.Title, Loc(e.Date), false, PColor(4))));
         next.AddRange(p.Tasks.Where(t => !t.Done && t.Due > 0 && Loc(t.Due).Date >= DateTime.Today).Select(t => (t.Title, Loc(t.Due).Date, true, subj.TryGetValue(t.Subject, out var sj) ? PColor(sj.Color) : PColor(7))));
         var nx = next.OrderBy(n => n.AllDay && n.When < now ? DateTime.Today : n.When).Cast<(string Title, DateTime When, bool AllDay, Windows.UI.Color Color)?>().FirstOrDefault();

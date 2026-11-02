@@ -25,6 +25,7 @@ public sealed class PlanState
     public List<StudyCard> Cards { get; init; } = new();
     public Dictionary<string, int> Cfg { get; init; } = new();
     public PomoTimer Timer { get; init; } = new();
+    public List<ExtEvent> Ext { get; init; } = new();
     public int Get(string k, int def) => Cfg.TryGetValue(k, out var v) ? v : def;
 }
 
@@ -35,7 +36,7 @@ public sealed class PlanState
 /// </summary>
 public sealed class Plan
 {
-    private static readonly string[] Groups = { "ev", "sub", "tk", "ex", "ses", "card", "cfg", "tm" };
+    private static readonly string[] Groups = { "ev", "sub", "tk", "ex", "ses", "card", "cfg", "tm", "gev" };
     private readonly Router _r;
     private readonly string _file = Path.Combine(Settings.Dir, "plan.json");
     private readonly object _lock = new();
@@ -46,6 +47,8 @@ public sealed class Plan
 
     public PlanState State { get; private set; } = new();
     public List<ExtEvent> External { get; private set; } = new();
+    /// <summary>Quelli dell'iCal più quelli che arrivano dai telefoni.</summary>
+    public List<ExtEvent> AllExternal => External.Concat(State.Ext).ToList();
     public string ExternalStatus { get; private set; } = "";
 
     public Plan(Router r)
@@ -108,6 +111,7 @@ public sealed class Plan
                 Sessions = Live("ses").Select(kv => new Sess(kv.Key, Str(kv.Value["s"]), Num(kv.Value["t"]), (int)Num(kv.Value["m"]))).OrderByDescending(s => s.Start).ToList(),
                 Cards = Live("card").Select(kv => new StudyCard(kv.Key, Str(kv.Value["s"]), Str(kv.Value["q"]), Str(kv.Value["a"]), (int)Num(kv.Value["b"]), Num(kv.Value["due"]))).ToList(),
                 Cfg = cfg, Timer = t,
+                Ext = Live("gev").Where(kv => Str(kv.Value["dv"]) != _r.S.DeviceId).Select(kv => new ExtEvent(Str(kv.Value["ti"]), Num(kv.Value["t"]), Num(kv.Value["e"]), Num(kv.Value["a"]) == 1, Str(kv.Value["l"]), "")).ToList(),
             };
         }
         _r.Raise();
@@ -277,6 +281,7 @@ public sealed class Plan
         var t = State.Timer; var now = Now;
         WriteTimer(t with { Running = true, StartedAt = now, EndAt = now + Minutes(t.Phase) * 60_000L, Subject = subject, Device = _r.S.DeviceId });
     });
+    public void TimerPenalty(long ms) => Mutate(() => { var t = State.Timer; if (t.Running) WriteTimer(t with { EndAt = t.EndAt + ms }); });
     public void TimerStop() => Mutate(() => WriteTimer(State.Timer with { Running = false, EndAt = 0, StartedAt = 0 }));
     public void TimerPhase(string p) => Mutate(() => WriteTimer(new PomoTimer(p, false, 0, 0, State.Timer.Subject, State.Timer.Cycle, _r.S.DeviceId)));
 
