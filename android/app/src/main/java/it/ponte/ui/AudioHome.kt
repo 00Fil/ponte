@@ -42,6 +42,7 @@ fun HeadphonesCard(r: Router) {
     val hps by r.headphones.list.collectAsState()
     val holder by r.headphones.holder.collectAsState()
     val preferred = r.prefs.preferredHp
+    val switching by r.headphones.switching.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(4000); tick++ } }
     val connected = hps.firstOrNull { it.connected && (it.address == preferred || it.address in r.prefs.headphones) } ?: hps.firstOrNull { it.connected }
@@ -61,8 +62,9 @@ fun HeadphonesCard(r: Router) {
                 val tl = androidx.compose.ui.geometry.Offset(w / 2, w / 2)
                 val sz = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
                 drawArc(c.bgSunken, 0f, 360f, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-                if (battery != null) drawArc(ring, -90f, 360f * level, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                if (battery != null && !switching) drawArc(ring, -90f, 360f * level, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
+            if (switching) BusyArc(c.accent, Modifier.matchParentSize(), stroke = 3.4f)
             Box(Modifier.size(52.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
                 if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
                 else TabGlyph(4, c.labelSecondary, false, Modifier.size(24.dp))

@@ -74,7 +74,7 @@ public sealed class Headphones
                     }
                 }
                 catch (Exception) { }
-                await Task.Delay(_r.S.PreferredHp.Length > 0 ? 1_000 : 10_000);
+                await Task.Delay(_r.S.PreferredHp.Length > 0 ? 250 : 10_000);
             }
         });
     }
@@ -102,6 +102,7 @@ public sealed class Headphones
             _r.Send(Proto.NewMsg("focus", ("ago", 0)));
             _r.Raise();
         }
+        if (was != Me && Focus == Me) SchedulePreConnect();
     }
 
     public void OnFocus(JsonObject m)
@@ -171,13 +172,69 @@ public sealed class Headphones
         }
         Claim(hp);
         if (here) return;
+        EnsureHere(hp, 6);
+    }
+
+    private CancellationTokenSource? _ensure;
+    private CancellationTokenSource? _pre;
+    private volatile string? _wanting;
+    private volatile bool _nudge;
+    public bool Switching { get; private set; }
+
+    /// <summary>Porta le cuffie qui e insiste finché non sono collegate: coi posti pieni il primo tentativo viene rifiutato, quindi si riprova a intervalli brevi e subito appena chi le lascia avvisa.</summary>
+    private void EnsureHere(string hp, int tries)
+    {
+        if (IsConnected(hp)) { Switching = false; return; }
+        _ensure?.Cancel();
+        var cts = new CancellationTokenSource();
+        _ensure = cts;
+        _wanting = hp;
+        Switching = true;
+        _r.Raise();
         _ = Task.Run(async () =>
         {
-            SetServices(hp, enable: true);
-            await Task.Delay(8_000);
-            List = Enumerate();
-            if (!IsConnected(hp) && _playing) Fallback();
-            _r.Raise();
+            var waits = new[] { 0, 700, 1200, 2000, 3000, 4000 };
+            try
+            {
+                for (var i = 0; i < Math.Min(tries, waits.Length); i++)
+                {
+                    var end = DateTime.UtcNow.AddMilliseconds(waits[i]);
+                    while (DateTime.UtcNow < end && !_nudge && !cts.IsCancellationRequested) await Task.Delay(80);
+                    _nudge = false;
+                    if (cts.IsCancellationRequested || _wanting != hp) return;
+                    if (LockedBy != null && LockedBy != Me) return;
+                    SetServices(hp, enable: true);
+                    await Task.Delay(1_200);
+                    List = Enumerate();
+                    _r.Raise();
+                    if (IsConnected(hp)) return;
+                }
+                if (_playing && !IsConnected(hp)) Fallback();
+            }
+            finally
+            {
+                if (_wanting == hp) _wanting = null;
+                if (_ensure == cts) { Switching = false; _r.Raise(); }
+            }
+        });
+    }
+
+    /// <summary>Appena si usa questo PC le cuffie arrivano, prima ancora che parta l'audio.</summary>
+    private void SchedulePreConnect()
+    {
+        var hp = _r.S.PreferredHp;
+        if (hp.Length == 0) return;
+        _pre?.Cancel();
+        var cts = new CancellationTokenSource();
+        _pre = cts;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(1_200);
+            if (cts.IsCancellationRequested) return;
+            if (Focus != Me || (LockedBy != null && LockedBy != Me) || IsConnected(hp)) return;
+            var busy = Live(hp).Values.Any(v => v.On);
+            Claim(hp);
+            EnsureHere(hp, busy ? 6 : 1);
         });
     }
 
@@ -275,6 +332,7 @@ public sealed class Headphones
         var now = DateTime.UtcNow;
         Map(hp)[from] = new HpState(m["on"] is JsonValue v && v.TryGetValue<bool>(out var on) && on,
             m["play"] is JsonValue p && p.TryGetValue<bool>(out var pl) && pl, now - TimeSpan.FromMilliseconds(m.L("ago")), now);
+        if (!(m["on"] is JsonValue v2 && v2.TryGetValue<bool>(out var on2) && on2) && _wanting == hp) _nudge = true;
     }
 
     public void Claim(string address)
@@ -318,7 +376,7 @@ public sealed class Headphones
     public void Connect(string address)
     {
         Claim(address);
-        SetServices(address, enable: true);
+        EnsureHere(address, 6);
         _lastActive = DateTime.UtcNow;
     }
 

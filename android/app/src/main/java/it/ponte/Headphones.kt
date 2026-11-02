@@ -23,6 +23,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -50,6 +51,8 @@ class Headphones(private val ctx: Context, private val r: Router) {
     val holder = MutableStateFlow<String?>(null)
     val focus = MutableStateFlow<String?>(null)
     val lockedBy = MutableStateFlow<String?>(null)
+    /** Sto portando le cuffie qui: la Home mostra l'attesa finché non sono collegate. */
+    val switching = MutableStateFlow(false)
 
     private val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val main = Handler(Looper.getMainLooper())
@@ -69,6 +72,10 @@ class Headphones(private val ctx: Context, private val r: Router) {
     private val holders = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, HpState>>()
     private var mutedByUs = false
     private var watcher: View? = null
+    private var ensureJob: Job? = null
+    private var preJob: Job? = null
+    @Volatile private var wanting: String? = null
+    @Volatile private var nudge = false
 
     private val me get() = r.deviceId
     private val SLOTS = 2
@@ -136,6 +143,7 @@ class Headphones(private val ctx: Context, private val r: Router) {
             lastFocusSent = now
             r.send(newMsg("focus", "ago" to 0))
         }
+        if (was != me && focus.value == me) schedulePreConnect()
     }
 
     fun onFocus(m: JSONObject) {
@@ -195,11 +203,53 @@ class Headphones(private val ctx: Context, private val r: Router) {
         }
         claim(hp)
         if (here) return
-        r.scope.launch {
-            connect(hp)
-            delay(8_000)
-            refresh()
-            if (!isConnected(hp) && playing) fallback()
+        ensureHere(hp, 6)
+    }
+
+    /**
+     * Porta le cuffie qui e insiste finché non sono collegate: se i due posti sono pieni il primo tentativo viene rifiutato,
+     * quindi si riprova a intervalli brevi e subito appena chi le deve lasciare avvisa di averlo fatto (vedi [onState]).
+     */
+    private fun ensureHere(hp: String, tries: Int) {
+        if (isConnected(hp)) { switching.value = false; return }
+        ensureJob?.cancel()
+        wanting = hp
+        switching.value = true
+        ensureJob = r.scope.launch {
+            val waits = longArrayOf(0, 700, 1200, 2000, 3000, 4000)
+            try {
+                for (i in 0 until minOf(tries, waits.size)) {
+                    val end = System.currentTimeMillis() + waits[i]
+                    while (System.currentTimeMillis() < end && !nudge) delay(80)
+                    nudge = false
+                    if (wanting != hp) return@launch
+                    val lock = lockedBy.value
+                    if (lock != null && lock != me) return@launch
+                    refresh()
+                    if (isConnected(hp)) return@launch
+                    connect(hp)
+                    if (isConnected(hp)) return@launch
+                }
+                if (playing && !isConnected(hp)) fallback()
+            } finally {
+                if (wanting == hp) wanting = null
+                switching.value = false
+            }
+        }
+    }
+
+    /** Appena uso questo dispositivo le cuffie arrivano, prima ancora che parta l'audio. */
+    private fun schedulePreConnect() {
+        val hp = r.prefs.preferredHp.ifEmpty { return }
+        preJob?.cancel()
+        preJob = r.scope.launch {
+            delay(1_200)
+            val lock = lockedBy.value
+            if (focus.value != me || (lock != null && lock != me)) return@launch
+            if (isConnected(hp)) return@launch
+            val busy = live(hp).values.any { it.on }
+            claim(hp)
+            ensureHere(hp, if (busy) 6 else 1)
         }
     }
 
@@ -308,6 +358,7 @@ class Headphones(private val ctx: Context, private val r: Router) {
         if (hp.isEmpty() || from.isEmpty()) return
         val now = System.currentTimeMillis()
         holders.getOrPut(hp) { java.util.concurrent.ConcurrentHashMap() }[from] = HpState(m.optBoolean("on"), m.optBoolean("play"), now - m.optLong("ago"), now)
+        if (!m.optBoolean("on") && wanting == hp) nudge = true
     }
 
     fun claim(address: String) {
@@ -365,6 +416,6 @@ class Headphones(private val ctx: Context, private val r: Router) {
 
     fun connectHere(address: String) {
         claim(address)
-        r.scope.launch { connect(address) }
+        ensureHere(address, 6)
     }
 }
