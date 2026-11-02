@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -279,7 +280,7 @@ fun Modifier.dropTaps(onTap: () -> Unit, onDouble: () -> Unit, corner: Dp = Radi
     val tap by rememberUpdatedState(onTap)
     val dbl by rememberUpdatedState(onDouble)
     this.pressGlow(t, dark, corner).pointerInput(Unit) {
-        androidx.compose.foundation.gestures.detectTapGestures(
+        detectTapGestures(
             onPress = { o ->
                 t.pos = o
                 scope.launch { t.press.animateTo(1f, Goccia.press) }
