@@ -1,6 +1,18 @@
 package it.ponte.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
@@ -47,48 +59,50 @@ enum class Tone { Neutral, Positive, Caution, Critical, Accent }
 /** Scheda: Card di Canone. Raggio 28, margine interno 24, filetto a riposo. */
 @Composable
 fun CCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Column(
-        modifier.fillMaxWidth().glassPanel(shape, isDark()).padding(Space.s5),
+        modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
         content = content,
     )
 }
 
-/** Pulsante tondo alto 44, area di tocco 48. Uno solo `Primary` per vista. */
+/**
+ * Pulsante di vetro come la barra: velo, riflesso, bordo di luce. Al tocco si gonfia appena e si illumina (poco rimbalzo).
+ * Tutto il movimento sta nella fase di disegno: nessuna ricomposizione mentre lo premi.
+ */
 @Composable
 fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, kind: ButtonKind = ButtonKind.Secondary, enabled: Boolean = true) {
     val c = Canone.colors
-    val (bg, fg) = when (kind) {
-        ButtonKind.Primary -> Brand.royal to Color.White
-        ButtonKind.Secondary -> Color.Transparent to c.labelPrimary
-        ButtonKind.Tertiary -> Color.Transparent to c.accent
-        ButtonKind.Destructive -> c.critical to c.criticalOnCritical
+    val dark = isDark()
+    val fg = when (kind) {
+        ButtonKind.Primary -> Color.White
+        ButtonKind.Secondary -> c.labelPrimary
+        ButtonKind.Tertiary -> c.accent
+        ButtonKind.Destructive -> c.criticalOnCritical
     }
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    // Al tocco il pulsante cede appena, come un tasto vero.
-    val scale by androidx.compose.animation.core.animateFloatAsState(
-        if (pressed) 0.96f else 1f, androidx.compose.animation.core.spring(stiffness = 600f), label = "pressione",
+    val grow = androidx.compose.animation.core.animateFloatAsState(
+        if (pressed) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 520f), label = "pressione",
     )
-    val dark = isDark()
-    val fill = when (kind) {
-        // primario: azzurro lucido con riflesso in alto e bordo di luce
-        ButtonKind.Primary -> Modifier.background(Brand.gradient)
-            .background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.38f), 0.5f to Color.Transparent))
-            .border(1.dp, Liquid.rim(dark, true), CircleShape)
-        ButtonKind.Secondary -> Modifier.glassPanel(CircleShape, dark, veil = 0.9f, elevation = false)
-        ButtonKind.Tertiary -> Modifier
-        ButtonKind.Destructive -> Modifier.background(bg).border(1.dp, Liquid.rim(dark), CircleShape)
+    val glass = when (kind) {
+        ButtonKind.Primary -> Modifier.glassControl(dark, fill = Brand.gradient, press = { grow.value })
+        ButtonKind.Secondary -> Modifier.glassControl(dark, press = { grow.value })
+        ButtonKind.Destructive -> Modifier.glassControl(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { grow.value })
+        ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * grow.value)) }
     }
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(CircleShape).then(fill).alpha(if (enabled) 1f else 0.4f)
+            .graphicsLayer {
+                val g = grow.value
+                scaleX = 1f + 0.07f * g; scaleY = 1f + 0.02f * g
+            }
+            .then(glass).alpha(if (enabled) 1f else 0.4f)
             .clickable(interactionSource = src, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.matchParentSize().background(fg.copy(alpha = if (pressed) 0.12f else 0f)))
         Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5), maxLines = 1)
     }
 }
@@ -103,7 +117,7 @@ fun CBadge(text: String, tone: Tone = Tone.Neutral) {
         Tone.Critical -> c.criticalSubtle to c.criticalOnSubtle
         Tone.Accent -> c.accentSubtle to c.accentOnSubtle
     }
-    Box(Modifier.clip(CircleShape).background(bg.copy(alpha = 0.85f)).border(1.dp, Liquid.rim(isDark()), CircleShape).padding(horizontal = Space.s3, vertical = Space.s1)) {
+    Box(Modifier.clip(CircleShape).background(bg).padding(horizontal = Space.s3, vertical = Space.s1)) {
         Text(text, style = CanoneType.footnote, color = fg, maxLines = 1)
     }
 }
@@ -116,63 +130,72 @@ fun CSwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Bo
             Text(title, style = CanoneType.body, color = c.labelPrimary)
             if (subtitle != null) Text(subtitle, style = CanoneType.footnote, color = c.labelSecondary)
         }
-        Switch(
-            checked = checked, onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White, checkedTrackColor = c.accent, checkedBorderColor = Color.Transparent,
-                uncheckedThumbColor = c.bgSurface, uncheckedTrackColor = c.fillControl, uncheckedBorderColor = Color.Transparent,
-            ),
-        )
+        GlassSwitch(checked, onChange)
     }
 }
 
-/** Riga di lista: titolo, nota, elemento finale. */
+/**
+ * Interruttore con pomello di vetro: lo tocchi e il pomello si gonfia e si allunga, lo trascini col dito e si assesta con poco rimbalzo.
+ * Pista e pomello si muovono in fase di disegno, senza ricomposizioni.
+ */
 @Composable
-fun CRow(title: String, note: String? = null, modifier: Modifier = Modifier, mono: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val c = Canone.colors
-    Row(modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            if (note != null) Text(note, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        trailing?.invoke()
-    }
-}
-
-@Composable
-fun CDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(Canone.colors.lineSeparator.copy(alpha = 0.55f)))
-}
-
-/** Campo di testo: etichetta sempre sopra e visibile, segnaposto solo come esempio. */
-@Composable
-fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, mono: Boolean = false, secret: Boolean = false) {
-    val c = Canone.colors
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        Text(label, style = CanoneType.footnote, color = c.labelSecondary)
-        BasicTextField(
-            value = value, onValueChange = onChange, singleLine = true,
-            textStyle = (if (mono) CanoneType.figure else CanoneType.body).copy(color = c.labelPrimary),
-            cursorBrush = SolidColor(c.accent),
-            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth(),
-            decorationBox = { inner ->
-                Box(
-                    Modifier.fillMaxWidth().height(44.dp).glassPanel(RoundedCornerShape(Radius.md), isDark(), veil = 0.8f, elevation = false)
-                        .padding(horizontal = Space.s4),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (value.isEmpty()) Text(placeholder, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelTertiary, maxLines = 1)
-                    inner()
+    val dark = isDark()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pos = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }
+    var held by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val grow = androidx.compose.animation.core.animateFloatAsState(
+        if (held) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.75f, stiffness = 480f), label = "pomello",
+    )
+    val settle = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.8f, stiffness = 420f)
+    androidx.compose.runtime.LaunchedEffect(checked) { if (!held) pos.animateTo(if (checked) 1f else 0f, settle) }
+    val now by androidx.compose.runtime.rememberUpdatedState(checked)
+    val change by androidx.compose.runtime.rememberUpdatedState(onChange)
+    val trackW = 54.dp
+    val trackH = 32.dp
+    val thumb = 26.dp
+    val pad = 3.dp
+    val on = Brush.verticalGradient(listOf(Brand.sky, Brand.mid, Brand.royal))
+    Box(
+        modifier.size(trackW, trackH)
+            .semantics { role = Role.Switch; toggleableState = androidx.compose.ui.state.ToggleableState(now); onClick { change(!now); true } }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    held = true
+                    val travel = (trackW - thumb - pad * 2).toPx()
+                    var moved = false
+                    val startPos = pos.value
+                    drag(down.id) { ch ->
+                        ch.consume()
+                        val d = (ch.position.x - down.position.x) / travel
+                        if (kotlin.math.abs(ch.position.x - down.position.x) > viewConfiguration.touchSlop) moved = true
+                        if (moved) scope.launch { pos.snapTo((startPos + d).coerceIn(0f, 1f)) }
+                    }
+                    held = false
+                    val target = if (moved) pos.value > 0.5f else !now
+                    if (target != now) change(target)
+                    scope.launch { pos.animateTo(if (target) 1f else 0f, settle) }
                 }
             },
+    ) {
+        // pista: grigio di vetro quando è spenta, azzurro lucido quando è accesa, con dissolvenza tra i due
+        Box(Modifier.matchParentSize().glassControl(dark, tint = c.fillControl.copy(alpha = if (dark) 0.55f else 0.65f)))
+        Box(
+            Modifier.matchParentSize().graphicsLayer { alpha = pos.value }.glassControl(dark, fill = on),
+        )
+        // pomello: vetro chiaro, si gonfia e si allunga quando lo tieni premuto
+        Box(
+            Modifier.padding(pad).align(Alignment.CenterStart).size(thumb)
+                .graphicsLayer {
+                    val travel = (trackW - thumb - pad * 2).toPx()
+                    translationX = pos.value * travel
+                    val g = grow.value
+                    scaleX = 1f + 0.38f * g
+                    scaleY = 1f + 0.10f * g
+                }
+                .glassControl(dark, tint = Color.White.copy(alpha = if (dark) 0.85f else 0.95f)),
         )
     }
-}
-
-@Composable
-fun CText(text: String, tertiary: Boolean = false, modifier: Modifier = Modifier) {
-    val c = Canone.colors
-    Text(text, style = CanoneType.footnote, color = if (tertiary) c.labelTertiary else c.labelSecondary, modifier = modifier)
 }

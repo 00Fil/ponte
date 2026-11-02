@@ -61,7 +61,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
     val storage = st.storage
     val plan = st.plan
 
-    Box(Modifier.fillMaxSize().liquidCanvas(isDark()).statusBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(c.bgCanvas).statusBarsPadding()) {
         ScreenList("Backup") {
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

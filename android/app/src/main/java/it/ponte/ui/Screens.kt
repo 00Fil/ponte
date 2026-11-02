@@ -18,6 +18,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -101,7 +103,7 @@ internal fun HeroCard(title: String, sub: String, height: androidx.compose.ui.un
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     val white = androidx.compose.ui.graphics.Color.White
-    Box(Modifier.fillMaxWidth().height(height).clip(shape).background(Brand.gradient).border(1.dp, Liquid.rim(isDark(), true), shape)) {
+    Box(Modifier.fillMaxWidth().height(height).clip(shape).background(Brand.gradient)) {
         SlatField(Modifier.matchParentSize(), onBrand = true)
         Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0.4f to androidx.compose.ui.graphics.Color.Transparent, 1f to androidx.compose.ui.graphics.Color(0x990E28AA))))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.s5), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -117,9 +119,15 @@ internal fun SectionTitle(text: String) = Text(text, style = CanoneType.title3, 
 @Composable
 private fun CChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val c = Canone.colors
+    val src = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val grow = androidx.compose.animation.core.animateFloatAsState(
+        if (pressed) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 520f), label = "chip",
+    )
     Box(
-        Modifier.then(if (selected) Modifier.clip(CircleShape).background(c.accentSubtle).border(BorderStroke(1.5.dp, c.accent), CircleShape) else Modifier.glassPanel(CircleShape, isDark(), veil = 0.9f, elevation = false))
-            .clickable(onClick = onClick).padding(horizontal = Space.s4, vertical = Space.s2),
+        Modifier.graphicsLayer { scaleX = 1f + 0.07f * grow.value; scaleY = 1f + 0.02f * grow.value }
+            .glassControl(isDark(), tint = if (selected) c.accent.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Unspecified, press = { grow.value })
+            .clickable(interactionSource = src, indication = null, onClick = onClick).padding(horizontal = Space.s4, vertical = Space.s2),
     ) { Text(label, style = CanoneType.footnote, color = if (selected) c.accentOnSubtle else c.labelPrimary) }
 }
 
@@ -309,7 +317,8 @@ fun ArchiveScreen(r: Router) {
             }
             items(list, key = { it.fid }) { e ->
                 Column(
-                    Modifier.glassPanel(RoundedCornerShape(Radius.lg), isDark())
+                    Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
+                        .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
                         .combinedClickable(onClick = { open(e) }, onLongClick = { toDelete = e }).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
                 ) {
