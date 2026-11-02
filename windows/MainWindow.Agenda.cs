@@ -102,7 +102,7 @@ public sealed partial class MainWindow
         var top = new Grid { ColumnSpacing = 12 };
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Segmented("agmode", new[] { "Mese", "Prossimi", "Studio" }, _agMode, i => { _agMode = i; RenderAgenda(); }));
+        top.Children.Add(Segmented("agmode", new[] { "Mese", "Studio" }, _agMode == 2 ? 1 : 0, i => { _agMode = i == 1 ? 2 : 0; RenderAgenda(); }));
         var gb = Btn("Google Calendar", () => AgGo("ics"));
         Grid.SetColumn(gb, 1);
         top.Children.Add(gb);

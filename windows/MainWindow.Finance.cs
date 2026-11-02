@@ -24,6 +24,10 @@ public sealed partial class MainWindow
     private string _cat = "";
     private string _note = "";
     private bool _cashSpend = true;
+    private string _src = "cash";
+    private static readonly (string K, string N)[] Sources = { ("cash", "Contanti"), ("revolut", "Revolut"), ("manual", "Altro") };
+    private static Windows.UI.Color SrcColor(string s) => s switch { "cash" => Argb(255, 0x34, 0xC7, 0x59), "revolut" => Argb(255, 0x3F, 0x86, 0xFF), _ => Argb(255, 0xFF, 0x9F, 0x0A) };
+    private static string SrcName(string s) => Sources.FirstOrDefault(x => x.K == s).N ?? "Altro";
     private Dictionary<int, int> _tally = new();
     private static readonly CultureInfo It = CultureInfo.GetCultureInfo("it-IT");
     private static readonly string[] Months = { "gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic" };
@@ -77,13 +81,13 @@ public sealed partial class MainWindow
         hero.Children.Add(head);
         hero.Children.Add(MoneyText("fin.total", m.TotalCents, 38));
         hero.Children.Add(PaceChart(m));
-        var split = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28 };
-        foreach (var (label, v, key) in new[] { ("Contanti", m.CashCents, "cash"), ("Revolut", m.RevolutCents, "rev"), ("Altro", m.OtherCents, "oth") })
+        var split = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
+        foreach (var (k, n) in Sources)
         {
-            var c = new StackPanel();
-            c.Children.Add(T(label, 12, "LabelTertiary"));
-            c.Children.Add(MoneyText("fin." + key, v, 15, "LabelPrimary", false));
-            split.Children.Add(c);
+            var lg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            lg.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(SrcColor(k)), VerticalAlignment = VerticalAlignment.Center });
+            lg.Children.Add(T(n, 12, "LabelSecondary"));
+            split.Children.Add(lg);
         }
         hero.Children.Add(split);
         h.Children.Add(Widget(hero));
@@ -391,6 +395,17 @@ public sealed partial class MainWindow
             var kk = k;
             chips.Children.Add(Chip(k.Length > 0 ? k : "Auto", _cat == k, () => { _cat = kk; RenderFinance(); }));
         }
+        var srcBtn = new DropDownButton { Content = SrcName(_src), CornerRadius = new CornerRadius(100), Padding = new Thickness(14, 6, 10, 6) };
+        var srcMenu = new MenuFlyout();
+        foreach (var (sk, sn) in Sources)
+        {
+            var kk2 = sk;
+            var mi = new MenuFlyoutItem { Text = sn, Icon = new FontIcon { Glyph = "\uEA3B", Foreground = Sb(SrcColor(sk)), FontSize = 12 } };
+            mi.Click += (_, _) => { _src = kk2; srcBtn.Content = SrcName(kk2); };
+            srcMenu.Items.Add(mi);
+        }
+        srcBtn.Flyout = srcMenu;
+        chips.Children.Insert(0, srcBtn);
         h.Children.Add(new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, Content = chips });
         var note = new TextBox { Text = _note, PlaceholderText = "Nota (dove o cosa)", MaxWidth = 420 };
         note.TextChanged += (_, _) => _note = note.Text;
@@ -409,21 +424,21 @@ public sealed partial class MainWindow
             amt.Foreground = B(_amount.Length > 0 ? "LabelPrimary" : "LabelTertiary");
         }
         // tastierino vero: tre colonne strette e centrate, tasti rotondi di vetro
-        var pad = new Grid { Width = 276, HorizontalAlignment = HorizontalAlignment.Center, RowSpacing = 12 };
+        var pad = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, RowSpacing = 8, ColumnSpacing = 8 };
         for (var c = 0; c < 3; c++) pad.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var keys = new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫" };
         for (var i = 0; i < keys.Length; i++)
         {
             if (i % 3 == 0) pad.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var k = keys[i];
-            var key = new Grid { Width = 72, Height = 72, Background = Sb(Microsoft.UI.Colors.Transparent) };
-            key.Children.Add(new Border { CornerRadius = new CornerRadius(36), Background = GlassBody(), BorderBrush = GlassEdge(), BorderThickness = new Thickness(1) });
+            var key = new Grid { Height = 64, Background = Sb(Microsoft.UI.Colors.Transparent) };
+            key.Children.Add(new Border { CornerRadius = new CornerRadius(20), Background = B("BgSurface"), BorderBrush = B("LineSeparator"), BorderThickness = new Thickness(1) });
             var kt = T(k, 26, "LabelPrimary", true);
             kt.HorizontalAlignment = HorizontalAlignment.Center;
             kt.VerticalAlignment = VerticalAlignment.Center;
             key.Children.Add(kt);
             key.Tapped += (_, _) => Press(k);
-            Bounce(key, 1.12f);
+            Bounce(key, 1.04f);
             Grid.SetColumn(key, i % 3);
             Grid.SetRow(key, i / 3);
             pad.Children.Add(key);
@@ -444,13 +459,12 @@ public sealed partial class MainWindow
             if (v == null || v == 0) return;
             var k = _cat.Length > 0 ? _cat : _income ? "Entrate" : Finance.Guess(_note);
             var before = _r.Fin.State.TotalCents;
-            _r.Fin.Add(_income ? v.Value : -v.Value, k, _note.Trim());
+            _r.Fin.Add(_income ? v.Value : -v.Value, k, _note.Trim(), _src);
             FlashMoney(before, _income ? v.Value : -v.Value);
             _amount = ""; _note = ""; _cat = "";
             FinGo(null);
         }, "PrimaryButton");
-        confirm.HorizontalAlignment = HorizontalAlignment.Center;
-        confirm.MinWidth = 276;
+        confirm.HorizontalAlignment = HorizontalAlignment.Stretch;
         Bounce(confirm);
         h.Children.Add(confirm);
     }
@@ -474,9 +488,6 @@ public sealed partial class MainWindow
         big.FontFamily = (FontFamily)Application.Current.Resources["FontMono"];
         big.HorizontalAlignment = HorizontalAlignment.Center;
         h.Children.Add(big);
-        var wallet = MoneyText("cash.wallet", m.CashCents, 13, "LabelTertiary", false, "Nel portafoglio ");
-        wallet.HorizontalAlignment = HorizontalAlignment.Center;
-        h.Children.Add(wallet);
 
         void Update()
         {
@@ -492,7 +503,7 @@ public sealed partial class MainWindow
         for (var i = 0; i < Finance.Notes.Length; i++)
         {
             if (i % 2 == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var note = Banknote(Finance.Notes[i], m.Cash.TryGetValue(Finance.Notes[i], out var own) ? own : 0, Update);
+            var note = Banknote(Finance.Notes[i], 0, Update);
             Grid.SetColumn(note, i % 2);
             Grid.SetRow(note, i / 2);
             grid.Children.Add(note);
@@ -515,7 +526,6 @@ public sealed partial class MainWindow
             var v = Tally();
             if (v == 0) return;
             var before = _r.Fin.State.TotalCents;
-            foreach (var (d, n) in _tally) if (n > 0) _r.Fin.Bump(d, _cashSpend ? -n : n);
             _r.Fin.Add(_cashSpend ? -v : v, _cashSpend ? (_cat.Length > 0 ? _cat : "Altro") : "Entrate", "Contanti", "cash");
             FlashMoney(before, _r.Fin.State.TotalCents - before);
             _tally = new(); _cat = "";
@@ -598,10 +608,13 @@ public sealed partial class MainWindow
             r.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             r.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             r.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            r.Children.Add(new Ellipse { Width = 10, Height = 10, Fill = Sb(CatColor(t.Cat)), VerticalAlignment = VerticalAlignment.Center });
+            var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            dots.Children.Add(new Ellipse { Width = 10, Height = 10, Fill = Sb(CatColor(t.Cat)), VerticalAlignment = VerticalAlignment.Center });
+            dots.Children.Add(new Border { Width = 4, Height = 30, CornerRadius = new CornerRadius(2), Background = Sb(SrcColor(t.Src)) });
+            r.Children.Add(dots);
             var mid = new StackPanel();
             mid.Children.Add(T(t.Note.Length > 0 ? t.Note : t.Cat, 14));
-            mid.Children.Add(T(t.Cat + " · " + DateTimeOffset.FromUnixTimeMilliseconds(t.Ts).LocalDateTime.ToString("d MMM", It) + (t.Src == "revolut" ? " · Revolut" : t.Src == "cash" ? " · Contanti" : ""), 12, "LabelTertiary"));
+            mid.Children.Add(T(t.Cat + " · " + DateTimeOffset.FromUnixTimeMilliseconds(t.Ts).LocalDateTime.ToString("d MMM", It) + " · " + SrcName(t.Src), 12, "LabelTertiary"));
             Grid.SetColumn(mid, 1);
             r.Children.Add(mid);
             var v = MoneyText("mv." + t.Id, t.Cents, 14, t.Cents > 0 ? "PositiveOnSubtle" : "LabelPrimary", false, t.Cents > 0 ? "+" : "");
@@ -626,7 +639,7 @@ public sealed partial class MainWindow
     {
         h.Children.Add(BackRow("Finanze", "Revolut", () => FinGo(null)));
         var col = new StackPanel { Spacing = 12 };
-        col.Children.Add(MoneyText("rev.total", _r.Fin.State.RevolutCents, 34));
+        col.Children.Add(MoneyText("rev.total", _r.Fin.State.TotalCents, 34));
         var status = T("", 13, "LabelTertiary");
         var imp = Btn("Importa estratto (CSV)", async () =>
         {
@@ -642,12 +655,12 @@ public sealed partial class MainWindow
         col.Children.Add(imp);
         col.Children.Add(status);
         var bal = new TextBox { PlaceholderText = "0,00", MaxWidth = 240, HorizontalAlignment = HorizontalAlignment.Left };
-        col.Children.Add(Field("Imposta il saldo a mano", bal));
+        col.Children.Add(Field("Imposta il saldo totale", bal));
         col.Children.Add(Btn("Salva saldo", () =>
         {
             var v = Finance.ToCents(bal.Text);
             if (v == null) { status.Text = "Scrivi un importo"; return; }
-            _r.Fin.SetRevolut(v.Value);
+            _r.Fin.SetTotal(v.Value);
             bal.Text = "";
             status.Text = "Saldo aggiornato";
         }));

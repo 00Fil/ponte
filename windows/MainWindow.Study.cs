@@ -152,7 +152,7 @@ public sealed partial class MainWindow
         btns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var main = t.Running ? Btn("Ferma", () => _r.Plan.TimerStop()) : Btn("Avvia", () => _r.Plan.TimerStart(""), "PrimaryButton");
         main.HorizontalAlignment = HorizontalAlignment.Stretch;
-        var skip = Btn(focus ? "Salta alla pausa" : "Salta la pausa", () => _r.Plan.TimerPhase(focus ? ((t.Cycle + 1) % rounds == 0 ? "long" : "short") : "focus"));
+        var skip = Btn("Salta", () => _r.Plan.TimerPhase(focus ? ((t.Cycle + 1) % rounds == 0 ? "long" : "short") : "focus"));
         skip.HorizontalAlignment = HorizontalAlignment.Stretch;
         Grid.SetColumn(skip, 1);
         btns.Children.Add(main); btns.Children.Add(skip);
@@ -232,10 +232,7 @@ public sealed partial class MainWindow
         c.Children.Add(days);
         h.Children.Add(Widget(c, null, new Thickness(20)));
 
-        var tot = new StackPanel();
-        tot.Children.Add(T("Totale", 12, "LabelTertiary"));
-        tot.Children.Add(T($"{Hm(p.Sessions.Sum(s => s.Minutes))} in {p.Sessions.Count} pomodori", 15, "LabelPrimary", true));
-        h.Children.Add(Widget(tot));
+
     }
 
     // ---------------------------------------------------------------- impostazioni

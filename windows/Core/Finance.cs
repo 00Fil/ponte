@@ -15,10 +15,8 @@ public sealed class Money
     public Dictionary<int, int> Cash { get; init; } = new();
     public long RevBase { get; init; }
     public long RevTs { get; init; }
-    public long CashCents => Cash.Sum(kv => (long)kv.Key * kv.Value);
-    public long RevolutCents => RevBase + Txs.Where(t => t.Src == "revolut" && t.Ts > RevTs).Sum(t => t.Cents);
-    public long OtherCents => Txs.Where(t => t.Src == "manual").Sum(t => t.Cents);
-    public long TotalCents => CashCents + RevolutCents + OtherCents;
+    /// <summary>Un solo patrimonio: la fonte (contanti, Revolut, altro) è solo un colore sul movimento.</summary>
+    public long TotalCents => RevBase + Txs.Sum(t => t.Src == "revolut" && t.Ts <= RevTs ? 0L : t.Cents);
 }
 
 /// <summary>
@@ -48,6 +46,19 @@ public sealed class Finance
         _r = r;
         try { if (File.Exists(_file) && JsonNode.Parse(File.ReadAllText(_file)) is JsonObject o) FromJson(o); }
         catch (Exception) { }
+        // Le banconote contate non sono più un conto a parte: ciò che c'era in tasca diventa un movimento "contanti" (una volta sola, uguale su ogni dispositivo).
+        lock (_lock)
+        {
+            if (_cash.Count > 0)
+            {
+                var inv = _cash.Sum(kv => (long)kv.Key * kv.Value.N);
+                var past = _tx.Values.Where(v => !v.D && v.S == "cash").Sum(v => v.C);
+                var u = Now;
+                if (inv - past != 0 && !_tx.ContainsKey("cash-init")) _tx["cash-init"] = new Rec(u, inv - past, "Altro", "Contanti iniziali", "cash", u, false);
+                foreach (var k in _cash.Keys.ToList()) _cash[k] = (0, u);
+                Save();
+            }
+        }
         Publish();
     }
 
@@ -219,13 +230,17 @@ public sealed class Finance
         if (_tx.TryGetValue(id, out var v)) _tx[id] = v with { U = Now, D = true };
     });
 
-    public void Bump(int denom, int by) => Mutate(() =>
+    /// <summary>Imposta il saldo totale a mano: la base si calcola sottraendo i movimenti che contano già.</summary>
+    public void SetTotal(long cents) => Mutate(() =>
     {
-        var cur = _cash.TryGetValue(denom, out var v) ? v.N : 0;
-        _cash[denom] = (Math.Max(0, cur + by), Now);
+        var rest = _tx.Values.Where(v => !v.D && v.S != "revolut").Sum(v => v.C);
+        _rev = (cents - rest, Now, Now);
     });
 
-    public void SetRevolut(long cents) => Mutate(() => _rev = (cents, Now, Now));
+    public void SetSource(string id, string src) => Mutate(() =>
+    {
+        if (_tx.TryGetValue(id, out var v)) _tx[id] = v with { S = src, U = Now };
+    });
 
     public static long? ToCents(string raw)
     {
