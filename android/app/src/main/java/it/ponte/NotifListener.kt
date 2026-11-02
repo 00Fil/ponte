@@ -16,6 +16,11 @@ class NotifListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val r = Ponte.router ?: return
+        if (sbn.packageName == "com.revolut.revolut") {
+            val ex = sbn.notification.extras
+            r.finance.fromNotification(ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(), ex.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty())
+            return
+        }
         if (!r.prefs.notifications || sbn.packageName == packageName || sbn.isOngoing) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0 || n.visibility == Notification.VISIBILITY_SECRET) return

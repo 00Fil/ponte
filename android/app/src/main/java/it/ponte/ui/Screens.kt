@@ -64,6 +64,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -164,18 +165,33 @@ fun DevicesScreen(r: Router) {
             }
         }
         item {
+            var target by remember { mutableStateOf<String?>(null) }
+            val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                val id = target
+                if (uri != null && id != null) r.scope.launch { if (!DevicePics.save(ctx, id, uri)) toast(ctx, "Immagine non leggibile") }
+            }
             CCard {
-                SectionTitle("Altri dispositivi")
-                if (devices.isEmpty()) {
-                    CText("Nessun altro dispositivo. Apri Relay su un altro dispositivo, con lo stesso server e lo stesso token.")
-                } else devices.forEachIndexed { i, d ->
+                SectionTitle("Dispositivi")
+                CText("Tocca l'immagine per scegliere un PNG per ogni dispositivo, anche un render 3D con sfondo trasparente. Tienila premuta per toglierla.", tertiary = true)
+                val rows = listOf(Triple(r.deviceId, r.prefs.name + " (questo)", "Android")) + devices.map { Triple(it.id, it.name, if (it.platform == "windows") "Windows" else "Android") }
+                rows.forEachIndexed { i, (id, nm, plat) ->
                     if (i > 0) CDivider()
-                    val what = buildList {
-                        add(if (d.platform == "windows") "Windows" else "Android")
-                        if ("audio-src" in d.caps) add("sorgente audio")
-                        if ("audio-sink" in d.caps) add("riceve audio")
-                    }.joinToString(" · ")
-                    CRow(d.name, what, Modifier.clip(RoundedCornerShape(Radius.lg)).background(Brush.horizontalGradient(listOf(c.accentSubtle, androidx.compose.ui.graphics.Color.Transparent))).padding(horizontal = Space.s3)) { CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent) }
+                    val d = devices.firstOrNull { it.id == id }
+                    val pic = DevicePics.rememberPic(id)
+                    CRow(nm, plat + (d?.let { x -> buildList {
+                        if ("audio-src" in x.caps) add("sorgente audio")
+                        if ("audio-sink" in x.caps) add("riceve audio")
+                    }.joinToString("") { " · $it" } } ?: "")) {
+                        if (d != null) CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent)
+                        Box(
+                            Modifier.size(56.dp).clip(RoundedCornerShape(Radius.lg)).background(c.bgSunken)
+                                .dropClickable({ target = id; pick.launch("image/*") }, { DevicePics.remove(ctx, id) }, Radius.lg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
+                            else TabGlyph(if (plat == "Windows") 1 else 1, c.labelTertiary, false, Modifier.size(24.dp))
+                        }
+                    }
                 }
             }
         }
@@ -354,10 +370,18 @@ fun AudioScreen(r: Router, openSettings: () -> Unit = {}) {
     ScreenList("Audio") {
         item {
             CCard {
-                Headphones3D(glow, c.accent, c.bgCanvas.luminance() < 0.5f)
+                val pic = DevicePics.rememberPic(holder)
+                Box(
+                    Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(Radius.lg))
+                        .background(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.22f * glow), Color.Transparent))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(Space.s3), contentScale = ContentScale.Fit)
+                    else TabGlyph(4, c.labelTertiary, false, Modifier.size(72.dp))
+                }
                 Text(who(holder), style = CanoneType.title2, color = c.labelPrimary)
                 Text(
-                    if (lockedBy != null) "Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() } else "Seguono dove ascolti. Trascina per ruotarle.",
+                    if (lockedBy != null) "Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() } else "Seguono dove ascolti.",
                     style = CanoneType.footnote, color = c.labelTertiary,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {

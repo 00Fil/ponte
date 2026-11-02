@@ -213,7 +213,7 @@ fun CDivider() {
 
 /** Campo di testo: etichetta sempre sopra e visibile, segnaposto solo come esempio. */
 @Composable
-fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, mono: Boolean = false, secret: Boolean = false) {
+fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, mono: Boolean = false, secret: Boolean = false, number: Boolean = false) {
     val c = Canone.colors
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Text(label, style = CanoneType.footnote, color = c.labelSecondary)
@@ -222,7 +222,7 @@ fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder
             textStyle = (if (mono) CanoneType.figure else CanoneType.body).copy(color = c.labelPrimary),
             cursorBrush = SolidColor(c.accent),
             visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else KeyboardType.Uri),
+            keyboardOptions = KeyboardOptions(keyboardType = if (secret) KeyboardType.Password else if (number) KeyboardType.Decimal else KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { inner ->
                 Box(

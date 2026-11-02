@@ -97,9 +97,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("Home", "Condividi", "Audio", "Impostazioni")
+private val TABS = listOf("Home", "Condividi", "Finanze", "Audio", "Impostazioni")
 /** Icona di ogni scheda (indici di TabGlyph). */
-private val GLYPHS = listOf(0, 1, 4, 5)
+private val GLYPHS = listOf(0, 1, 6, 4, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -152,9 +152,10 @@ private fun MainShell(r: Router, onBackup: () -> Unit, onDevices: () -> Unit, re
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
             // Home usa la vecchia numerazione: 1 Dispositivi (pagina a parte), 2 Appunti, 3 Archivio, 4 Audio
-            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> { shareTab = 0; select(1) }; 3 -> { shareTab = 1; select(1) }; 4 -> select(2); else -> select(0) } }
+            0 -> HomeScreen(r) { when (it) { 1 -> onDevices(); 2 -> { shareTab = 0; select(1) }; 3 -> { shareTab = 1; select(1) }; 4 -> select(3); else -> select(0) } }
             1 -> ShareScreen(r, shareTab) { shareTab = it }
-            2 -> AudioScreen(r) { select(3) }
+            2 -> it.ponte.ui.FinanceScreen(r)
+            3 -> AudioScreen(r) { select(4) }
             else -> SettingsScreen(r, replayOnboarding, onBackup)
         }
     }
