@@ -253,7 +253,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                         Text(day ?: "", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelTertiary, modifier = Modifier.then(tabFx).padding(top = Space.s2, start = Space.s1))
                     } else {
                         val fx = rememberCopyFx()
-                        val rowScope = rememberCoroutineScope()
+                        val rowScope = androidx.compose.runtime.rememberCoroutineScope()
                         val tone = deviceTone(if (h.mine) "me" else h.from)
                         val pic = DevicePics.rememberPic(if (h.mine) r.deviceId else h.from)
                         val link = h.text.trim().let { (it.startsWith("http://") || it.startsWith("https://")) && !it.contains(' ') }

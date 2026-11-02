@@ -13,6 +13,8 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.asImageBitmap
@@ -121,8 +123,8 @@ fun DropSlider(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Mod
     val thick by androidx.compose.animation.core.animateDpAsState(if (active) 12.dp else 6.dp, androidx.compose.animation.core.spring(0.7f, 420f), label = "pista")
     Box(
         modifier.fillMaxWidth().height(28.dp).pointerInput(Unit) {
-            androidx.compose.foundation.gestures.awaitEachGesture {
-                val down = androidx.compose.foundation.gestures.awaitFirstDown()
+            awaitEachGesture {
+                val down = awaitFirstDown()
                 active = true
                 change((down.position.x / size.width).coerceIn(0f, 1f))
                 while (true) {
