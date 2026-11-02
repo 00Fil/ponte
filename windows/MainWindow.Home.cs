@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         h.Children.Add(sub);
 
         h.Children.Add(MoneyWidget());
+        h.Children.Add(PlanWidgets());
 
         // ultimo screenshot e ultimo testo copiato
         var row = new Grid { ColumnSpacing = 12 };
@@ -68,6 +69,69 @@ public sealed partial class MainWindow
 
         var i = 0;
         foreach (var el in h.Children) Enter(el, 0, 8, 360, 40 * i++);
+    }
+
+    // ---------------------------------------------------------------- agenda e studio
+
+    /// <summary>Due riquadri: il prossimo impegno e il pomodoro (o lo studio di oggi).</summary>
+    private Grid PlanWidgets()
+    {
+        var p = _r.Plan.State;
+        var now = DateTime.Now;
+        var subj = p.Subjects.ToDictionary(s => s.Id);
+        var next = new List<(string Title, DateTime When, bool AllDay, Windows.UI.Color Color)>();
+        next.AddRange(p.Events.Where(e => Loc(e.End) > now).Select(e => (string.IsNullOrWhiteSpace(e.Title) ? "(senza titolo)" : e.Title, Loc(e.Start), e.AllDay, PColor(e.Color))));
+        next.AddRange(_r.Plan.External.Where(e => Loc(e.End) > now && Loc(e.Start) < now.AddDays(14)).Select(e => (e.Title, Loc(e.Start), e.AllDay, Argb(255, 0x1A, 0x73, 0xE8))));
+        next.AddRange(p.Exams.Where(e => Loc(e.Date) > now).Select(e => ("Esame: " + e.Title, Loc(e.Date), false, PColor(4))));
+        next.AddRange(p.Tasks.Where(t => !t.Done && t.Due > 0 && Loc(t.Due).Date >= DateTime.Today).Select(t => (t.Title, Loc(t.Due).Date, true, subj.TryGetValue(t.Subject, out var sj) ? PColor(sj.Color) : PColor(7))));
+        var nx = next.OrderBy(n => n.AllDay && n.When < now ? DateTime.Today : n.When).Cast<(string Title, DateTime When, bool AllDay, Windows.UI.Color Color)?>().FirstOrDefault();
+
+        var g = new Grid { ColumnSpacing = 12 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var a = new StackPanel { Spacing = 6 };
+        a.Children.Add(T("Prossimo impegno", 12, "LabelTertiary"));
+        if (nx == null) a.Children.Add(T("Niente in programma", 15, "LabelSecondary"));
+        else
+        {
+            var n = nx.Value;
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            line.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(n.Color), VerticalAlignment = VerticalAlignment.Center });
+            line.Children.Add(T(DayLabel(n.When) + (n.AllDay ? "" : " " + n.When.ToString("HH:mm", It)), 12, "LabelSecondary"));
+            a.Children.Add(line);
+            var tt = T(n.Title, 15, "LabelPrimary", true);
+            tt.TextWrapping = TextWrapping.Wrap; tt.MaxLines = 2;
+            a.Children.Add(tt);
+        }
+        var wa = Widget(a, 124);
+        wa.Tapped += (_, _) => Select(3);
+        Bounce(wa, 1.02f);
+        g.Children.Add(wa);
+
+        var t = p.Timer;
+        var total = (t.Phase switch { "short" => p.Get("short", 5), "long" => p.Get("long", 15), _ => p.Get("focus", 25) }) * 60_000L;
+        var b = new StackPanel { Spacing = 6 };
+        b.Children.Add(T(t.Running ? (t.Phase == "focus" ? "Concentrazione" : "Pausa") : "Studio", 12, t.Running ? (t.Phase == "focus" ? "AccentDefault" : "PositiveOnSubtle") : "LabelTertiary"));
+        var clock = T("00:00", 30, t.Running ? "LabelPrimary" : "LabelTertiary", true);
+        void Upd()
+        {
+            var st = _r.Plan.State.Timer;
+            var left = st.Running ? Math.Clamp(st.EndAt - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), 0, total) : total;
+            var secs = (int)((left + 999) / 1000);
+            clock.Text = $"{secs / 60:00}:{secs % 60:00}";
+        }
+        Upd();
+        if (t.Running) { EnsureTicks(); _ticks.Add(Upd); }
+        b.Children.Add(clock);
+        var today = MinutesOn(p, DateTime.Today, DateTime.MaxValue);
+        b.Children.Add(T(t.Running ? "Tocca per aprire" : today > 0 ? $"Oggi hai studiato {today} min" : "Tocca per iniziare", 12, "LabelTertiary"));
+        var wb = Widget(b, 124);
+        wb.Tapped += (_, _) => Select(4);
+        Bounce(wb, 1.02f);
+        Grid.SetColumn(wb, 1);
+        g.Children.Add(wb);
+        return g;
     }
 
     // ---------------------------------------------------------------- saldo
