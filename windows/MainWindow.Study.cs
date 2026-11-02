@@ -160,7 +160,7 @@ public sealed partial class MainWindow
         const double Size = 232, W = 14, R = (Size - W) / 2;
         var ring = new Grid { Width = Size, Height = Size, HorizontalAlignment = HorizontalAlignment.Center };
         ring.Children.Add(new Ellipse { Width = Size - W, Height = Size - W, Stroke = B("BgSunken"), StrokeThickness = W });
-        var arc = new Path { Stroke = B(tint), StrokeThickness = W, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = Size, Height = Size };
+        var arc = new Microsoft.UI.Xaml.Shapes.Path { Stroke = B(tint), StrokeThickness = W, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = Size, Height = Size };
         ring.Children.Add(arc);
         var inner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var clock = T("00:00", 52, "LabelPrimary", true);
