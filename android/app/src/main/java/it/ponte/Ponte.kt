@@ -9,6 +9,6 @@ object Ponte {
         private set
 
     fun ensure(ctx: Context): Router = router ?: synchronized(this) {
-        router ?: Router(ctx.applicationContext, Prefs(ctx.applicationContext)).also { router = it }
+        router ?: Router(ctx.applicationContext, Prefs(ctx.applicationContext)).also { router = it; Eq.start(ctx.applicationContext) }
     }
 }

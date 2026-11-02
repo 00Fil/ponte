@@ -135,7 +135,8 @@ private fun FixWidget(n: Int, onClick: () -> Unit) {
 @Composable
 private fun BalanceCard(r: Router, total: Long, modifier: Modifier, onClick: () -> Unit) {
     val c = Canone.colors
-    Widget(modifier, onClick) {
+    Widget(modifier) {
+        Box(Modifier.matchParentSize().dropClickable(onClick))
         Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)

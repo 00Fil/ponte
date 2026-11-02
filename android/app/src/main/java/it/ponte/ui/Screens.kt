@@ -14,6 +14,7 @@ import android.provider.OpenableColumns
 import android.provider.Settings
 import android.text.format.DateFormat
 import android.text.format.Formatter
+import it.ponte.Eq
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -255,6 +256,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                     Action("", "Backup", false, glyph = 8) { onBackup() }
                 }
             }
+            item(key = "space", span = { GridItemSpan(maxLineSpan) }) { DriveUsage(all, history.sumOf { it.text.length.toLong() }) }
             item(key = "seg", span = { GridItemSpan(maxLineSpan) }) {
                 GlassSegmented(listOf("Appunti", "Immagini", "File"), tabSel, { onTab(keys[it]); folder = null })
             }
@@ -366,6 +368,42 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                 }, kind = ButtonKind.Primary)
             },
         )
+    }
+}
+
+private const val DRIVE_CAP = 50L * 1024 * 1024 * 1024
+
+/** Lo spazio condiviso: una barra con immagini, file e appunti rispetto ai 50 GB. */
+@Composable
+private fun DriveUsage(all: List<FileEntry>, clipBytes: Long) {
+    val c = Canone.colors
+    val ctx = LocalContext.current
+    val img = all.filter { it.mime.startsWith("image/") }.sumOf { it.size }
+    val oth = all.sumOf { it.size } - img
+    val used = img + oth + clipBytes
+    fun f(n: Long) = Formatter.formatShortFileSize(ctx, n)
+    fun frac(n: Long) = (n.toFloat() / DRIVE_CAP).coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(Radius.lg)
+    Column(Modifier.fillMaxWidth().padding(bottom = Space.s2).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text(f(used), style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+            Text(" di 50 GB", style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.padding(bottom = 2.dp))
+            Spacer(Modifier.weight(1f))
+            Text("${all.size} elementi", style = CanoneType.footnote, color = c.labelTertiary)
+        }
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken)) {
+            val parts = listOf(img to c.accent, oth to Color(0xFFFF9F0A), clipBytes to Color(0xFF34C759))
+            parts.forEach { (n, col) -> if (n > 0) Box(Modifier.fillMaxHeight().weight(maxOf(frac(n), 0.004f)).background(col)) }
+            Spacer(Modifier.weight(maxOf(1f - frac(used), 0.0001f)))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+            listOf(Triple("Immagini", img, c.accent), Triple("File", oth, Color(0xFFFF9F0A)), Triple("Appunti", clipBytes, Color(0xFF34C759))).forEach { (n, v, col) ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(col))
+                    Text("$n ${f(v)}", style = CanoneType.footnote, color = c.labelSecondary)
+                }
+            }
+        }
     }
 }
 
@@ -613,7 +651,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
         r.reconfigure()
         toast(ctx, "Salvato")
     }
-    val titles = mapOf("perm" to "Permessi", "sys" to "Sistema", "share" to "Condividi", "audio" to "Audio", "fin" to "Finanze")
+    val titles = mapOf("perm" to "Permessi", "sys" to "Sistema", "share" to "Condividi", "audio" to "Audio", "fin" to "Finanze", "eq" to "Equalizzatore")
 
     ModuleSwitch(sub) { page ->
         ScreenList("Impostazioni") {
@@ -637,6 +675,47 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                     item { Category(1, "Condividi", "Collegamento diretto, screenshot, notifiche", Color(0xFF2FB5C4)) { onSub("share") } }
                     item { Category(6, "Finanze", "Importi nascosti, pagamenti Revolut", Color(0xFF5DA85B)) { onSub("fin") } }
                     item { Category(4, "Audio", "Cuffie, passaggio automatico, root", Color(0xFFE88A2E)) { onSub("audio") } }
+                    item { Category(4, "Equalizzatore", "Su tutto il suono del dispositivo", Color(0xFFAF52DE)) { onSub("eq") } }
+                }
+
+                "eq" -> {
+                    item {
+                        androidx.compose.runtime.LaunchedEffect(Unit) { Eq.start(ctx) }
+                        var on by remember { mutableStateOf(Eq.enabled) }
+                        var ver by remember { mutableIntStateOf(0) }
+                        @Suppress("UNUSED_EXPRESSION") ver
+                        CCard {
+                            CSwitchRow("Equalizzatore", null, on) { on = it; Eq.enabled = it }
+                        }
+                        if (Eq.available) {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                                Eq.presets.forEach { (n, lv) -> CButton(n, { Eq.preset(lv); ver++ }, kind = ButtonKind.Secondary) }
+                            }
+                            CCard {
+                                for (i in 0 until Eq.bands) {
+                                    var v by remember(ver) { mutableStateOf(Eq.level(i).toFloat()) }
+                                    val f = Eq.freqs[i]
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(if (f >= 1000) "${f / 1000} kHz" else "$f Hz", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
+                                        androidx.compose.material3.Slider(v, { v = it; Eq.setLevel(i, v.toInt()) }, Modifier.weight(1f), valueRange = Eq.minDb.toFloat()..Eq.maxDb.toFloat())
+                                        Text("${v.toInt()} dB", style = CanoneType.footnote.copy(fontFeatureSettings = "tnum"), color = c.labelTertiary, modifier = Modifier.width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                                    }
+                                }
+                                var b by remember(ver) { mutableStateOf(Eq.bassLevel.toFloat()) }
+                                Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Bassi", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
+                                    androidx.compose.material3.Slider(b, { b = it; Eq.bassLevel = b.toInt() }, Modifier.weight(1f), valueRange = 0f..100f)
+                                    Spacer(Modifier.width(48.dp))
+                                }
+                                var g by remember(ver) { mutableStateOf(Eq.gain.toFloat()) }
+                                Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Volume", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
+                                    androidx.compose.material3.Slider(g, { g = it; Eq.gain = g.toInt() }, Modifier.weight(1f), valueRange = 0f..12f)
+                                    Text("+${g.toInt()} dB", style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                                }
+                            }
+                        } else CText("Questo dispositivo non espone l'equalizzatore di sistema", tertiary = true)
+                    }
                 }
 
                 "fin" -> {

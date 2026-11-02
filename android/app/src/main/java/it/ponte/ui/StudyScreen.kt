@@ -209,7 +209,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
             if (t.running) CButton("Ferma", { r.plan.timerStop() }, Modifier.weight(1f))
             else CButton("Avvia", { r.plan.timerStart("") }, Modifier.weight(1f), kind = ButtonKind.Primary)
-            CButton(if (focus) "Salta alla pausa" else "Salta la pausa", {
+            CButton("Salta", {
                 r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus")
             }, Modifier.weight(1f))
         }

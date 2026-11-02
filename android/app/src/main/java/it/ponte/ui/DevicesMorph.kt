@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,7 +60,12 @@ fun DevicesMorph(r: Router, open: Boolean, onToggle: () -> Unit) {
         Box(
             Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).offset(x = lerp(0.dp, -bleed, p)).size(w, h).clip(shape).background(c.bgSurface)
                 .border(BorderStroke(1.dp, c.lineSeparator), shape)
-                .then(if (p < 0.5f) Modifier.dropClickable(onToggle, corner = 15.dp) else Modifier),
+                .then(if (p < 0.5f) Modifier.dropClickable(onToggle, corner = 15.dp) else Modifier)
+                .pointerInput(open) {
+                    if (!open) return@pointerInput
+                    var dy = 0f
+                    detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy < -40f) onToggle() }, onDragCancel = {}) { _, a -> dy += a }
+                },
         ) {
             if (p < 0.6f) Box(Modifier.size(w, 30.dp).graphicsLayer { alpha = (1f - p * 2f).coerceIn(0f, 1f) }, contentAlignment = Alignment.Center) {
                 Text(

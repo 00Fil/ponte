@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 
 /** Icone a tratto, tutte sullo stesso reticolo (24 × 24) e con lo stesso spessore. */
 object Ico {
-    const val FOLDER = 0; const val FOLDER_PLUS = 1; const val SHARE = 2; const val OPEN = 3; const val TRASH = 4; const val EYE = 5; const val EYE_OFF = 6; const val CHECK = 7
+    const val FOLDER = 0; const val FOLDER_PLUS = 1; const val SHARE = 2; const val OPEN = 3; const val TRASH = 4; const val EYE = 5; const val EYE_OFF = 6; const val CHECK = 7; const val PENCIL = 8; const val CLOSE = 9; const val BACK = 10
 }
 
 @Composable
@@ -62,6 +62,12 @@ fun Icon24(kind: Int, color: Color, modifier: Modifier = Modifier) {
                 drawCircle(color, P(3.2f), Offset(P(12f), P(12f)), style = st)
                 if (kind == Ico.EYE_OFF) drawLine(color, Offset(P(4.5f), P(4.5f)), Offset(P(19.5f), P(19.5f)), st.width * 1.15f, StrokeCap.Round)
             }
+            Ico.PENCIL -> {
+                drawPath(p { moveTo(P(4f), P(20f)); lineTo(P(4.8f), P(15.6f)); lineTo(P(16.2f), P(4.2f)); quadraticTo(P(17.2f), P(3.2f), P(18.2f), P(4.2f)); lineTo(P(19.8f), P(5.8f)); quadraticTo(P(20.8f), P(6.8f), P(19.8f), P(7.8f)); lineTo(P(8.4f), P(19.2f)); close() }, color, style = st)
+                drawLine(color, Offset(P(14.2f), P(6.2f)), Offset(P(17.8f), P(9.8f)), st.width, StrokeCap.Round)
+            }
+            Ico.CLOSE -> { drawLine(color, Offset(P(6f), P(6f)), Offset(P(18f), P(18f)), st.width * 1.1f, StrokeCap.Round); drawLine(color, Offset(P(18f), P(6f)), Offset(P(6f), P(18f)), st.width * 1.1f, StrokeCap.Round) }
+            Ico.BACK -> drawPath(p { moveTo(P(14.5f), P(5f)); lineTo(P(7.5f), P(12f)); lineTo(P(14.5f), P(19f)) }, color, style = Stroke(2.1f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
             Ico.CHECK -> drawPath(p { moveTo(P(5f), P(12.5f)); lineTo(P(10f), P(17.5f)); lineTo(P(19f), P(7f)) }, color, style = Stroke(2.2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }

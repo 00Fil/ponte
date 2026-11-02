@@ -82,6 +82,8 @@ private class Draft(
     var color: Int = 0, var place: String = "", var note: String = "", var remind: Int = 10,
 )
 
+private class Sheet(val item: Item?, val draft: Draft?, val edit: Boolean)
+
 private val REMINDERS = listOf(-1 to "Nessuno", 0 to "All'ora", 10 to "10 min", 30 to "30 min", 60 to "1 ora", 1440 to "1 giorno")
 private fun weekStart(t: Long) = addDays(dayStart(t), -((Calendar.getInstance().apply { timeInMillis = t }.get(Calendar.DAY_OF_WEEK) + 5) % 7))
 
@@ -98,7 +100,8 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     var cursor by remember { mutableLongStateOf(Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis) }
     var selected by remember { mutableLongStateOf(dayStart(now)) }
     var expanded by remember { mutableStateOf(true) }
-    var draft by remember { mutableStateOf<Draft?>(null) }
+    var sheet by remember { mutableStateOf<Sheet?>(null) }
+    var closeTick by remember { mutableIntStateOf(0) }
     var cals by remember { mutableStateOf<List<DevCal>>(emptyList()) }
     var hidden by remember { mutableStateOf(bridge.hidden) }
     var target by remember { mutableStateOf(bridge.target) }
@@ -110,7 +113,18 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         onDispose { bridge.unobserve(o) }
     }
     LaunchedEffect(sub) { if (sub == "study") { mode = 2; onSub(null) } }
-    androidx.activity.compose.BackHandler(enabled = draft != null) { draft = null }
+    androidx.activity.compose.BackHandler(enabled = sheet != null) { closeTick++ }
+    androidx.compose.runtime.SideEffect {
+        val sh = sheet
+        DrawerBar.mode = if (sh == null) 0 else if (sh.edit) 2 else 1
+        DrawerBar.onBack = { closeTick++ }
+        DrawerBar.onEdit = {
+            val cur = sheet
+            if (cur?.draft != null) sheet = Sheet(cur.item, cur.draft, true)
+            else (cur?.item?.ref as? DevEvent)?.let { e -> try { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, e.id)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {} }
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { DrawerBar.mode = 0 } }
 
     val first = Calendar.getInstance().apply { timeInMillis = cursor }
     val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
@@ -142,15 +156,14 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         return Draft(calId = target, start = t, end = t + 3_600_000L)
     }
     fun open(i: Item) {
-        when (i.kind) {
-            0 -> (i.ref as Ev).let { e -> draft = Draft(e.id, -1, 0, e.title, e.start, if (e.allDay) e.end - DAY else e.end, e.allDay, e.color, e.place, e.note, e.remind) }
+        val dr: Draft? = when (i.kind) {
+            0 -> (i.ref as Ev).let { e -> Draft(e.id, -1, 0, e.title, e.start, if (e.allDay) e.end - DAY else e.end, e.allDay, e.color, e.place, e.note, e.remind) }
             1 -> (i.ref as DevEvent).let { e ->
-                val cal = cals.firstOrNull { it.id == e.calId }
-                if (cal?.writable == true) draft = Draft("", e.id, e.calId, e.title, e.start, if (e.allDay) e.end - DAY else e.end, e.allDay, 0, e.place, e.note, -1)
-                else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, e.id)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                if (cals.firstOrNull { it.id == e.calId }?.writable == true) Draft("", e.id, e.calId, e.title, e.start, if (e.allDay) e.end - DAY else e.end, e.allDay, 0, e.place, e.note, -1) else null
             }
-            else -> {}
+            else -> null
         }
+        sheet = Sheet(i, dr, false)
     }
     fun remove(i: Item) {
         when (i.kind) { 0 -> r.plan.removeEvent((i.ref as Ev).id); 1 -> { bridge.delete((i.ref as DevEvent).id); tick++ } }
@@ -206,8 +219,13 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         studyItems(r, plan) { onSub("set") }
                     }
                 }
-                if (mode != 2) Fab(Modifier.align(Alignment.BottomEnd).padding(end = Space.s4, bottom = LocalBarInset.current + 4.dp)) { draft = newDraft(if (mode == 0) selected else dayStart(now)) }
-                draft?.let { d -> SheetHost({ draft = null }) { close -> EditorSheet(r, d, cals, bridge, ctx) { tick++; close() } } }
+                if (mode != 2) Fab(Modifier.align(Alignment.BottomEnd).padding(end = Space.s4, bottom = LocalBarInset.current + 4.dp)) { sheet = Sheet(null, newDraft(if (mode == 0) selected else dayStart(now)), true) }
+                sheet?.let { sh ->
+                    SheetHost({ sheet = null }, closeTick) { close ->
+                        if (sh.edit && sh.draft != null) EditorSheet(r, sh.draft, cals, bridge, ctx) { tick++; close() }
+                        else if (sh.item != null) DetailSheet(sh.item, cals)
+                    }
+                }
             }
         }
     }
@@ -292,10 +310,10 @@ private fun MonthCard(
 @Composable
 private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: (Boolean) -> Unit, open: (Item) -> Unit, remove: (Item) -> Unit, modifier: Modifier) {
     val c = Canone.colors
-    val shape = RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl)
+    val shape = RoundedCornerShape(Radius.xl)
     var dy by remember { mutableStateOf(0f) }
     Column(
-        modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape),
+        modifier.padding(horizontal = Space.s4).padding(bottom = LocalBarInset.current - 4.dp).fillMaxWidth().clip(shape).background(c.bgSurface).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape),
     ) {
         Column(
             Modifier.fillMaxWidth().pointerInput(expanded) {
@@ -312,7 +330,7 @@ private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: 
             }
         }
         androidx.compose.foundation.lazy.LazyColumn(
-            Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = Space.s4, end = Space.s4, top = Space.s1, bottom = LocalBarInset.current + 76.dp),
+            Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = Space.s4, end = Space.s4, top = Space.s1, bottom = 76.dp),
             verticalArrangement = Arrangement.spacedBy(Space.s2),
         ) {
             if (list.isEmpty()) item { Text("Libero", style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.padding(Space.s2)) }
@@ -367,24 +385,26 @@ private fun EventRow(i: Item, onClick: () -> Unit) {
 
 /** Cassetto che sale dal basso con velo scuro; si chiude toccando fuori o trascinando giù. */
 @Composable
-private fun SheetHost(onDismiss: () -> Unit, content: @Composable (close: () -> Unit) -> Unit) {
+private fun SheetHost(onDismiss: () -> Unit, closeTick: Int, content: @Composable (close: () -> Unit) -> Unit) {
     val c = Canone.colors
     val drag = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     fun close() { scope.launch { shown = false; kotlinx.coroutines.delay(230); onDismiss() } }
+    var lastTick by remember { mutableIntStateOf(closeTick) }
+    LaunchedEffect(closeTick) { if (closeTick != lastTick) { lastTick = closeTick; close() } }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { close() } })
         }
         androidx.compose.animation.AnimatedVisibility(
-            shown, Modifier.align(Alignment.BottomCenter),
+            shown, Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBarInset.current - 6.dp),
             enter = androidx.compose.animation.slideInVertically(spring(0.88f, 360f)) { it }, exit = androidx.compose.animation.slideOutVertically(tween(220)) { it },
         ) {
-            val shape = RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl)
+            val shape = RoundedCornerShape(Radius.xl)
             Column(
-                Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight * 0.92f).offset { androidx.compose.ui.unit.IntOffset(0, drag.value.toInt()) }
+                Modifier.widthIn(max = 560.dp).padding(horizontal = Space.s4).fillMaxWidth().heightIn(max = maxHeight * 0.80f).offset { androidx.compose.ui.unit.IntOffset(0, drag.value.toInt()) }
                     .clip(shape).background(c.bgSurface).imePadding()
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
@@ -442,21 +462,52 @@ private fun EditorSheet(r: Router, d: Draft, cals: List<DevCal>, bridge: Calenda
         Chip("Relay", cal == 0L) { cal = 0L }
         cals.filter { it.writable }.forEach { k -> Chip(k.name.ifBlank { k.account }, cal == k.id, Color(k.color or (0xFF shl 24))) { cal = k.id } }
     }
-    CButton(if (existing) "Salva" else "Aggiungi", {
-        if (title.isBlank()) { toast(ctx, "Scrivi un titolo"); return@CButton }
+    val save: () -> Unit = save@{
+        if (title.isBlank()) { toast(ctx, "Scrivi un titolo"); return@save }
         val s = if (allDay) dayStart(start) else start
         val e = if (allDay) dayStart(maxOf(end, start)) + DAY else maxOf(end, start + 15 * 60_000L)
         when {
             d.devId > 0 -> bridge.update(d.devId, title.trim(), s, e, allDay, place.trim(), note.trim())
-            cal != 0L && d.id.isEmpty() -> if (bridge.insert(cal, title.trim(), s, e, allDay, place.trim(), note.trim(), remind) < 0) { toast(ctx, "Non riesco a scrivere su Google Calendar"); return@CButton }
+            cal != 0L && d.id.isEmpty() -> if (bridge.insert(cal, title.trim(), s, e, allDay, place.trim(), note.trim(), remind) < 0) { toast(ctx, "Non riesco a scrivere su Google Calendar"); return@save }
             else -> r.plan.saveEvent(Ev(d.id, s, e, allDay, title.trim(), color, note.trim(), place.trim(), remind))
         }
         done()
-    }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-    if (existing) CButton("Elimina", {
-        if (d.devId > 0) bridge.delete(d.devId) else r.plan.removeEvent(d.id)
-        done()
-    }, Modifier.fillMaxWidth(), kind = ButtonKind.Destructive)
+    }
+    androidx.compose.runtime.SideEffect { DrawerBar.onConfirm = save }
+    if (existing) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.size(44.dp).dropClickable({ if (d.devId > 0) bridge.delete(d.devId) else r.plan.removeEvent(d.id); done() }, corner = 100.dp), contentAlignment = Alignment.Center) { Icon24(Ico.TRASH, c.critical, Modifier.size(24.dp)) }
+    }
+}
+
+/** Il cassetto di lettura di un evento: titolo, quando, dove, note. La matita nella barra apre la modifica. */
+@Composable
+private fun DetailSheet(i: Item, cals: List<DevCal>) {
+    val c = Canone.colors
+    val whenText = if (i.allDay) {
+        val last = i.end - DAY
+        if (dayStart(last) <= dayStart(i.start)) cap(fmt(i.start, "EEEE d MMMM")) else cap(fmt(i.start, "d MMM")) + " – " + fmt(last, "d MMM")
+    } else cap(fmt(i.start, "EEEE d MMMM")) + "\n" + fmt(i.start, "HH:mm") + " – " + fmt(i.end, "HH:mm")
+    val note = when (val ref = i.ref) { is Ev -> ref.note; is DevEvent -> ref.note; else -> "" }
+    val source = when (i.kind) { 0 -> "Relay"; 1 -> (i.ref as DevEvent).let { e -> cals.firstOrNull { it.id == e.calId }?.let { k -> k.name.ifBlank { k.account } } ?: "Google" }; else -> "Google" }
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+        Box(Modifier.padding(top = 6.dp).width(5.dp).height(44.dp).clip(CircleShape).background(i.color))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(i.title, style = CanoneType.title2, color = c.labelPrimary)
+            Text(whenText, style = CanoneType.body, color = c.labelSecondary)
+        }
+    }
+    if (i.place.isNotEmpty()) DetailRow("Luogo", i.place)
+    if (note.isNotEmpty()) DetailRow("Note", note)
+    DetailRow("Calendario", source)
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    val c = Canone.colors
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSunken).padding(Space.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = CanoneType.footnote, color = c.labelTertiary)
+        Text(value, style = CanoneType.body, color = c.labelPrimary)
+    }
 }
 
 @Composable

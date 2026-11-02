@@ -447,9 +447,14 @@ private fun TxRow(t: Tx, ctx: android.content.Context, onDelete: () -> Unit) {
 private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSub: () -> Unit, modifier: Modifier) {
     val touch = rememberDropTouch()
     val base = noteColor(denom)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val res = remember(denom) { ctx.resources.getIdentifier("eur_${denom / 100}", "drawable", ctx.packageName) }
     Box(modifier.aspectRatio(2.05f).dropGestures(touch, onAdd)) {
         Box(Modifier.fillMaxSize().dropDeform(touch).clip(RoundedCornerShape(10.dp))) {
-            Canvas(Modifier.fillMaxSize()) {
+            if (res != 0) androidx.compose.foundation.Image(
+                androidx.compose.ui.res.painterResource(res), null, Modifier.fillMaxSize().graphicsLayer { alpha = if (count > 0) 1f else 0.55f },
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            ) else Canvas(Modifier.fillMaxSize()) {
                 val a = if (count > 0) 1f else 0.62f
                 drawRect(Brush.linearGradient(listOf(base.copy(alpha = a), Color.White.copy(alpha = 0.35f * a).compositeOver(base))))
                 val w = size.width; val h = size.height
@@ -466,8 +471,8 @@ private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSu
                     drawCircle(Color.White.copy(alpha = 0.35f), 1.6f, Offset(w * 0.86f + 11f * kotlin.math.cos(ang), h * 0.22f + 11f * kotlin.math.sin(ang)))
                 }
             }
-            Text("${denom / 100}", style = CanoneType.title1.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp))
-            Text("EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, letterSpacing = 1.5.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 8.dp))
+            if (res == 0) Text("${denom / 100}", style = CanoneType.title1.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp))
+            if (res == 0) Text("EURO", style = CanoneType.footnote.copy(fontSize = 9.sp, letterSpacing = 1.5.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 8.dp))
         }
         // il contatore e il "−" esplicito: un tocco sulla banconota ne aggiunge una, per toglierne una si tocca il "−"
         if (count > 0) Row(
