@@ -91,11 +91,11 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * touch.press.value)) }
     }
     Box(
-        modifier.minimumInteractiveComponentSize().height(44.dp)
-            .dropTouch(touch, onClick, enabled = enabled)
-            .then(glass).alpha(if (enabled) 1f else 0.4f),
+        modifier.minimumInteractiveComponentSize().height(44.dp).dropGestures(touch, onClick, enabled = enabled).alpha(if (enabled) 1f else 0.4f),
         contentAlignment = Alignment.Center,
     ) {
+        // il vetro si deforma, l'etichetta resta ferma
+        Box(Modifier.matchParentSize().dropDeform(touch).then(glass))
         Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5), maxLines = 1)
     }
 }
@@ -187,9 +187,8 @@ fun GlassSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifie
                     val g = grow.value
                     // si allunga nel verso del movimento: più è lontano dal punto d'arrivo, più si stira
                     val stretch = (kotlin.math.abs(pos.targetValue - pos.value) * 0.55f).coerceAtMost(0.4f)
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (pos.targetValue >= pos.value) 0.2f else 0.8f, 0.5f)
-                    scaleX = 1f + 0.38f * g + stretch
-                    scaleY = 1f + 0.10f * g - stretch * 0.25f
+                    scaleX = 1f + 0.14f * g + stretch * 0.5f
+                    scaleY = 1f + 0.04f * g - stretch * 0.1f
                 }
                 .drop(dark, tint = Color.White.copy(alpha = if (dark) 0.88f else 0.97f)),
         )

@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -132,19 +133,18 @@ fun rememberDropTouch() = remember { DropTouch() }
  *  - rilasci dentro la goccia: scatta il click e torna indietro con un piccolo rimbalzo; rilasci fuori: torna indietro senza click.
  * Sono i punti in cui il dito resta fermo a lungo che "armano" lo stiramento: un gesto veloce lascia scorrere liste e pagine.
  */
-fun Modifier.dropTouch(
+fun Modifier.dropGestures(
     t: DropTouch,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     enabled: Boolean = true,
-    shrink: Boolean = false,
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val click by rememberUpdatedState(onClick)
     val long by rememberUpdatedState(onLongClick)
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val limit = with(density) { 44.dp.toPx() }
+    val limit = with(density) { 24.dp.toPx() }
     fun rubber(d: Float) = limit * (1f - kotlin.math.exp(-kotlin.math.abs(d) / limit)) * (if (d < 0f) -1f else 1f)
     this
         .semantics { role = Role.Button; this.onClick { click(); true } }
@@ -187,30 +187,29 @@ fun Modifier.dropTouch(
                 }
             }
         }
-        .graphicsLayer {
-            val p = t.press.value
-            val x = t.dx.value
-            val y = t.dy.value
-            val sx = abs(x) / size.width
-            val sy = abs(y) / size.height
-            translationX = x * 0.5f
-            translationY = y * 0.5f
-            // si allunga verso il dito: il perno sta sul lato opposto
-            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                0.5f - 0.42f * (x / limit).coerceIn(-1f, 1f),
-                0.5f - 0.42f * (y / limit).coerceIn(-1f, 1f),
-            )
-            val inflate = if (shrink) -0.035f else Goccia.INFLATE_X + 0.04f
-            val inflateY = if (shrink) -0.035f else Goccia.INFLATE_Y + 0.02f
-            scaleX = 1f + inflate * p + sx * 0.55f - sy * 0.12f
-            scaleY = 1f + inflateY * p + sy * 0.55f - sx * 0.16f
-        }
 }
 
-/** Riga/scheda cliccabile: al tocco si schiaccia appena, si può tirare come un elastico, torna con un piccolo rimbalzo. */
-fun Modifier.dropClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
+/**
+ * Deformazione del solo contenitore (mai del contenuto, che sta fuori da questo livello): resta ancorato al suo posto e si
+ * gonfia e si allunga di pochissimo, giusto quanto basta a dare l'idea di una goccia.
+ */
+fun Modifier.dropDeform(t: DropTouch): Modifier = this.graphicsLayer {
+    val p = t.press.value
+    val lim = 24.dp.toPx()
+    val sx = (abs(t.dx.value) / lim).coerceAtMost(1f)
+    val sy = (abs(t.dy.value) / lim).coerceAtMost(1f)
+    scaleX = 1f + 0.030f * p + 0.035f * sx - 0.010f * sy
+    scaleY = 1f + 0.010f * p + 0.035f * sy - 0.010f * sx
+}
+
+/** Riga/scheda cliccabile: non si muove; il contenitore si illumina appena mentre lo premi. */
+fun Modifier.dropClickable(onClick: () -> Unit, onLongClick: (() -> Unit)? = null, corner: Dp = Radius.xl): Modifier = composed {
     val t = rememberDropTouch()
-    this.dropTouch(t, onClick, onLongClick, shrink = true)
+    val dark = isDark()
+    this.drawBehind {
+        val p = t.press.value
+        if (p > 0.01f) drawRoundRect(Goccia.ink(dark).copy(alpha = 0.07f * p), cornerRadius = CornerRadius(corner.toPx()))
+    }.dropGestures(t, onClick, onLongClick)
 }
 
 /**

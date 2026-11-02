@@ -301,7 +301,7 @@ fun ArchiveScreen(r: Router) {
                 Column(
                     Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
                         .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
-                        .dropClickable({ open(e) }, { toDelete = e }).padding(Space.s2),
+                        .dropClickable({ open(e) }, { toDelete = e }, Radius.lg).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
                 ) {
                     val bmp by produceState<Bitmap?>(null, e.path) {
