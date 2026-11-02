@@ -7,6 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -62,7 +66,7 @@ private val CAT_COLORS = listOf(
     Color(0xFF3F86FF), Color(0xFF5DA85B), Color(0xFFE88A2E), Color(0xFF8E5BB5), Color(0xFFD9534F),
     Color(0xFF2FB5C4), Color(0xFFD9B73A), Color(0xFF6D7BFF), Color(0xFF9AA19A), Color(0xFF5DA85B),
 )
-private fun catColor(cat: String) = CAT_COLORS[CATEGORIES.indexOf(cat).coerceAtLeast(0) % CAT_COLORS.size]
+internal fun catColor(cat: String) = CAT_COLORS[CATEGORIES.indexOf(cat).coerceAtLeast(0) % CAT_COLORS.size]
 
 /** Colori e tagli delle banconote in euro. */
 private fun noteColor(d: Int) = when (d) {
@@ -83,7 +87,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     var cat by remember { mutableStateOf("") }
     var income by remember { mutableStateOf(false) }
     var revInput by remember { mutableStateOf("") }
-    var cashMode by remember { mutableIntStateOf(0) }            // 0 conta, 1 ho speso, 2 ho ricevuto
+    var cashMode by remember { mutableIntStateOf(1) }            // 1 ho speso, 2 ho ricevuto
     var tally by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var showNote by remember { mutableStateOf(false) }
 
@@ -145,12 +149,16 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     // ------------------------------------------------ cruscotto: solo grafici e tasti
                     item {
                         CCard {
-                            Text("Patrimonio", style = CanoneType.footnote, color = c.labelTertiary)
-                            CountUp(m.cashCents + m.revolutCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
-                            Trend(trend, c.accent, Modifier.fillMaxWidth().height(86.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
+                                EyeToggle(r)
+                            }
+                            CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
+                            Trend(trend, c.accent, Modifier.fillMaxWidth().height(96.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
                                 Column { Text("Contanti", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.cashCents, CanoneType.body, c.labelPrimary) }
                                 Column { Text("Revolut", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.revolutCents, CanoneType.body, c.labelPrimary) }
+                                Column { Text("Altro", style = CanoneType.footnote, color = c.labelTertiary); CountUp(m.otherCents, CanoneType.body, c.labelPrimary) }
                             }
                         }
                     }
@@ -158,7 +166,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             Action("−", "Spesa", true) { income = false; onSub("add") }
                             Action("+", "Entrata", false) { income = true; onSub("add") }
-                            Action("€", "Contanti", false) { onSub("cash") }
+                            Action("€", "Contanti", false) { cashMode = 1; tally = emptyMap(); onSub("cash") }
                             Action("R", "Revolut", false) { onSub("revolut") }
                             Action("≡", "Movimenti", false) { onSub("moves") }
                         }
@@ -184,7 +192,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 Kpi("Al giorno", if (daysIn > 0) spent / daysIn else 0, Modifier.weight(1f))
                             }
                             val diff = if (prevSpent > 0) ((spent - prevSpent) * 100 / prevSpent).toInt() else null
-                            if (diff != null) CBadge(if (diff > 0) "Spesa +$diff% sul periodo prima" else if (diff < 0) "Spesa $diff% sul periodo prima" else "Spesa invariata", if (diff > 0) Tone.Caution else Tone.Positive)
+                            if (diff != null) Text(if (diff > 0) "Spesa +$diff% rispetto al periodo prima" else if (diff < 0) "Spesa $diff% rispetto al periodo prima" else "Spesa invariata", style = CanoneType.footnote, color = if (diff > 0) c.critical else c.positive)
                         }
                     }
                     item {
@@ -207,71 +215,57 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item {
                         CCard {
                             SectionTitle("Dove vanno i soldi")
-                            val by = inPeriod.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }
-                            if (by.isEmpty()) CText("Nessuna spesa in questo periodo.", tertiary = true) else {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-                                    Donut(by.map { it.value.toFloat() to catColor(it.key) }, Modifier.size(128.dp))
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                        by.take(6).forEach { (k, v) ->
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                                Box(Modifier.size(8.dp).clip(CircleShape).background(catColor(k)))
-                                                Text(k, style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.weight(1f), maxLines = 1)
-                                                Text("${v * 100 / spent.coerceAtLeast(1)}%", style = CanoneType.footnote, color = c.labelTertiary)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            CategoryDonut(inPeriod.filter { it.cents < 0 }, "Nessuna spesa in questo periodo.")
                         }
                     }
                 }
 
                 "cash" -> {
+                    val tallyCents = tally.entries.sumOf { it.key.toLong() * it.value }
+                    val spend = cashMode != 2
                     item { Back("Contanti") }
+                    item { GlassSegmented(listOf("Ho speso", "Ho ricevuto"), if (spend) 0 else 1, { cashMode = if (it == 0) 1 else 2; tally = emptyMap() }) }
                     item {
-                        CCard {
-                            GlassSegmented(listOf("Conta", "Ho speso", "Ho ricevuto"), cashMode, { cashMode = it; tally = emptyMap() })
-                            val tallyCents = tally.entries.sumOf { it.key.toLong() * it.value }
-                            CountUp(if (cashMode == 0) m.cashCents else tallyCents, CanoneType.title1, if (cashMode == 1 && tallyCents > 0) c.criticalOnSubtle else c.labelPrimary)
-                            CText(
-                                when (cashMode) {
-                                    0 -> "Tocca una banconota per ogni pezzo che hai. Tieni premuto per toglierne una."
-                                    1 -> "Tocca le banconote che hai dato: escono dal portafoglio e diventano una spesa."
-                                    else -> "Tocca le banconote che hai preso: entrano nel portafoglio e diventano un'entrata."
-                                },
-                                tertiary = true,
-                            )
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CountUp(tallyCents, CanoneType.title1.copy(fontSize = 48.sp, fontWeight = FontWeight.SemiBold), if (tallyCents == 0L) c.labelTertiary else if (spend) c.critical else c.positive)
+                            Text("Nel portafoglio " + eur(m.cashCents), style = CanoneType.footnote, color = c.labelTertiary)
+                        }
+                    }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                             NOTES_EUR.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                                     pair.forEach { d ->
-                                        val n = if (cashMode == 0) m.cash[d] ?: 0 else tally[d] ?: 0
-                                        Banknote(d, n,
-                                            { if (cashMode == 0) r.finance.bump(d, 1) else tally = tally + (d to (tally[d] ?: 0) + 1) },
-                                            { if (cashMode == 0) r.finance.bump(d, -1) else tally = tally + (d to ((tally[d] ?: 0) - 1).coerceAtLeast(0)) },
+                                        Banknote(d, tally[d] ?: 0, m.cash[d] ?: 0,
+                                            { tally = tally + (d to (tally[d] ?: 0) + 1) },
+                                            { tally = tally + (d to ((tally[d] ?: 0) - 1).coerceAtLeast(0)) },
                                             Modifier.weight(1f))
                                     }
                                     if (pair.size == 1) Box(Modifier.weight(1f))
                                 }
                             }
-                            if (cashMode == 0) {
-                                if (m.cashCents > 0) CButton("Azzera", { r.finance.clearCash() }, Modifier.fillMaxWidth(), kind = ButtonKind.Tertiary)
-                            } else {
-                                if (cashMode == 1) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                    CATEGORIES.dropLast(1).forEach { k ->
-                                        val sel = cat == k
-                                        Box(Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken).dropClickable({ cat = if (sel) "" else k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
-                                            Text(k, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1)
-                                        }
-                                    }
+                            CText(if (spend) "Tocca le banconote che hai dato, tieni premuto per toglierne una." else "Tocca le banconote che hai preso, tieni premuto per toglierne una.", tertiary = true)
+                        }
+                    }
+                    if (spend) item {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                            CATEGORIES.dropLast(1).forEach { k ->
+                                val sel = cat == k
+                                Box(Modifier.clip(CircleShape).background(if (sel) c.accent else c.bgSunken).dropClickable({ cat = if (sel) "" else k }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                                    Text(k, style = CanoneType.footnote, color = if (sel) Color.White else c.labelSecondary, maxLines = 1)
                                 }
-                                CButton(if (cashMode == 1) "Registra spesa" else "Registra entrata", {
-                                    if (tallyCents == 0L) { toast(ctx, "Tocca almeno una banconota"); return@CButton }
-                                    tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (cashMode == 1) -n else n) }
-                                    r.finance.add(if (cashMode == 1) -tallyCents else tallyCents, if (cashMode == 1) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
-                                    tally = emptyMap(); cat = ""; cashMode = 0
-                                }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                             }
                         }
+                    }
+                    item {
+                        CButton(if (spend) "Registra spesa" else "Registra entrata", {
+                            if (tallyCents == 0L) { toast(ctx, "Tocca almeno una banconota"); return@CButton }
+                            val before = m.totalCents
+                            tally.forEach { (d, n) -> if (n > 0) r.finance.bump(d, if (spend) -n else n) }
+                            r.finance.add(if (spend) -tallyCents else tallyCents, if (spend) cat.ifEmpty { "Altro" } else "Entrate", "Contanti", "cash")
+                            Flash.show(before, r.finance.state.value.totalCents - before)
+                            tally = emptyMap(); cat = ""; onSub(null)
+                        }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                     }
                 }
 
@@ -310,7 +304,9 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 val v = r.finance.toCents(amount)
                                 if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }
                                 val k = if (cat.isNotEmpty()) cat else if (income) "Entrate" else r.finance.guess(note)
+                                val before = r.finance.state.value.totalCents
                                 r.finance.add(if (income) v else -v, k, note.trim())
+                                Flash.show(before, if (income) v else -v)
                                 amount = ""; note = ""; cat = ""; showNote = false; onSub(null)
                             }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                         }
@@ -343,8 +339,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         CCard {
                             CountUp(m.revolutCents, CanoneType.title1, c.labelPrimary)
                             CRow("Pagamenti dalle notifiche", "Ogni pagamento che Revolut ti notifica entra da solo") {
-                                if (listenerEnabled(ctx)) CBadge("Attivo", Tone.Positive)
-                                else CButton("Attiva", { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, kind = ButtonKind.Primary)
+                                GrantMark(listenerEnabled(ctx)) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
                             }
                             CButton("Importa estratto (CSV)", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth())
                             CField("Imposta il saldo a mano", revInput, { revInput = it }, "0,00", number = true)
@@ -408,13 +403,13 @@ private fun TxRow(t: Tx, ctx: android.content.Context, onDelete: () -> Unit) {
 
 /** Banconota disegnata: colore e taglio come l'euro vero, con la finestra ad arco e i cerchi concentrici. Tocco = una in più, pressione lunga = una in meno. */
 @Composable
-private fun Banknote(denom: Int, count: Int, onAdd: () -> Unit, onSub: () -> Unit, modifier: Modifier) {
+private fun Banknote(denom: Int, count: Int, owned: Int, onAdd: () -> Unit, onSub: () -> Unit, modifier: Modifier) {
     val touch = rememberDropTouch()
     val base = noteColor(denom)
     Box(modifier.aspectRatio(2.05f).dropGestures(touch, onAdd, onSub)) {
         Box(Modifier.fillMaxSize().dropDeform(touch).clip(RoundedCornerShape(10.dp))) {
             Canvas(Modifier.fillMaxSize()) {
-                val a = if (count > 0) 1f else 0.5f
+                val a = if (count > 0) 1f else 0.62f
                 drawRect(Brush.linearGradient(listOf(base.copy(alpha = a), Color.White.copy(alpha = 0.35f * a).compositeOver(base))))
                 val w = size.width; val h = size.height
                 // margine interno chiaro
@@ -435,7 +430,8 @@ private fun Banknote(denom: Int, count: Int, onAdd: () -> Unit, onSub: () -> Uni
         }
         if (count > 0) Box(
             Modifier.align(Alignment.TopStart).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 9.dp, vertical = 3.dp),
-        ) { Text("×$count", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = Color.White) }
+        ) { RollingText("×$count", CanoneType.footnote.copy(fontWeight = FontWeight.Medium), Color.White) }
+        if (owned > 0) Text("hai $owned", style = CanoneType.footnote.copy(fontSize = 10.sp), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 10.dp))
     }
 }
 
@@ -453,78 +449,176 @@ private fun rememberGrow(key: Any): Float {
 
 /** Cifra in euro che rotola verso il nuovo valore. */
 @Composable
-private fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, color: Color) = RollingText(eur(cents), style, color)
+internal fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, color: Color) {
+    if (MoneyPrivacy.hidden) Text(MoneyPrivacy.MASK, style = style, color = color, maxLines = 1)
+    else RollingText(eur(cents), style, color, haptic = true)
+}
+
+/** Occhio per nascondere o mostrare gli importi (vale per Home e Finanze). */
+@Composable
+internal fun EyeToggle(r: Router) {
+    val c = Canone.colors
+    val t = rememberDropTouch()
+    Box(
+        Modifier.size(36.dp).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).dropDeform(t).drop(isDark(), press = { t.press.value }),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(20.dp)) {
+            val w = size.width; val h = size.height
+            val eye = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.05f, h * 0.5f); quadraticTo(w * 0.5f, h * 0.05f, w * 0.95f, h * 0.5f); quadraticTo(w * 0.5f, h * 0.95f, w * 0.05f, h * 0.5f); close()
+            }
+            drawPath(eye, c.labelSecondary, style = Stroke(w * 0.08f))
+            drawCircle(c.labelSecondary, w * 0.14f, Offset(w / 2, h / 2), style = Stroke(w * 0.08f))
+            if (MoneyPrivacy.hidden) drawLine(c.labelSecondary, Offset(w * 0.12f, h * 0.12f), Offset(w * 0.88f, h * 0.88f), w * 0.08f, StrokeCap.Round)
+        }
+    }
+}
+
+/** Ciambella per categoria con legenda: tocca uno spicchio o una voce e al centro compare l'importo preciso. */
+@Composable
+internal fun CategoryDonut(list: List<Tx>, empty: String) {
+    val c = Canone.colors
+    val by = list.groupBy { it.cat }.mapValues { kotlin.math.abs(it.value.sumOf { t -> t.cents }) }.entries.sortedByDescending { it.value }
+    if (by.isEmpty()) { CText(empty, tertiary = true); return }
+    val total = by.sumOf { it.value }.coerceAtLeast(1)
+    var sel by remember(by) { mutableStateOf<Int?>(null) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s4), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(132.dp), contentAlignment = Alignment.Center) {
+            Donut(by.map { it.value.toFloat() to catColor(it.key) }, Modifier.fillMaxSize(), sel) { sel = if (sel == it) null else it }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val s = sel
+                Text(if (s == null) "Totale" else by[s].key, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+                CountUp(if (s == null) total else by[s].value, CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+            by.take(6).forEachIndexed { i, (k, v) ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.sm)).background(if (sel == i) c.bgSunken else Color.Transparent)
+                        .dropClickable({ sel = if (sel == i) null else i }, corner = Radius.sm).padding(horizontal = Space.s1, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2),
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(catColor(k)))
+                    Text(k, style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.weight(1f), maxLines = 1)
+                    Text("${v * 100 / total}%", style = CanoneType.footnote, color = c.labelTertiary)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun BarChart(bars: List<Triple<String, Long, Long>>, income: Color, spend: Color) {
     val c = Canone.colors
     val grow = rememberGrow(bars)
+    var sel by remember(bars) { mutableStateOf<Int?>(null) }
     val max = (bars.maxOfOrNull { maxOf(it.second, it.third) } ?: 0L).coerceAtLeast(1L)
     Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+        // valore preciso della colonna toccata
+        Row(Modifier.fillMaxWidth().height(22.dp), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
+            val s = sel
+            if (s == null) Text("Tocca una colonna", style = CanoneType.footnote, color = c.labelTertiary)
+            else {
+                Text(bars[s].first, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+                Text("+" + if (MoneyPrivacy.hidden) "••" else eur(bars[s].second), style = CanoneType.footnote, color = income)
+                Text("−" + if (MoneyPrivacy.hidden) "••" else eur(bars[s].third), style = CanoneType.footnote, color = c.labelSecondary)
+            }
+        }
+        Canvas(Modifier.fillMaxWidth().height(130.dp).pointerInput(bars) {
+            detectTapGestures { o -> val i = (o.x / (size.width / bars.size)).toInt().coerceIn(0, bars.size - 1); sel = if (sel == i) null else i }
+        }) {
             val slot = size.width / bars.size
             val bw = slot * 0.30f
             for (g in 1..3) drawLine(c.lineSeparator, Offset(0f, size.height * g / 4f), Offset(size.width, size.height * g / 4f), 1f)
             bars.forEachIndexed { i, (_, inc, out) ->
                 val x = i * slot + slot / 2f
+                val dim = if (sel == null || sel == i) 1f else 0.35f
+                if (sel == i) drawRoundRect(c.bgSunken, Offset(i * slot + 2f, 0f), Size(slot - 4f, size.height), CornerRadius(10f))
                 val hi = size.height * inc / max * grow; val ho = size.height * out / max * grow
-                drawRoundRect(Brush.verticalGradient(listOf(income, income.copy(alpha = 0.55f)), startY = size.height - hi, endY = size.height), Offset(x - bw - 1f, size.height - hi), Size(bw, hi.coerceAtLeast(2f)), CornerRadius(6f))
-                drawRoundRect(Brush.verticalGradient(listOf(spend, spend.copy(alpha = 0.5f)), startY = size.height - ho, endY = size.height), Offset(x + 1f, size.height - ho), Size(bw, ho.coerceAtLeast(2f)), CornerRadius(6f))
+                drawRoundRect(Brush.verticalGradient(listOf(income.copy(alpha = dim), income.copy(alpha = 0.55f * dim)), startY = size.height - hi, endY = size.height), Offset(x - bw - 1f, size.height - hi), Size(bw, hi.coerceAtLeast(2f)), CornerRadius(6f))
+                drawRoundRect(Brush.verticalGradient(listOf(spend.copy(alpha = dim), spend.copy(alpha = 0.5f * dim)), startY = size.height - ho, endY = size.height), Offset(x + 1f, size.height - ho), Size(bw, ho.coerceAtLeast(2f)), CornerRadius(6f))
             }
         }
-        Row(Modifier.fillMaxWidth()) { bars.forEach { Text(it.first, style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+        Row(Modifier.fillMaxWidth()) { bars.forEachIndexed { i, b -> Text(b.first, style = CanoneType.footnote, color = if (sel == i) c.labelPrimary else c.labelTertiary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
     }
 }
 
 @Composable
-private fun Donut(parts: List<Pair<Float, Color>>, modifier: Modifier) {
+internal fun Donut(parts: List<Pair<Float, Color>>, modifier: Modifier, selected: Int? = null, onSelect: (Int) -> Unit = {}) {
     val grow = rememberGrow(parts)
     val total = parts.sumOf { it.first.toDouble() }.toFloat().coerceAtLeast(1f)
-    Canvas(modifier) {
-        val sw = size.minDimension * 0.17f
+    Canvas(modifier.pointerInput(parts) {
+        detectTapGestures { o ->
+            val dx = o.x - size.width / 2f; val dy = o.y - size.height / 2f
+            var ang = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat() + 90f
+            if (ang < 0) ang += 360f
+            var acc = 0f
+            parts.forEachIndexed { i, (v, _) -> val sw = 360f * v / total; if (ang >= acc && ang < acc + sw) { onSelect(i); return@detectTapGestures }; acc += sw }
+        }
+    }) {
+        val sw = size.minDimension * 0.15f
         var start = -90f
-        parts.forEach { (v, col) ->
+        parts.forEachIndexed { i, (v, col) ->
             val sweep = 360f * v / total * grow
-            drawArc(col, start, (sweep - 2f).coerceAtLeast(0.5f), false, Offset(sw / 2, sw / 2), Size(size.width - sw, size.height - sw), style = Stroke(sw, cap = StrokeCap.Butt))
+            val on = selected == null || selected == i
+            val w = if (selected == i) sw * 1.35f else sw
+            drawArc(col.copy(alpha = if (on) 1f else 0.3f), start, (sweep - 2f).coerceAtLeast(0.5f), false, Offset(sw * 0.7f, sw * 0.7f), Size(size.width - sw * 1.4f, size.height - sw * 1.4f), style = Stroke(w, cap = StrokeCap.Butt))
             start += sweep
         }
     }
 }
 
-/** Andamento cumulato (entrate − uscite) nel periodo, disegnato progressivamente con l'area sotto. */
+/** Andamento cumulato (entrate − uscite) nel periodo: si disegna progressivamente; tocca o trascina per leggere il valore di un giorno. */
 @Composable
 private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
+    val c = Canone.colors
     val grow = rememberGrow(points)
-    Canvas(modifier) {
-        if (points.size < 2) return@Canvas
-        val lo = minOf(points.min(), 0f); val hi = maxOf(points.max(), 1f)
-        fun y(v: Float) = size.height * (1f - (v - lo) / (hi - lo)) * 0.86f + size.height * 0.07f
-        val n = ((points.size - 1) * grow).coerceAtLeast(0.01f)
-        val line = androidx.compose.ui.graphics.Path()
-        val area = androidx.compose.ui.graphics.Path()
-        var lastX = 0f; var lastY = 0f
-        for (i in 0..n.toInt()) {
-            val x = size.width * i / (points.size - 1); val yy = y(points[i])
-            if (i == 0) { line.moveTo(x, yy); area.moveTo(x, size.height); area.lineTo(x, yy) } else { line.lineTo(x, yy); area.lineTo(x, yy) }
-            lastX = x; lastY = yy
+    var sel by remember(points) { mutableStateOf<Int?>(null) }
+    Box(modifier) {
+        Canvas(Modifier.fillMaxSize().pointerInput(points) {
+            fun pick(x: Float) { if (points.size > 1) sel = ((x / size.width) * (points.size - 1)).roundToInt().coerceIn(0, points.size - 1) }
+            detectDragGestures(onDragStart = { pick(it.x) }, onDragEnd = { sel = null }, onDragCancel = { sel = null }) { ch, _ -> ch.consume(); pick(ch.position.x) }
+        }.pointerInput(points) { detectTapGestures { o -> if (points.size > 1) { val i = ((o.x / size.width) * (points.size - 1)).roundToInt(); sel = if (sel == i) null else i } } }) {
+            if (points.size < 2) return@Canvas
+            val lo = minOf(points.min(), 0f); val hi = maxOf(points.max(), 1f)
+            fun y(v: Float) = size.height * (1f - (v - lo) / (hi - lo)) * 0.86f + size.height * 0.07f
+            val n = ((points.size - 1) * grow).coerceAtLeast(0.01f)
+            val line = androidx.compose.ui.graphics.Path()
+            val area = androidx.compose.ui.graphics.Path()
+            var lastX = 0f; var lastY = 0f
+            for (i in 0..n.toInt()) {
+                val x = size.width * i / (points.size - 1); val yy = y(points[i])
+                if (i == 0) { line.moveTo(x, yy); area.moveTo(x, size.height); area.lineTo(x, yy) } else { line.lineTo(x, yy); area.lineTo(x, yy) }
+                lastX = x; lastY = yy
+            }
+            val fi = n.toInt()
+            if (fi < points.size - 1) {
+                val t = n - fi
+                val nx = size.width * (fi + 1) / (points.size - 1); val ny = y(points[fi + 1])
+                lastX += (nx - lastX) * t; lastY += (ny - lastY) * t
+                line.lineTo(lastX, lastY); area.lineTo(lastX, lastY)
+            }
+            area.lineTo(lastX, size.height); area.close()
+            drawLine(c.lineSeparator, Offset(0f, y(0f)), Offset(size.width, y(0f)), 1f)
+            drawPath(area, Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), Color.Transparent)))
+            drawPath(line, accent, style = Stroke(3f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            val s = sel
+            if (s != null) {
+                val x = size.width * s / (points.size - 1); val yy = y(points[s])
+                drawLine(c.labelTertiary, Offset(x, 0f), Offset(x, size.height), 1.5f)
+                drawCircle(accent, 7f, Offset(x, yy)); drawCircle(Color.White, 3f, Offset(x, yy))
+            } else { drawCircle(accent, 6f, Offset(lastX, lastY)); drawCircle(Color.White.copy(alpha = 0.9f), 2.5f, Offset(lastX, lastY)) }
         }
-        val fi = n.toInt()
-        if (fi < points.size - 1) {
-            val t = n - fi
-            val nx = size.width * (fi + 1) / (points.size - 1); val ny = y(points[fi + 1])
-            lastX += (nx - lastX) * t; lastY += (ny - lastY) * t
-            line.lineTo(lastX, lastY); area.lineTo(lastX, lastY)
-        }
-        area.lineTo(lastX, size.height); area.close()
-        drawLine(Color.White.copy(alpha = 0.12f), Offset(0f, y(0f)), Offset(size.width, y(0f)), 1f)
-        drawPath(area, Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), Color.Transparent)))
-        drawPath(line, accent, style = Stroke(3f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-        drawCircle(accent, 6f, Offset(lastX, lastY)); drawCircle(Color.White.copy(alpha = 0.9f), 2.5f, Offset(lastX, lastY))
+        val s = sel
+        if (s != null) Text(
+            "${s + 1} · " + (if (MoneyPrivacy.hidden) "••" else eur((points[s] * 100).toLong())),
+            style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary,
+            modifier = Modifier.align(Alignment.TopStart).clip(RoundedCornerShape(Radius.sm)).background(c.bgSunken).padding(horizontal = Space.s2, vertical = 2.dp),
+        )
     }
 }
 
-
-/** Tastierino numerico: tasti-goccia grandi, virgola e cancella (tieni premuto per azzerare). Massimo due decimali. */
 @Composable
 private fun AmountPad(value: String, onChange: (String) -> Unit) {
     fun press(k: String) {
@@ -546,11 +640,13 @@ private fun AmountPad(value: String, onChange: (String) -> Unit) {
                 row.forEach { k ->
                     val t = rememberDropTouch()
                     val dark = isDark()
-                    Box(
-                        Modifier.weight(1f).height(58.dp).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
-                            .dropDeform(t).drop(dark, corner = 22.dp, press = { t.press.value }),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(70.dp).dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
+                                .dropDeform(t).drop(dark, press = { t.press.value }),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = Canone.colors.labelPrimary) }
+                    }
                 }
             }
         }

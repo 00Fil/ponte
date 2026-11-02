@@ -140,17 +140,26 @@ private fun decodeThumb(path: String): Bitmap? {
     return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = s })
 }
 
-/** Condividi: tutto quello che passa tra i dispositivi in un posto solo — appunti, screenshot e file — con un selettore in alto. */
+/**
+ * Condividi: in alto i dispositivi e i tasti rapidi (invia appunti, invia file, backup), poi le tre schede Appunti, Immagini e File.
+ * Immagini e file si possono ordinare in cartelle; tenendo premuto un elemento compare l'anteprima con le azioni.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ShareList(r: Router, tab: Int, onTab: (Int) -> Unit, onBack: () -> Unit) {
+fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: () -> Unit) {
     val ctx = LocalContext.current
     val c = Canone.colors
     val all by r.files.items.collectAsState()
     val history by r.clipboard.history.collectAsState()
-    var toDelete by remember { mutableStateOf<FileEntry?>(null) }
-    val filter = if (tab == 1) "screenshot" else if (tab == 2) "file" else ""
-    val list = if (tab == 0) emptyList() else all.filter { it.kind == filter }
+    val keys = listOf("clips", "images", "files")
+    val tab = keys.indexOf(tabKey).coerceAtLeast(0)
+    var folders by remember { mutableStateOf(r.prefs.folders) }
+    var placed by remember { mutableStateOf(r.prefs.fileFolders) }
+    var folder by remember { mutableStateOf<String?>(null) }
+    var newFolder by remember { mutableStateOf<String?>(null) }
+    var peek by remember { mutableStateOf<FileEntry?>(null) }
+    val filter = if (tab == 1) "screenshot" else "file"
+    val list = if (tab == 0) emptyList() else all.filter { it.kind == filter && (folder == null || placed[it.fid] == folder) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -179,91 +188,153 @@ private fun ShareList(r: Router, tab: Int, onTab: (Int) -> Unit, onBack: () -> U
             toast(ctx, "Nessuna app può aprire questo file")
         }
     }
+    fun place(e: FileEntry, f: String?) {
+        placed = if (f == null) placed - e.fid else placed + (e.fid to f)
+        r.prefs.fileFolders = placed
+    }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(
-            GridCells.Adaptive(160.dp), Modifier.widthIn(max = 1024.dp).fillMaxHeight(),
-            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s5, bottom = Space.s5 + LocalBarInset.current),
+            GridCells.Adaptive(150.dp), Modifier.widthIn(max = 1024.dp).fillMaxHeight(),
+            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = Space.s5 + LocalBarInset.current),
             horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
-            item(key = "back", span = { GridItemSpan(maxLineSpan) }) { BackRow("Condividi", listOf("Appunti", "Immagini", "File")[tab], onBack) }
+            item(key = "dev", span = { GridItemSpan(maxLineSpan) }) { DevicesCard(r) }
+            item(key = "act", span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Action("", "Invia appunti", true, glyph = 2) { toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare") }
+                    Action("", "Invia file", false, glyph = 7) { picker.launch(arrayOf("*/*")) }
+                    Action("", "Backup", false, glyph = 8) { onBackup() }
+                }
+            }
             item(key = "seg", span = { GridItemSpan(maxLineSpan) }) {
-                GlassSegmented(listOf("Appunti", "Immagini", "File"), tab, onTab)
+                GlassSegmented(listOf("Appunti", "Immagini", "File"), tab, { onTab(keys[it]); folder = null })
             }
             if (tab == 0) {
-                item(key = "send", span = { GridItemSpan(maxLineSpan) }) {
-                    CButton("Invia appunti", {
-                        toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare")
-                    }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-                }
-                if (history.isEmpty()) {
-                    item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
-                        CCard { CText("Niente per ora. Copia su un altro dispositivo e arriva qui.") }
-                    }
+                if (history.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
+                    CText("Niente per ora. Copia su un altro dispositivo e arriva qui.", tertiary = true)
                 }
                 items(history, key = { "c" + it.ts + it.text.hashCode() }, span = { GridItemSpan(maxLineSpan) }) { h ->
-                    CCard(Modifier.dropClickable({ r.clipboard.copyLocal(h.text); toast(ctx, "Copiato") })) {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).dropClickable({ r.clipboard.copyLocal(h.text); toast(ctx, "Copiato") }, corner = Radius.lg).padding(Space.s3),
+                        verticalArrangement = Arrangement.spacedBy(Space.s1),
+                    ) {
                         Text(h.text, style = CanoneType.body, color = c.labelPrimary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                         Text((if (h.mine) "Da qui" else r.deviceName(h.from)) + " · " + time(h.ts, ctx) + " · tocca per copiare", style = CanoneType.footnote, color = c.labelTertiary)
                     }
                 }
             } else {
-                item(key = "sendf", span = { GridItemSpan(maxLineSpan) }) {
-                    CButton("Invia file", { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
-                }
-                if (list.isEmpty()) {
-                    item(key = "nonef", span = { GridItemSpan(maxLineSpan) }) {
-                        CCard { CText(if (tab == 1) "Nessuna immagine. Fai uno screenshot su un dispositivo collegato e arriva qui." else "Nessun file. Mandane uno da qualsiasi dispositivo.") }
+                item(key = "folders", span = { GridItemSpan(maxLineSpan) }) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        (listOf<String?>(null) + folders).forEach { f ->
+                            val on = folder == f
+                            Box(
+                                Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.accent else c.bgSunken)
+                                    .dropClickable({ folder = f }, if (f != null) ({
+                                        folders = folders - f; r.prefs.folders = folders
+                                        placed = placed.filterValues { it != f }; r.prefs.fileFolders = placed
+                                        if (folder == f) folder = null
+                                        toast(ctx, "Cartella $f eliminata")
+                                    }) else null, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2),
+                            ) { Text(f ?: "Tutte", style = CanoneType.footnote, color = if (on) Color.White else c.labelSecondary, maxLines = 1) }
+                        }
+                        Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken).dropClickable({ newFolder = "" }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                            Text("+ Cartella", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+                        }
                     }
+                }
+                if (list.isEmpty()) item(key = "nonef", span = { GridItemSpan(maxLineSpan) }) {
+                    CText(
+                        if (folder != null) "Cartella vuota. Tieni premuto un elemento per spostarlo qui."
+                        else if (tab == 1) "Nessuna immagine. Fai uno screenshot su un dispositivo collegato e arriva qui."
+                        else "Nessun file. Mandane uno da qualsiasi dispositivo.",
+                        tertiary = true,
+                    )
                 }
             }
             items(list, key = { it.fid }) { e ->
                 Column(
                     Modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
                         .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
-                        .dropClickable({ open(e) }, { toDelete = e }, Radius.lg).padding(Space.s2),
+                        .dropClickable({ open(e) }, { peek = e }, Radius.lg).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
                 ) {
                     val bmp by produceState<Bitmap?>(null, e.path) {
                         value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null
                     }
-                    // Raggio interno = 20 - margine 8 = 12.
-                    Box(Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(Radius.lg - Space.s2)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(1.3f).clip(RoundedCornerShape(Radius.lg - Space.s2)).background(c.bgSunken), contentAlignment = Alignment.Center) {
                         bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                             ?: Text(e.name.substringAfterLast('.', "file").take(5), style = CanoneType.figure, color = c.labelTertiary)
                     }
-                    Column(Modifier.padding(horizontal = Space.s2).padding(bottom = Space.s2)) {
+                    Column(Modifier.padding(horizontal = Space.s2).padding(bottom = Space.s1)) {
                         Text(e.name, style = CanoneType.footnote, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(Formatter.formatShortFileSize(ctx, e.size) + " · " + dateTime(e.ts, ctx), style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text((placed[e.fid]?.let { "$it · " } ?: "") + Formatter.formatShortFileSize(ctx, e.size), style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
     }
 
-    viewing?.let { i ->
-        PhotoViewer(images, i, onShare = { share(it) }, onClose = { viewing = null })
-    }
+    viewing?.let { i -> PhotoViewer(images, i, onShare = { share(it) }, onClose = { viewing = null }) }
 
-    toDelete?.let { e ->
+    peek?.let { e -> Peek(e, folders, placed[e.fid], onShare = { share(e) }, onFolder = { f -> place(e, f) }, onDelete = { r.files.delete(e); peek = null }) { peek = null } }
+
+    newFolder?.let { name ->
         AlertDialog(
-            onDismissRequest = { toDelete = null },
+            onDismissRequest = { newFolder = null },
             containerColor = c.bgSurface,
             shape = RoundedCornerShape(36.dp),
-            title = { Text(e.name, style = CanoneType.title3, color = c.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = { Text("Condividi lo manda a WhatsApp o a un'altra app. Elimina lo toglie solo da questo dispositivo.", style = CanoneType.body, color = c.labelSecondary) },
-            dismissButton = { CButton("Elimina", { r.files.delete(e); toDelete = null }, kind = ButtonKind.Destructive) },
+            title = { Text("Nuova cartella", style = CanoneType.title3, color = c.labelPrimary) },
+            text = { CField("Nome", name, { newFolder = it }, "Lavoro, Università…") },
+            dismissButton = { CButton("Annulla", { newFolder = null }, kind = ButtonKind.Tertiary) },
             confirmButton = {
-                CButton("Condividi", {
-                    toDelete = null
-                    val send = Intent(Intent.ACTION_SEND)
-                        .setType(if (e.mime.startsWith("text/")) "application/octet-stream" else e.mime)
-                        .putExtra(Intent.EXTRA_STREAM, r.files.uriFor(e))
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    try { ctx.startActivity(Intent.createChooser(send, e.name)) } catch (_: ActivityNotFoundException) { toast(ctx, "Nessuna app può riceverlo") }
+                CButton("Crea", {
+                    val n = name.trim()
+                    if (n.isNotEmpty() && n !in folders) { folders = folders + n; r.prefs.folders = folders; folder = n }
+                    newFolder = null
                 }, kind = ButtonKind.Primary)
             },
         )
+    }
+}
+
+/** Anteprima tenendo premuto: l'immagine si apre con una molla al centro, sotto le azioni e le cartelle. Tocca fuori per chiudere. */
+@Composable
+private fun Peek(e: FileEntry, folders: List<String>, current: String?, onShare: () -> Unit, onFolder: (String?) -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+    val c = Canone.colors
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(e.fid) { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
+    val bmp by produceState<Bitmap?>(null, e.path) { value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null }
+    val grow = remember { androidx.compose.animation.core.Animatable(0.82f) }
+    LaunchedEffect(e.fid) { grow.animateTo(1f, androidx.compose.animation.core.spring(0.7f, 320f)) }
+    androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                Modifier.padding(Space.s5).graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.82f) / 0.18f).coerceIn(0f, 1f) },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4),
+            ) {
+                Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
+                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxWidth(), contentScale = ContentScale.Fit) }
+                        ?: Text(e.name, style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s6))
+                }
+                Text(e.name, style = CanoneType.footnote, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (folders.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    (listOf<String?>(null) + folders).forEach { f ->
+                        val on = current == f
+                        Box(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(if (on) c.accent else c.bgSurface).dropClickable({ onFolder(f) }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                            Text(f ?: "Nessuna cartella", style = CanoneType.footnote, color = if (on) Color.White else c.labelSecondary, maxLines = 1)
+                        }
+                    }
+                }
+                Row(Modifier.clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface).padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s5)) {
+                    Action("↗", "Condividi", true, onClick = onShare)
+                    Action("✕", "Elimina", false, onClick = onDelete)
+                }
+            }
+        }
     }
 }
 
@@ -328,9 +399,8 @@ private fun DevicesCard(r: Router) {
                     }
                     Column(Modifier.weight(1f)) {
                         Text(d.name + if (d.id == r.deviceId) " (questo)" else "", style = CanoneType.body, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (d.id == r.deviceId) "Android" else if (d.platform == "windows") "Windows" else "Android", style = CanoneType.footnote, color = c.labelTertiary)
+                        Text(if (d.id == r.deviceId) "Android · questo" else (if (d.platform == "windows") "Windows" else "Android") + " · " + when (d.via) { "lan" -> "diretto"; "bt" -> "Bluetooth"; else -> "server" }, style = CanoneType.footnote, color = c.labelTertiary)
                     }
-                    if (d.id != r.deviceId) CBadge(when (d.via) { "lan" -> "Diretto"; "bt" -> "Bluetooth"; else -> "Server" }, if (d.via == "server") Tone.Neutral else Tone.Accent)
                     Text(if (sel) "⌃" else "⌄", style = CanoneType.body, color = c.labelTertiary)
                 }
             }
@@ -369,109 +439,142 @@ private fun DevicesCard(r: Router) {
 }
 
 
-/** Condividi: dashboard con dispositivi, contatori e tasti rapidi; da qui si apre ogni funzione (appunti, immagini, file, dispositivi, backup). */
-@Composable
-fun ShareScreen(r: Router, sub: String?, onSub: (String?) -> Unit, onBackup: () -> Unit) {
-    val tabs = listOf("clips", "images", "files")
-    ModuleSwitch(sub) { s ->
-        when (s) {
-            null -> ShareDashboard(r, onSub, onBackup)
-            else -> ShareList(r, tabs.indexOf(s).coerceAtLeast(0), { onSub(tabs[it]) }) { onSub(null) }
-        }
-    }
-}
-
-@Composable
-private fun ShareDashboard(r: Router, go: (String?) -> Unit, onBackup: () -> Unit) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
-    val devices by r.devices.collectAsState()
-    val hub by r.hubState.collectAsState()
-    val clips by r.clipboard.history.collectAsState()
-    val files by r.files.items.collectAsState()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            val name = ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "file"
-            val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
-            toast(ctx, "File in invio")
-            r.scope.launch { r.files.sendUri(uri, name, mime, "file") }
-        }
-    }
-    val shots = files.count { it.kind == "screenshot" }
-    ScreenList("Condividi") {
-        item { DevicesCard(r) }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Action("", "Invia appunti", true, glyph = 2) { toast(ctx, if (r.clipboard.sendCurrent()) "Appunti inviati" else "Negli appunti non c'è niente da inviare") }
-                Action("", "Invia file", false, glyph = 7) { picker.launch(arrayOf("*/*")) }
-                Action("", "Backup", false, glyph = 8) { onBackup() }
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                NavTile(2, "Appunti", "${clips.size}", clips.firstOrNull()?.text?.take(24) ?: "in cronologia", TINT_B, Modifier.weight(1f)) { go("clips") }
-                NavTile(3, "Immagini", "$shots", "screenshot", TINT_C, Modifier.weight(1f)) { go("images") }
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                NavTile(7, "File", "${files.count { it.kind != "screenshot" }}", "condivisi", TINT_A, Modifier.weight(1f)) { go("files") }
-                NavTile(8, "Backup", "Server", "file, contatti, SMS, app", TINT_D, Modifier.weight(1f)) { onBackup() }
-            }
-        }
-    }
-}
-
-
 // ---------------------------------------------------------------- Audio
+/**
+ * Audio: le cuffie con l'immagine del dispositivo e la batteria, cosa sta suonando con i controlli, il volume,
+ * dove esce l'audio e l'ascolto dal PC. Le regole tecniche stanno in Impostazioni → Audio.
+ */
 @Composable
 fun AudioScreen(r: Router, openSettings: () -> Unit = {}) {
     val c = Canone.colors
+    val ctx = LocalContext.current
     val devices by r.devices.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val sources = devices.filter { "audio-src" in it.caps }
     val hps by r.headphones.list.collectAsState()
     val holder by r.headphones.holder.collectAsState()
-    val focus by r.headphones.focus.collectAsState()
     val lockedBy by r.headphones.lockedBy.collectAsState()
     val preferred = r.prefs.preferredHp
-    fun who(id: String?) = when (id) { null -> "Libere"; r.deviceId -> "Su questo dispositivo"; else -> "Su " + r.deviceName(id) }
+    val np = rememberNowPlaying()
+    val am = remember { ctx.getSystemService(android.media.AudioManager::class.java) }
+    val maxVol = remember { am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var vol by remember { mutableIntStateOf(am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(4000); tick++; vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) } }
+    val connected = hps.firstOrNull { it.connected && (it.address == preferred || it.address in r.prefs.headphones) } ?: hps.firstOrNull { it.connected }
+    val battery = remember(connected?.address, tick) { connected?.let { headphonesBattery(ctx, it.address) } }
+    val out = remember(tick, holder) { outputName(ctx) }
+    fun who(id: String?) = when (id) { null -> "Libere"; r.deviceId -> "Su questo telefono"; else -> "Su " + r.deviceName(id) }
     val glow by androidx.compose.animation.core.animateFloatAsState(if (holder == r.deviceId) 1f else 0f, androidx.compose.animation.core.tween(500), label = "luce")
+    val pic = DevicePics.rememberPic(holder)
+
     ScreenList("Audio") {
+        // ------------------------------------------------ cuffie
+        item {
+            val shape = RoundedCornerShape(Radius.xl)
+            Column(Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
+                Column(Modifier.fillMaxWidth().background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+                        Box(
+                            Modifier.size(92.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.10f + 0.25f * glow), c.bgSunken))),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                            else TabGlyph(4, c.accentOnSubtle, false, Modifier.size(40.dp))
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(connected?.name ?: "Cuffie", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+                            Text(who(holder), style = CanoneType.title3, color = c.labelPrimary, maxLines = 2)
+                            if (battery != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                                Box(Modifier.size(28.dp, 12.dp).clip(RoundedCornerShape(3.dp)).background(c.bgSunken)) {
+                                    Box(Modifier.fillMaxHeight().fillMaxWidth(battery / 100f).background(if (battery < 20) c.critical else c.positive))
+                                }
+                                RollingText("$battery%", CanoneType.footnote, c.labelSecondary)
+                            }
+                            if (lockedBy != null) Text("Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() }, style = CanoneType.footnote, color = c.labelTertiary)
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        CButton(if (lockedBy == r.deviceId) "Sblocca" else "Tienile qui", { r.headphones.toggleLock() },
+                            Modifier.weight(1f), kind = if (lockedBy == r.deviceId) ButtonKind.Secondary else ButtonKind.Primary)
+                        if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
+                            CButton("Portale qui", { r.headphones.connectHere(preferred) }, Modifier.weight(1f))
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().background(c.bgSunken).padding(horizontal = Space.s4, vertical = Space.s3), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Esce da", style = CanoneType.footnote, color = c.labelTertiary)
+                    Text(out, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
+                }
+            }
+        }
+        // ------------------------------------------------ in riproduzione
         item {
             CCard {
-                val pic = DevicePics.rememberPic(holder)
-                Box(
-                    Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(Radius.lg))
-                        .background(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.22f * glow), Color.Transparent))),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(Space.s3), contentScale = ContentScale.Fit)
-                    else TabGlyph(4, c.labelTertiary, false, Modifier.size(72.dp))
-                }
-                Text(who(holder), style = CanoneType.title2, color = c.labelPrimary)
-                Text(
-                    if (lockedBy != null) "Bloccate " + who(lockedBy).replaceFirstChar { it.lowercase() } else "Seguono dove ascolti.",
-                    style = CanoneType.footnote, color = c.labelTertiary,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    CButton(if (lockedBy == r.deviceId) "Sblocca" else "Tienile qui", { r.headphones.toggleLock() },
-                        Modifier.weight(1f), kind = if (lockedBy == r.deviceId) ButtonKind.Secondary else ButtonKind.Primary)
-                    if (preferred.isNotEmpty() && hps.none { it.address == preferred && it.connected }) {
-                        CButton("Portale qui", { r.headphones.connectHere(preferred) }, Modifier.weight(1f))
+                if (np == null) {
+                    SectionTitle("In riproduzione")
+                    if (listenerEnabled(ctx)) CText("Fai partire la musica: qui compaiono titolo, copertina e controlli.", tertiary = true)
+                    else {
+                        CText("Per vedere e comandare la musica serve l'accesso alle notifiche.", tertiary = true)
+                        CButton("Consenti", { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, kind = ButtonKind.Primary)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                        Box(Modifier.size(64.dp).clip(RoundedCornerShape(Radius.md)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                            np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(28.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(np.artist, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(np.app, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        val tc = np.controller.transportControls
+                        listOf(0 to { tc.skipToPrevious() }, (if (np.playing) 2 else 1) to { if (np.playing) tc.pause() else tc.play() }, 3 to { tc.skipToNext() }).forEach { (k, act) ->
+                            val t = rememberDropTouch()
+                            val big = k == 1 || k == 2
+                            Box(
+                                Modifier.size(if (big) 64.dp else 52.dp).dropGestures(t, act).dropDeform(t)
+                                    .drop(isDark(), tint = if (big) c.accent.copy(alpha = 0.32f) else Color.Unspecified, press = { t.press.value }),
+                                contentAlignment = Alignment.Center,
+                            ) { MediaIcon(k, c.labelPrimary, Modifier.size(if (big) 24.dp else 20.dp)) }
+                        }
                     }
                 }
             }
         }
+        // ------------------------------------------------ volume
+        item {
+            CCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    SectionTitle("Volume")
+                    RollingText("${vol * 100 / maxVol}%", CanoneType.footnote, c.labelSecondary)
+                }
+                DropSlider(vol.toFloat() / maxVol, { f ->
+                    val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
+                    if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
+                })
+            }
+        }
+        // ------------------------------------------------ dal PC
         item {
             CCard {
                 SectionTitle("Ascolta dal PC")
                 if (sources.isEmpty()) {
-                    CText("Apri Relay sul PC e il suo audio compare qui.", tertiary = true)
+                    CText("Apri Relay sul PC e il suo audio compare qui. Il ritardo è di circa 100 ms.", tertiary = true)
                 } else {
                     sources.forEach { d ->
-                        CRow(d.name, if (active == d.id) "In ascolto" else "Disponibile") {
+                        val dp = DevicePics.rememberPic(d.id)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                            Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                                if (dp != null) Image(dp, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(1, c.labelTertiary, false, Modifier.size(20.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(d.name, style = CanoneType.body, color = c.labelPrimary, maxLines = 1)
+                                Text(if (active == d.id) "In ascolto qui" else "Disponibile", style = CanoneType.footnote, color = c.labelTertiary)
+                            }
                             if (active == d.id) CButton("Ferma", { r.audio.stopListening(d.id) })
                             else CButton("Ascolta", { r.audio.listenTo(d.id) }, kind = ButtonKind.Primary)
                         }
@@ -497,6 +600,29 @@ internal fun missingPerms(ctx: Context): Int {
     ).count { !it }
 }
 
+/** Voce di categoria: goccia colorata con l'icona, nome e descrizione; tutta la riga è una goccia che si preme. */
+@Composable
+private fun Category(icon: Int, title: String, note: String, tint: Color, onClick: () -> Unit) {
+    val c = Canone.colors
+    val dark = isDark()
+    val t = rememberDropTouch()
+    Box(Modifier.fillMaxWidth().dropGestures(t, onClick)) {
+        Row(
+            Modifier.fillMaxWidth().dropDeform(t).drop(dark, corner = Radius.xl, press = { t.press.value }).padding(Space.s3),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
+        ) {
+            Box(Modifier.size(46.dp).drop(dark, tint = tint.copy(alpha = if (dark) 0.42f else 0.30f)), contentAlignment = Alignment.Center) {
+                TabGlyph(icon, if (dark) Color.White else tint, false, Modifier.size(22.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary)
+                Text(note, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text("›", style = CanoneType.title3, color = c.labelTertiary)
+        }
+    }
+}
+
 @Composable
 private fun SetGroup(text: String) =
     Text(text.uppercase(), style = CanoneType.footnote, color = Canone.colors.labelTertiary, modifier = Modifier.padding(start = Space.s3, top = Space.s2))
@@ -511,7 +637,6 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
     var token by remember { mutableStateOf(r.prefs.token) }
     var tick by remember { mutableIntStateOf(0) }
     val hubState by r.hubState.collectAsState()
-    val rootState by r.headphones.rooted.collectAsState()
 
     DisposableEffect(ctx) {
         val lc = (ctx as? ComponentActivity)?.lifecycle
@@ -526,19 +651,14 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
 
     @Composable
     fun PermRow(title: String, note: String, granted: Boolean, action: () -> Unit) {
-        CRow(title, note) {
-            if (granted) CBadge("Concesso", Tone.Positive) else {
-                CBadge("Da concedere", Tone.Caution)
-                CButton("Concedi", action)
-            }
-        }
+        CRow(title, note) { GrantMark(granted, action) }
     }
     fun save() {
         r.prefs.name = name; r.prefs.hubUrl = hub; r.prefs.token = token
         r.reconfigure()
         toast(ctx, "Salvato")
     }
-    val titles = mapOf("perm" to "Permessi", "sys" to "Sistema", "share" to "Condividi", "audio" to "Audio")
+    val titles = mapOf("perm" to "Permessi", "sys" to "Sistema", "share" to "Condividi", "audio" to "Audio", "fin" to "Finanze")
 
     ModuleSwitch(sub) { page ->
         ScreenList("Impostazioni") {
@@ -546,26 +666,32 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
             @Suppress("UNUSED_EXPRESSION") tick
             when (page) {
                 null -> {
-                    val missing = missingPerms(ctx)
                     item {
-                        CCard {
-                            Text("Relay 1.0.${r.updater.current}", style = CanoneType.title2, color = c.labelPrimary)
-                            Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                CBadge(if (hubState == "Connesso") "Server online" else "Server offline", if (hubState == "Connesso") Tone.Positive else Tone.Caution)
-                                CBadge(if (missing == 0) "Permessi ok" else "$missing permessi da concedere", if (missing == 0) Tone.Positive else Tone.Caution)
+                        Row(Modifier.fillMaxWidth().padding(vertical = Space.s2), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                            RelayMark(52.dp)
+                            Column {
+                                Text("Relay", style = CanoneType.title2, color = c.labelPrimary)
+                                Text("Versione 1.0.${r.updater.current}", style = CanoneType.footnote, color = c.labelTertiary)
                             }
                         }
                     }
+                    item { Category(10, "Permessi", "Cosa può fare Relay su questo telefono", Color(0xFF3F86FF)) { onSub("perm") } }
+                    item { Category(5, "Sistema", "Aggiornamenti, server e questo dispositivo", Color(0xFF8E8E93)) { onSub("sys") } }
+                    item { SetGroup("Moduli") }
+                    item { Category(1, "Condividi", "Collegamento diretto, screenshot, notifiche", Color(0xFF2FB5C4)) { onSub("share") } }
+                    item { Category(6, "Finanze", "Importi nascosti, pagamenti Revolut", Color(0xFF5DA85B)) { onSub("fin") } }
+                    item { Category(4, "Audio", "Cuffie, passaggio automatico, root", Color(0xFFE88A2E)) { onSub("audio") } }
+                }
+
+                "fin" -> {
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                            NavTile(5, "Permessi", if (missing == 0) "Tutti" else "$missing", if (missing == 0) "concessi" else "da concedere", TINT_B, Modifier.weight(1f)) { onSub("perm") }
-                            NavTile(0, "Sistema", "Versione", "aggiornamenti, server, dispositivo", TINT_A, Modifier.weight(1f)) { onSub("sys") }
-                        }
-                    }
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                            NavTile(1, "Condividi", if (r.prefs.lanEnabled) "Diretto" else "Server", "collegamento, screenshot, notifiche", TINT_C, Modifier.weight(1f)) { onSub("share") }
-                            NavTile(4, "Audio", when (rootState) { true -> "Root"; false -> "No root"; null -> "…" }, "cuffie e passaggio", TINT_D, Modifier.weight(1f)) { onSub("audio") }
+                        var rev by remember { mutableStateOf(r.prefs.revolutNotif) }
+                        CCard {
+                            CSwitchRow("Nascondi gli importi", "Nelle dashboard al posto delle cifre compare •••• (anche dall'occhio accanto al saldo)", MoneyPrivacy.hidden) {
+                                MoneyPrivacy.hidden = it; r.prefs.hideMoney = it
+                            }
+                            CDivider()
+                            CSwitchRow("Pagamenti Revolut dalle notifiche", "Ogni pagamento notificato da Revolut entra da solo nei movimenti", rev) { rev = it; r.prefs.revolutNotif = it }
                         }
                     }
                 }
@@ -633,7 +759,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                     item {
                         CCard {
                             SectionTitle("Server")
-                            CRow("Stato", hubState) { CBadge(if (hubState == "Connesso") "Online" else "Offline", if (hubState == "Connesso") Tone.Positive else Tone.Caution) }
+                            CRow("Stato", if (hubState == "Connesso") "Collegato" else hubState)
                             CField("Indirizzo", hub, { hub = it }, "ponte.esempio.it", mono = true)
                             CField("Token", token, { token = it }, "Lo stesso impostato sul server", mono = true, secret = true)
                             CButton("Salva e riconnetti", ::save, kind = ButtonKind.Primary)
@@ -712,8 +838,7 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                                     "Root",
                                     when (rooted) { true -> "Relay può collegare e scollegare le cuffie"; false -> "Non disponibile: senza, qui le cuffie non si spostano"; null -> "Controllo in corso…" },
                                 ) {
-                                    CBadge(when (rooted) { true -> "Attivo"; false -> "No"; null -> "…" }, if (rooted == true) Tone.Positive else Tone.Neutral)
-                                    if (rooted != true) CButton("Riprova", { r.headphones.retryRoot() })
+                                    if (rooted == true) GrantMark(true) {} else CButton("Riprova", { r.headphones.retryRoot() })
                                 }
                                 if (rootError.isNotEmpty()) CText("Dettaglio: $rootError", tertiary = true)
                                 if (cannot) CText("L'ultimo tentativo di spostare le cuffie da qui non è riuscito.", tertiary = true)

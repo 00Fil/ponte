@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         PonteService.start(this)
         val router = Ponte.ensure(this)
+        it.ponte.ui.MoneyPrivacy.hidden = router.prefs.hideMoney
         setContent { PonteTheme { PonteApp(router) } }
     }
 }
@@ -118,6 +119,7 @@ private fun PonteApp(r: Router) {
                 Box(Modifier.fillMaxSize()) {
                     MainShell(r, onBackup = { page = 1 }) { r.prefs.onboarded = false; mode = 0 }
                     if (page == 1) it.ponte.ui.BackupScreen(r) { page = 0 }
+                    it.ponte.ui.FlashHost()
                 }
             }
         }
@@ -151,15 +153,15 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     var finSub by remember { mutableStateOf<String?>(null) }
     var setSub by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(
-        enabled = (pager.currentPage == 1 && shareSub != null) || (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 4 && setSub != null),
+        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 4 && setSub != null),
     ) {
-        when (pager.currentPage) { 1 -> shareSub = null; 2 -> finSub = null; else -> setSub = null }
+        when (pager.currentPage) { 2 -> finSub = null; else -> setSub = null }
     }
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
             0 -> HomeScreen(r) { to ->
                 when (to) {
-                    "devices" -> { shareSub = null; select(1) }
+                    "devices" -> select(1)
                     "clips", "images" -> { shareSub = to; select(1) }
                     "finance" -> { finSub = null; select(2) }
                     "audio" -> select(3)

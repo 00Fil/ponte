@@ -25,6 +25,9 @@ data class Money(
 ) {
     val cashCents: Long get() = cash.entries.sumOf { it.key.toLong() * it.value }
     val revolutCents: Long get() = revBase + txs.filter { it.src == "revolut" && it.ts > revTs }.sumOf { it.cents }
+    /** Movimenti inseriti a mano (né contanti né Revolut): un conto "Altro". */
+    val otherCents: Long get() = txs.filter { it.src == "manual" }.sumOf { it.cents }
+    val totalCents: Long get() = cashCents + revolutCents + otherCents
 }
 
 val CATEGORIES = listOf("Cibo", "Casa", "Trasporti", "Svago", "Salute", "Shopping", "Abbonamenti", "Studio", "Altro", "Entrate")

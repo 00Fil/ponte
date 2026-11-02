@@ -90,7 +90,10 @@ class Backup(private val ctx: Context, private val r: Router) {
     }?.build()
     private fun req(u: HttpUrl) = Request.Builder().url(u).header("Authorization", "Bearer ${r.prefs.token}")
 
-    suspend fun refreshStorage() {
+    // Si chiama anche dalla UI (thread principale): la rete va sempre su IO, altrimenti Android chiude l'app (NetworkOnMainThreadException).
+    suspend fun refreshStorage(): Unit = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { refreshStorageIo() }
+
+    private fun refreshStorageIo() {
         val u = url("storage")
         if (u == null) { set { it.copy(storageError = "Server non configurato") }; return }
         try {

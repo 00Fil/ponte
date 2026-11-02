@@ -49,22 +49,27 @@ private fun springEase(overshoot: Float): Easing {
 private val SPRING = springEase(0.06f)
 private fun mod10(v: Int) = ((v % 10) + 10) % 10
 
+/** Un solo "tic" ogni tanto anche se rotolano più colonne insieme: la vibrazione segue l'andamento senza diventare un ronzio. */
+private object Tick { @Volatile var last = 0L }
+
 /**
- * Numero che "rotola" cifra per cifra, come il CountUp in modalità roll: ogni cifra è una colonna che gira verso il valore, con
- * le cifre di destra che fanno più giri e le colonne che partono scaglionate da sinistra. Parte quando il numero entra nello schermo
- * (una pagina fuori vista non lo consuma) e a ogni cambio di valore le sole cifre cambiate rotolano di nuovo.
+ * Numero che "rotola" cifra per cifra, come il CountUp in modalità roll: all'apertura il valore è già fermo,
+ * quando cambia le cifre cambiate girano verso il nuovo valore (su se sale, giù se scende) con la molla del template,
+ * scaglionate da sinistra. Con [haptic] ogni scatto di cifra dà un tic leggero.
  */
 @Composable
-fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, durationMs: Int = 1800) {
-    val density = LocalDensity.current
-    val screenPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-    var seen by remember { mutableStateOf(false) }
+fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, haptic: Boolean = false) {
     val st = style.copy(fontFeatureSettings = "tnum", lineHeight = if (style.lineHeight.isSpecified) style.lineHeight else (style.fontSize.value * 1.25f).sp)
-    Row(modifier.onGloballyPositioned { if (!seen) { val b = it.boundsInWindow(); if (b.right > 0f && b.left < screenPx && b.width > 0f) seen = true } }) {
+    // verso: confronto numerico grezzo tra il valore precedente e il nuovo
+    val num = remember(text) { text.filter { it.isDigit() || it == '-' }.toLongOrNull() ?: 0L }
+    var prev by remember { mutableStateOf(num) }
+    val up = num >= prev
+    LaunchedEffect(num) { prev = num }
+    Row(modifier) {
         text.forEachIndexed { i, ch ->
             val fromRight = text.length - 1 - i
             key(fromRight, ch.isDigit()) {
-                if (ch.isDigit()) RollDigit(ch.digitToInt(), st, color, rank = fromRight, index = i, seen = seen, durationMs = durationMs)
+                if (ch.isDigit()) RollDigit(ch.digitToInt(), st, color, index = i, up = up, haptic = haptic)
                 else Text(ch.toString(), style = st, color = color, maxLines = 1, softWrap = false)
             }
         }
@@ -72,19 +77,19 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
 }
 
 @Composable
-private fun RollDigit(digit: Int, style: TextStyle, color: Color, rank: Int, index: Int, seen: Boolean, durationMs: Int) {
-    val pos = remember { Animatable(0f) }
-    var first by remember { mutableStateOf(true) }
-    LaunchedEffect(digit, seen) {
-        if (!seen) return@LaunchedEffect
-        if (first) {
-            first = false
-            val turns = maxOf(1, 3 - rank)
-            pos.animateTo((digit + 10 * turns).toFloat(), tween(durationMs, delayMillis = minOf(index, 8) * 70, easing = SPRING))
-        } else {
-            val cur = pos.value
-            val delta = mod10(digit - mod10(cur.roundToInt()))
-            if (delta != 0) pos.animateTo(cur.roundToInt() + delta.toFloat(), tween(900, easing = SPRING))
+private fun RollDigit(digit: Int, style: TextStyle, color: Color, index: Int, up: Boolean, haptic: Boolean) {
+    val pos = remember { Animatable(digit.toFloat()) }
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(digit) {
+        val cur = pos.value.roundToInt()
+        if (mod10(cur) == digit) return@LaunchedEffect
+        val delta = if (up) mod10(digit - mod10(cur)) else -mod10(mod10(cur) - digit)
+        pos.animateTo((cur + delta).toFloat(), tween(1100, delayMillis = minOf(index, 8) * 55, easing = SPRING))
+    }
+    if (haptic) LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { floor(pos.value).toInt() }.collect {
+            val now = System.currentTimeMillis()
+            if (now - Tick.last > 38) { Tick.last = now; view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) }
         }
     }
     val lh = with(LocalDensity.current) { style.lineHeight.toDp() }
@@ -95,6 +100,6 @@ private fun RollDigit(digit: Int, style: TextStyle, color: Color, rank: Int, ind
     Box(Modifier.height(lh).clipToBounds()) {
         Text("0", style = style, color = color, modifier = Modifier.alpha(0f), maxLines = 1)
         Text(mod10(base).toString(), style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { translationY = -frac * lhPx })
-        Text(mod10(base + 1).toString(), style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { translationY = (1f - frac) * lhPx })
+        if (frac > 0.001f) Text(mod10(base + 1).toString(), style = style, color = color, maxLines = 1, modifier = Modifier.graphicsLayer { translationY = (1f - frac) * lhPx })
     }
 }

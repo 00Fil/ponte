@@ -81,6 +81,25 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("idleMinutes", 10)
         set(v) = sp.edit().putInt("idleMinutes", v).apply()
 
+    /** Importi nascosti nelle dashboard (Home e Finanze). */
+    var hideMoney: Boolean
+        get() = sp.getBoolean("hideMoney", false)
+        set(v) = sp.edit().putBoolean("hideMoney", v).apply()
+
+    /** Registra da solo i pagamenti che Revolut notifica. */
+    var revolutNotif: Boolean
+        get() = sp.getBoolean("revolutNotif", true)
+        set(v) = sp.edit().putBoolean("revolutNotif", v).apply()
+
+    /** Cartelle create in Condividi, e in quale cartella sta ogni elemento (fid -> nome). */
+    var folders: List<String>
+        get() = try { org.json.JSONArray(sp.getString("folders", "[]")).let { a -> (0 until a.length()).map { a.getString(it) } } } catch (_: Exception) { emptyList() }
+        set(v) = sp.edit().putString("folders", org.json.JSONArray(v).toString()).apply()
+
+    var fileFolders: Map<String, String>
+        get() = try { org.json.JSONObject(sp.getString("fileFolders", "{}") ?: "{}").let { o -> o.keys().asSequence().associateWith { o.getString(it) } } } catch (_: Exception) { emptyMap() }
+        set(v) = sp.edit().putString("fileFolders", org.json.JSONObject(v).toString()).apply()
+
     /** "wss://host/ws" a partire da quello che scrive l'utente (host, https://host, wss://host/ws...). */
     fun wsUrl(): String? {
         var u = hubUrl.trim().trimEnd('/')

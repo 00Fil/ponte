@@ -120,6 +120,19 @@ fun CBadge(text: String, tone: Tone = Tone.Neutral) {
     }
 }
 
+/** Permesso: concesso = goccia verde con la spunta; da concedere = tasto "Concedi". */
+@Composable
+fun GrantMark(granted: Boolean, onGrant: () -> Unit) {
+    val c = Canone.colors
+    if (granted) Box(Modifier.size(30.dp).drop(isDark(), tint = c.positive.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.size(14.dp)) {
+            val w = size.width; val h = size.height
+            drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.1f, h * 0.55f); lineTo(w * 0.4f, h * 0.85f); lineTo(w * 0.92f, h * 0.18f) }, c.positive,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.16f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
+    } else CButton("Concedi", onGrant, kind = ButtonKind.Primary)
+}
+
 @Composable
 fun CSwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     val c = Canone.colors

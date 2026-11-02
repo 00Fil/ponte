@@ -54,7 +54,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
 
     @Composable
     fun Perm(title: String, note: String, granted: Boolean, action: () -> Unit) {
-        CRow(title, note) { if (granted) CBadge("Concesso", Tone.Positive) else { CBadge("Da concedere", Tone.Caution); CButton("Concedi", action) } }
+        CRow(title, note) { GrantMark(granted, action) }
     }
 
     val running = b.busy
@@ -141,7 +141,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
                 CCard {
                     SectionTitle("Prima di sbloccare il bootloader")
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        if (st.lastVerifiedOk > 0) CBadge("Backup verificato ${day(st.lastVerifiedOk)}", Tone.Positive) else CBadge("Backup non ancora verificato", Tone.Caution)
+                        CText(if (st.lastVerifiedOk > 0) "Backup verificato il ${day(st.lastVerifiedOk)}" else "Backup non ancora verificato", tertiary = true)
                     }
                     CText("Lo sblocco cancella TUTTO il telefono. Relay copia ciò che Android lascia leggere; i dati interni delle app (chat, database, accessi) non si possono copiare senza root. Per quelli fai, nell'ordine:")
                     listOf(
