@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -225,11 +226,12 @@ fun GlassTabBar(
     var origin by remember { mutableStateOf(Offset.Zero) }
     var holding by remember { mutableStateOf(false) }
     var settling by remember { mutableStateOf(false) }
+    val barLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val follow = remember { Animatable(0f) }
     val bubble = remember { Animatable(1f) }
     LaunchedEffect(holding) {
-        // gonfia con un rimbalzo elastico quando la tocchi, si sgonfia con un altro quando la lasci
-        bubble.animateTo(if (holding) 1.26f else 1f, spring(dampingRatio = if (holding) 0.36f else 0.42f, stiffness = 420f))
+        // si gonfia appena un poco quando la tocchi, senza rimbalzi vistosi
+        bubble.animateTo(if (holding) 1.09f else 1f, spring(dampingRatio = 0.82f, stiffness = 380f))
     }
     val pillPos = { if (holding || settling) follow.value else pos() }
 
@@ -245,84 +247,51 @@ fun GlassTabBar(
         val pillW = (barW - padX * 2) / n
         val pillH = barH - padY * 2
 
-        // 1) il vetro della barra: rifrazione leggera, sfocatura poca, colori vivi
-        Glass(
-            layer, { origin }, barW, barH,
-            edge = 20.dp, amount = 13.dp, aberr = 0.28f, sat = 1.7f, magnify = 0f, blur = 5.dp,
-        )
-        // 2) velo appena percettibile (non grigio): serve solo a dare corpo
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                    1f to white.copy(alpha = if (dark) 0.03f else 0.06f),
-                ),
-                shape,
-            ),
-        )
-        // 3) bordo con riflesso speculare: luce forte in alto a sinistra e in basso a destra, buio in mezzo
-        Box(
-            Modifier.fillMaxSize()
-                .border(
-                    3.dp,
-                    Brush.linearGradient(listOf(white.copy(alpha = if (dark) 0.10f else 0.20f), Color.Transparent, white.copy(alpha = if (dark) 0.06f else 0.12f))),
-                    shape,
-                )
-                .border(
-                    1.dp,
-                    Brush.linearGradient(
-                        0f to white.copy(alpha = if (dark) 0.70f else 1f),
-                        0.35f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                        0.65f to white.copy(alpha = if (dark) 0.06f else 0.16f),
-                        1f to white.copy(alpha = if (dark) 0.55f else 0.95f),
+        // Tutto ciò che sta nella barra (vetro, bordo, icone) viene registrato in barLayer: la bolla lo rifrange,
+        // così sotto la lente anche le icone si piegano e si ingrandiscono, come su iOS.
+        Box(Modifier.fillMaxSize().drawWithContent { barLayer.record { this@drawWithContent.drawContent() }; drawLayer(barLayer) }) {
+            // 1) il vetro della barra: rifrazione, sfocatura poca, colori vivi
+            Glass(
+                layer, { origin }, barW, barH,
+                edge = 20.dp, amount = 13.dp, aberr = 0.28f, sat = 1.7f, magnify = 0f, blur = 5.dp,
+            )
+            // 2) velo appena percettibile (non grigio): serve solo a dare corpo
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        0f to white.copy(alpha = if (dark) 0.10f else 0.22f),
+                        1f to white.copy(alpha = if (dark) 0.03f else 0.06f),
                     ),
                     shape,
                 ),
-        )
-
-        Box(Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY)) {
-            // 4) la bolla: vetro più spesso (rifrange e ingrandisce di più), si allunga con la velocità
+            )
+            // 3) bordo con riflesso speculare: luce forte in alto a sinistra e in basso a destra, buio in mezzo
             Box(
-                Modifier.graphicsLayer {
-                    val px = pillW.toPx()
-                    translationX = pillPos() * px
-                    val stretch = (abs(follow.targetValue - follow.value) * 0.30f).coerceAtMost(0.34f)
-                    scaleX = bubble.value * (1f + stretch)
-                    scaleY = 1f + (bubble.value - 1f) * 0.75f - stretch * 0.28f
-                },
-            ) {
-                Glass(
-                    layer,
-                    { Offset(origin.x + with(dens) { padX.toPx() + pillPos() * pillW.toPx() }, origin.y + with(dens) { padY.toPx() }) },
-                    pillW, pillH,
-                    edge = 22.dp, amount = 20.dp, aberr = 0.45f, sat = 1.9f, magnify = 0.07f, blur = 2.dp,
-                )
-                Box(
-                    Modifier.size(pillW, pillH)
-                        .background(
-                            Brush.verticalGradient(listOf(white.copy(alpha = if (dark) 0.20f else 0.34f), white.copy(alpha = if (dark) 0.06f else 0.10f))),
-                            shape,
-                        )
-                        .border(
-                            1.2.dp,
-                            Brush.linearGradient(
-                                0f to white.copy(alpha = if (dark) 0.75f else 1f),
-                                0.4f to white.copy(alpha = if (dark) 0.14f else 0.30f),
-                                0.7f to white.copy(alpha = if (dark) 0.10f else 0.22f),
-                                1f to white.copy(alpha = if (dark) 0.60f else 0.95f),
-                            ),
-                            shape,
+                Modifier.fillMaxSize()
+                    .border(
+                        3.dp,
+                        Brush.linearGradient(listOf(white.copy(alpha = if (dark) 0.10f else 0.20f), Color.Transparent, white.copy(alpha = if (dark) 0.06f else 0.12f))),
+                        shape,
+                    )
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(
+                            0f to white.copy(alpha = if (dark) 0.70f else 1f),
+                            0.35f to white.copy(alpha = if (dark) 0.10f else 0.22f),
+                            0.65f to white.copy(alpha = if (dark) 0.06f else 0.16f),
+                            1f to white.copy(alpha = if (dark) 0.55f else 0.95f),
                         ),
-                )
-            }
-            // 5) icone ed etichette. Il dito che tiene premuto sposta la bolla; al rilascio la scheda sotto la bolla diventa attiva.
+                        shape,
+                    ),
+            )
+            // 4) icone ed etichette. Il dito che tiene premuto sposta la bolla; al rilascio la scheda sotto la bolla diventa attiva.
             Row(
-                Modifier.fillMaxSize().pointerInput(n) {
+                Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY).pointerInput(n) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val itemPx = size.width / n
                         fun toTab(x: Float) = (x / itemPx - 0.5f).coerceIn(0f, (n - 1).toFloat())
-                        val soft = spring<Float>(dampingRatio = 0.62f, stiffness = 520f)
+                        val soft = spring<Float>(dampingRatio = 0.9f, stiffness = 480f)
                         holding = true; settling = false
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         scope.launch { follow.snapTo(posNow()); follow.animateTo(toTab(down.position.x), soft) }
@@ -339,15 +308,14 @@ fun GlassTabBar(
                         settling = true; holding = false
                         if (idx != currentNow) selectNow(idx)
                         scope.launch {
-                            follow.animateTo(idx.toFloat(), spring(dampingRatio = 0.5f, stiffness = 260f))
+                            follow.animateTo(idx.toFloat(), spring(dampingRatio = 0.86f, stiffness = 300f))
                             settling = false
                         }
                     }
                 },
             ) {
                 labels.forEachIndexed { i, label ->
-                    val near = { (1f - abs(i - pillPos())).coerceIn(0f, 1f) }
-                    val nearNow = near()
+                    val nearNow = (1f - abs(i - pillPos())).coerceIn(0f, 1f)
                     val tint = lerp(c.labelSecondary, c.accent, nearNow)
                     Column(
                         Modifier.weight(1f).fillMaxHeight().semantics {
@@ -365,6 +333,43 @@ fun GlassTabBar(
                         )
                     }
                 }
+            }
+        }
+
+        // 5) la bolla di vetro sopra la barra: rifrange la barra intera (vetro + icone), si allunga appena con la velocità
+        Box(Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY)) {
+            Box(
+                Modifier.graphicsLayer {
+                    val px = pillW.toPx()
+                    translationX = pillPos() * px
+                    val stretch = (abs(follow.targetValue - follow.value) * 0.10f).coerceAtMost(0.12f)
+                    scaleX = bubble.value * (1f + stretch)
+                    scaleY = 1f + (bubble.value - 1f) * 0.8f - stretch * 0.25f
+                },
+            ) {
+                Glass(
+                    barLayer,
+                    { Offset(with(dens) { padX.toPx() + pillPos() * pillW.toPx() }, with(dens) { padY.toPx() }) },
+                    pillW, pillH,
+                    edge = 22.dp, amount = 18.dp, aberr = 0.45f, sat = 1.6f, magnify = 0.08f, blur = 0.dp,
+                )
+                Box(
+                    Modifier.size(pillW, pillH)
+                        .background(
+                            Brush.verticalGradient(listOf(white.copy(alpha = if (dark) 0.14f else 0.22f), white.copy(alpha = if (dark) 0.03f else 0.04f))),
+                            shape,
+                        )
+                        .border(
+                            1.2.dp,
+                            Brush.linearGradient(
+                                0f to white.copy(alpha = if (dark) 0.75f else 1f),
+                                0.4f to white.copy(alpha = if (dark) 0.14f else 0.30f),
+                                0.7f to white.copy(alpha = if (dark) 0.10f else 0.22f),
+                                1f to white.copy(alpha = if (dark) 0.60f else 0.95f),
+                            ),
+                            shape,
+                        ),
+                )
             }
         }
     }
