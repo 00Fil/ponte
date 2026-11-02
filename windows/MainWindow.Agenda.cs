@@ -35,6 +35,7 @@ public sealed partial class MainWindow
     private DateTime _agCursor = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime _agSel = DateTime.Today;
     private AgDraft? _agDraft;
+    private AgItem? _agDetail;
     private static readonly (int Min, string Label)[] Reminders = { (-1, "Nessuno"), (0, "All'ora"), (10, "10 min prima"), (30, "30 min prima"), (60, "1 ora prima"), (1440, "1 giorno prima") };
 
     private static DateTime Loc(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime;
@@ -90,6 +91,7 @@ public sealed partial class MainWindow
         var h = Reset("Agenda");
         switch (_agSub)
         {
+            case "detail": AgDetail(h); break;
             case "edit": AgEditor(h); break;
             case "ics": AgIcs(h); break;
             case "set": StSettings(h, _r.Plan.State); break;
@@ -242,9 +244,9 @@ public sealed partial class MainWindow
             switch (i.Kind)
             {
                 case 0:
-                    var e = (Ev)i.Ref!;
-                    _agDraft = new AgDraft { Id = e.Id, Title = e.Title, Place = e.Place, Note = e.Note, Start = Loc(e.Start), End = e.AllDay ? Loc(e.End).AddDays(-1) : Loc(e.End), AllDay = e.AllDay, Color = e.Color, Remind = e.Remind };
-                    AgGo("edit");
+                case 1:
+                    _agDetail = i;
+                    AgGo("detail");
                     break;
                 case 2:
                     var t = (StudyTask)i.Ref!;
@@ -254,6 +256,57 @@ public sealed partial class MainWindow
         };
         Bounce(w, 1.02f);
         return w;
+    }
+
+    /// <summary>Il dettaglio di un evento: titolo, quando, dove, note. La matita apre la modifica (solo per gli eventi di Relay).</summary>
+    private void AgDetail(StackPanel h)
+    {
+        var i = _agDetail;
+        if (i == null) { AgGo(null); return; }
+        var bar = new Grid { ColumnSpacing = 12 };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.Children.Add(BackRow("Agenda", "Evento", () => AgGo(null)));
+        if (i.Kind == 0)
+        {
+            var pen = BubbleButton("\uE70F", 44, () =>
+            {
+                var e = (Ev)i.Ref!;
+                _agDraft = new AgDraft { Id = e.Id, Title = e.Title, Place = e.Place, Note = e.Note, Start = Loc(e.Start), End = e.AllDay ? Loc(e.End).AddDays(-1) : Loc(e.End), AllDay = e.AllDay, Color = e.Color, Remind = e.Remind };
+                AgGo("edit");
+            }, true, "Modifica");
+            Grid.SetColumn(pen, 1);
+            bar.Children.Add(pen);
+        }
+        h.Children.Add(bar);
+
+        var when = i.AllDay
+            ? (i.End.AddDays(-1).Date <= i.Start.Date ? Cap(i.Start.ToString("dddd d MMMM", It)) : Cap(i.Start.ToString("d MMM", It)) + " – " + i.End.AddDays(-1).ToString("d MMM", It))
+            : Cap(i.Start.ToString("dddd d MMMM", It)) + "\n" + i.Start.ToString("HH:mm", It) + " – " + i.End.ToString("HH:mm", It);
+        var head = new Grid { ColumnSpacing = 12 };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.Children.Add(new Border { Width = 5, Height = 48, CornerRadius = new CornerRadius(3), Background = Sb(i.Color), VerticalAlignment = VerticalAlignment.Top });
+        var tt = new StackPanel { Spacing = 2 };
+        var title = T(i.Title, 25, "LabelPrimary", true); title.TextWrapping = TextWrapping.Wrap; title.TextTrimming = TextTrimming.None;
+        var wt = T(when, 14, "LabelSecondary"); wt.TextWrapping = TextWrapping.Wrap;
+        tt.Children.Add(title); tt.Children.Add(wt);
+        Grid.SetColumn(tt, 1);
+        head.Children.Add(tt);
+        h.Children.Add(Widget(head, null, new Thickness(20)));
+
+        string note = i.Ref switch { Ev e => e.Note, ExtEvent x => x.Note, _ => "" };
+        Border Info(string label, string value)
+        {
+            var c = new StackPanel { Spacing = 2 };
+            c.Children.Add(T(label, 12, "LabelTertiary"));
+            var v = T(value, 14); v.TextWrapping = TextWrapping.Wrap; v.TextTrimming = TextTrimming.None;
+            c.Children.Add(v);
+            return new Border { Background = B("BgSunken"), CornerRadius = new CornerRadius(20), Padding = new Thickness(16, 12, 16, 12), Child = c };
+        }
+        if (i.Place.Length > 0) h.Children.Add(Info("Luogo", i.Place));
+        if (note.Length > 0) h.Children.Add(Info("Note", note));
+        h.Children.Add(Info("Calendario", i.Kind == 0 ? "Relay" : "Google"));
     }
 
     private void AgNew(DateTime day)

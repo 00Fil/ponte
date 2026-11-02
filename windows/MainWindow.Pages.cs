@@ -137,6 +137,23 @@ public sealed partial class MainWindow
     }
 
     private string? _devOpen;
+    private Border? _devStripEl;
+    private bool _devDismissHooked;
+
+    /// <summary>Un clic fuori dalla scheda dei dispositivi chiude i dettagli aperti.</summary>
+    private void HookDevDismiss()
+    {
+        if (_devDismissHooked) return;
+        _devDismissHooked = true;
+        Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (_devOpen == null || _tab != 1) return;
+            for (var o = e.OriginalSource as DependencyObject; o != null; o = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(o))
+                if (ReferenceEquals(o, _devStripEl)) return;
+            _devOpen = null;
+            DispatcherQueue.TryEnqueue(RenderShare);
+        }), true);
+    }
 
     /// <summary>Scheda compatta dei dispositivi: stato di server e P2P, i dispositivi in fila come bolle; un tocco apre i dettagli.</summary>
     private Border DevicesStrip()
@@ -199,7 +216,10 @@ public sealed partial class MainWindow
             col.Children.Add(drawer);
             Enter(drawer, 0, -6, 300);
         }
-        return Widget(col, null, new Thickness(14, 12, 14, 12));
+        var strip2 = Widget(col, null, new Thickness(14, 12, 14, 12));
+        _devStripEl = strip2;
+        HookDevDismiss();
+        return strip2;
     }
 
     private Border StatusPill(string label, bool on)
