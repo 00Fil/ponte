@@ -229,12 +229,16 @@ private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Floa
     val t = p.timer
     val focus = t.phase == "focus"
     val rounds = p.cfg("rounds", 4)
+    // margini letti dalla finestra dell'app: nel dialog a tutto schermo gli inset possono arrivare a zero
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val navB = with(dens) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(24.dp)
+    val topB = with(dens) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
     androidx.compose.ui.window.Dialog(onMinimize, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color(0xFF05060A))) {
             WavesBackground(palette, Color(0xFF05060A), Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
             Column(
-                Modifier.fillMaxSize().systemBarsPadding().padding(Space.s5),
+                Modifier.fillMaxSize().padding(top = topB, bottom = navB + 40.dp).padding(horizontal = Space.s5),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium.copy(letterSpacing = 2.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(top = Space.s6))
@@ -247,7 +251,7 @@ private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Floa
                         for (i in 0 until rounds) Box(Modifier.padding(horizontal = 3.dp).size(7.dp).clip(CircleShape).background(if (i < t.cycle % rounds) Color.White else Color.White.copy(alpha = 0.25f)))
                     }
                 }
-                Row(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(bottom = Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                Row(Modifier.widthIn(max = 440.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     CButton("Ferma", { r.plan.timerStop(); onMinimize() }, Modifier.weight(1f).height(56.dp))
                     CButton("Salta", { r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus") }, Modifier.weight(1f).height(56.dp))
                     CButton("Riduci", onMinimize, Modifier.weight(1f).height(56.dp))

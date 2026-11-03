@@ -91,8 +91,52 @@ object Eq {
                     }
                 }, f, androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
             } catch (_: Throwable) {}
+            watchPlayers(ctx.applicationContext)
+            watchdog()
         }
         apply()
+    }
+
+    private fun attach(sid: Int) {
+        if (sid <= 0 || fx[sid] != null) return
+        val x = make(sid); fx[sid] = x
+        if (!available) x.eq?.let { e ->
+            eq = e; bands = e.numberOfBands.toInt()
+            minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
+            freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
+            available = true
+        }
+        apply()
+    }
+
+    /** Anche le app che non annunciano la propria sessione: si legge la sessione di ogni lettore attivo. */
+    private fun watchPlayers(ctx: Context) {
+        try {
+            val am = ctx.getSystemService(android.media.AudioManager::class.java) ?: return
+            val m = android.media.AudioPlaybackConfiguration::class.java.getDeclaredMethod("getSessionId").apply { isAccessible = true }
+            fun scan(list: List<android.media.AudioPlaybackConfiguration>) {
+                list.forEach { c -> try { attach(m.invoke(c) as Int) } catch (_: Throwable) {} }
+            }
+            scan(am.activePlaybackConfigurations)
+            am.registerAudioPlaybackCallback(object : android.media.AudioManager.AudioPlaybackCallback() {
+                override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>) = scan(configs)
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (_: Throwable) {}
+    }
+
+    /** Se un'altra app si prende gli effetti, li si ricrea e si riapplicano: l'equalizzatore resta sempre attivo. */
+    private fun watchdog() {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        h.postDelayed(object : Runnable {
+            override fun run() {
+                if (enabled) fx.entries.toList().forEach { (sid, x) ->
+                    val lost = try { x.eq?.hasControl() == false } catch (_: Throwable) { true }
+                    if (lost) { x.release(); fx[sid] = make(sid) }
+                }
+                apply()
+                h.postDelayed(this, 5000)
+            }
+        }, 5000)
     }
 
     private fun apply() {

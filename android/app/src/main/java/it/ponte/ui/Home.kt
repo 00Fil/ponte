@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -143,24 +145,44 @@ private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClic
             -m.txs.filter { it.ts >= a.timeInMillis && it.ts < b.timeInMillis && it.cents < 0 }.sumOf { it.cents }.toFloat()
         }
     }
+    val now = Calendar.getInstance()
+    val monthStart = Calendar.getInstance().apply { clear(); set(now.get(Calendar.YEAR), now.get(Calendar.MONTH), 1) }.timeInMillis
+    val monthTx = m.txs.filter { it.ts >= monthStart }
+    val outM = -monthTx.filter { it.cents < 0 }.sumOf { it.cents }
+    val inM = monthTx.filter { it.cents > 0 }.sumOf { it.cents }
+    val letters = remember { (5 downTo 0).map { k -> listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[Calendar.getInstance().apply { add(Calendar.MONTH, -k) }.get(Calendar.MONTH)] } }
     GlassTile(modifier, Tint.blue, 3, onClick, onLong) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxSize().padding(Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconBubble(6)
                     Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
                 }
-                EyeToggle(r)
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
                 CountUp(m.totalCents, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    Column {
+                        Text("Uscite", style = CanoneType.footnote, color = c.labelTertiary)
+                        CountUp(outM, CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                    }
+                    Column {
+                        Text("Entrate", style = CanoneType.footnote, color = c.labelTertiary)
+                        CountUp(inM, CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), c.accent)
+                    }
+                }
+            }
+            Column(Modifier.width(118.dp).fillMaxHeight(), horizontalAlignment = Alignment.End) {
+                EyeToggle(r, 30.dp)
                 val mx = (bars.maxOrNull() ?: 0f).coerceAtLeast(1f)
-                Canvas(Modifier.size(width = 96.dp, height = 56.dp).blurIf(MoneyPrivacy.hidden)) {
+                Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = Space.s2).blurIf(MoneyPrivacy.hidden)) {
                     val w = size.width / (bars.size * 2 - 1)
                     bars.forEachIndexed { i, v ->
+                        drawRoundRect(c.bgSunken, Offset(i * 2 * w, 0f), Size(w, size.height), CornerRadius(w / 2))
                         val hh = (v / mx).coerceAtLeast(0.06f) * size.height
-                        drawRoundRect(if (i == bars.lastIndex) c.accent else c.accent.copy(alpha = 0.32f), Offset(i * 2 * w, size.height - hh), Size(w, hh), CornerRadius(w / 2))
+                        drawRoundRect(if (i == bars.lastIndex) c.accent else c.accent.copy(alpha = 0.35f), Offset(i * 2 * w, size.height - hh), Size(w, hh), CornerRadius(w / 2))
                     }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    letters.forEachIndexed { i, l -> Text(l, style = CanoneType.footnote.copy(fontSize = 10.sp), color = if (i == letters.lastIndex) c.accent else c.labelTertiary, modifier = Modifier.width(118.dp / 11), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                 }
             }
         }
@@ -206,17 +228,11 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
                     .clip(shape).background(if (id == 2) Brush.linearGradient(listOf(c.accent.copy(alpha = 0.12f), Color.Transparent)) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, c.lineSeparator), shape)
                     .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg).onLongPressOnly(onLong),
             ) {
-                content()
-                if (mine) Box(Modifier.matchParentSize().graphicsLayer { alpha = ((p.value - 0.35f) / 0.5f).coerceIn(0f, 1f) }) {
-                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.45f))))
-                    Row(
-                        Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s3).clip(CircleShape).background(c.bgSurface.copy(alpha = 0.92f)).padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon24(Ico.CHECK, c.positive, Modifier.size(16.dp))
-                        Text("Copiato", style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
-                    }
-                }
+                Box(Modifier.fillMaxSize().graphicsLayer {
+                    val v = if (mine) p.value else 0f
+                    renderEffect = if (v > 0.01f && android.os.Build.VERSION.SDK_INT >= 31) androidx.compose.ui.graphics.BlurEffect(v * 18f, v * 18f, androidx.compose.ui.graphics.TileMode.Decal) else null
+                }) { content() }
+                if (mine) GlassCopied({ p.value }, lerp(Radius.lg, Radius.xl, p.value), Modifier.matchParentSize())
             }
         }
         Tile(1, 0.dp, {

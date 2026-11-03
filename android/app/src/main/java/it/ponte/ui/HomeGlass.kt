@@ -14,6 +14,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -37,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -107,11 +114,21 @@ fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: 
     val t = rememberDropTouch()
     Box(
         modifier.stagger(index)
+            .then(if (!dark && !acrylic) Modifier.shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.10f)) else Modifier)
             .graphicsLayer { val p = t.press.value; scaleX = 1f - 0.04f * p; scaleY = 1f - 0.04f * p }
             .clip(shape)
-            // acrilico: neutro e quasi opaco, per i menu che galleggiano sopra lo sfondo sfocato
-            // come la barra: velo del colore di fondo, nessun bianco; acrilico quasi opaco per i menu sopra lo sfondo sfocato
-            .background(if (acrylic) c.bgSurface.copy(alpha = 0.96f) else c.bgSurface)
+            // profondità leggera: piano che scende di tono verso il basso e filo di luce in alto, come i widget di iOS
+            .background(
+                if (acrylic) Brush.verticalGradient(listOf(c.bgSurface.copy(alpha = 0.96f), c.bgSurface.copy(alpha = 0.96f)))
+                else if (dark) Brush.verticalGradient(listOf(Color(0xFF26262A), Color(0xFF19191C)))
+                else Brush.verticalGradient(listOf(Color.White, Color(0xFFF7F7FA))),
+            )
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.10f else 0.9f), Color.White.copy(alpha = if (dark) 0.02f else 0.4f))), shape)
+            .drawBehind {
+                // la luce del tocco, la stessa delle bolle
+                val p = t.press.value
+                if (p > 0.01f) drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = (if (dark) 0.10f else 0.25f) * p), Color.Transparent), center = if (t.pos.isSpecified) t.pos else center, radius = size.maxDimension * 0.7f))
+            }
             .then(if (onClick != null || onLong != null) Modifier.dropGestures(t, onClick ?: {}, onLong) else Modifier),
         content = content,
     )
@@ -188,18 +205,111 @@ fun AudioRows(r: Router, max: Int) {
     }
 }
 
-/** Audio: chi sta suonando tra i dispositivi collegati e da dove esce. */
+/** Audio: cosa suona e dove, con i comandi; sotto i dispositivi, toccane uno per fermarlo o farlo ripartire. */
 @Composable
 fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onLong: () -> Unit) {
-    val playing by r.media.playingNow.collectAsState()
+    val c = Canone.colors
+    val dark = isDark()
+    val np = rememberNowPlaying()
+    val known by r.media.media.collectAsState()
+    val devices by r.devices.collectAsState()
+    val me = r.deviceId
+    val remote = known.values.filter { it.id != me && it.title.isNotEmpty() }.sortedByDescending { it.playing }
+    val localOn = np != null && np.playing
+    val focusRemote = if (localOn) null else remote.firstOrNull { it.playing } ?: if (np == null) remote.firstOrNull() else null
+    val title = focusRemote?.title ?: np?.title.orEmpty()
+    val artist = focusRemote?.artist ?: np?.artist.orEmpty()
+    val playing = focusRemote?.playing ?: (np?.playing == true)
+    val where = focusRemote?.let { r.deviceName(it.id) } ?: "Questo telefono"
+    fun send(a: String) {
+        val f = focusRemote
+        if (f != null) r.media.cmd(f.id, a)
+        else np?.controller?.transportControls?.let { t -> when (a) { "play" -> t.play(); "pause" -> t.pause(); "next" -> t.skipToNext(); "prev" -> t.skipToPrevious() } }
+    }
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconBubble(4)
-                Text("Audio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2)
-                if (playing.isEmpty()) Text("Silenzio", style = CanoneType.footnote, color = OnGlass3)
+        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                val shape = RoundedCornerShape(14.dp)
+                Box(Modifier.size(58.dp).clip(shape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                    val art = if (focusRemote == null) np?.art else null
+                    if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    else IconBubble(4)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (artist.isNotEmpty()) Text(artist, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (title.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        if (playing) EqBars(c.accent)
+                        Text(where, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = if (playing) c.accent else OnGlass3, maxLines = 1)
+                    }
+                }
+                if (title.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoundGlass(40.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(16.dp)) }
+                    RoundGlass(46.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(18.dp)) }
+                    RoundGlass(40.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(16.dp)) }
+                }
             }
-            AudioRows(r, 3)
+            // dispositivi: bolla con la foto, anello blu se suona; un tocco lo ferma o lo fa ripartire
+            val list = buildList { add(me); devices.forEach { add(it.id) } }.take(6)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
+                list.forEach { id ->
+                    val on = if (id == me) localOn else known[id]?.playing == true
+                    val pic = DevicePics.rememberPic(id)
+                    RoundGlass(34.dp, false, {
+                        if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
+                        else r.media.cmd(id, if (on) "pause" else "play")
+                    }, ring = if (on) c.accent else null) {
+                        if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(15.dp))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                val n = list.count { id -> if (id == me) localOn else known[id]?.playing == true }
+                if (n > 0) Text(if (n == 1) "1 in riproduzione" else "$n in riproduzione", style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Bolla di vetro rotonda; [solid] = piena di blu. */
+@Composable
+fun RoundGlass(size: Dp, solid: Boolean, onClick: () -> Unit, ring: Color? = null, content: @Composable BoxScope.() -> Unit) {
+    val c = Canone.colors
+    val dark = isDark()
+    val t = rememberDropTouch()
+    Box(
+        Modifier.size(size)
+            .graphicsLayer { val p = t.press.value; scaleX = 1f + 0.08f * p; scaleY = 1f + 0.08f * p }
+            .then(if (ring != null) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+            .drop(dark, tint = if (solid) c.accent else Color.Unspecified, press = { t.press.value }, touch = t)
+            .clip(CircleShape).dropGestures(t, onClick),
+        contentAlignment = Alignment.Center, content = content,
+    )
+}
+
+/** Tre barrette che ballano: sta suonando. */
+@Composable
+fun EqBars(color: Color) {
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "eq")
+    val a by inf.animateFloat(0.3f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(420), androidx.compose.animation.core.RepeatMode.Reverse), label = "a")
+    val b by inf.animateFloat(1f, 0.35f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(520), androidx.compose.animation.core.RepeatMode.Reverse), label = "b")
+    val d by inf.animateFloat(0.5f, 0.9f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(360), androidx.compose.animation.core.RepeatMode.Reverse), label = "d")
+    Canvas(Modifier.size(11.dp, 10.dp)) {
+        val w = size.width / 5
+        listOf(a, b, d).forEachIndexed { i, v -> drawRoundRect(color, Offset(i * 2 * w, size.height * (1 - v)), Size(w, size.height * v), CornerRadius(w / 2)) }
+    }
+}
+
+/** Simboli dei comandi: 0 indietro, 1 play, 2 pausa, 3 avanti. */
+@Composable
+fun TransportGlyph(kind: Int, color: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        fun tri(x0: Float, x1: Float) = androidx.compose.ui.graphics.Path().apply { moveTo(x0, h * 0.18f); lineTo(x1, h / 2); lineTo(x0, h * 0.82f); close() }
+        when (kind) {
+            1 -> drawPath(tri(w * 0.24f, w * 0.86f), color)
+            2 -> { drawRoundRect(color, Offset(w * 0.22f, h * 0.18f), Size(w * 0.2f, h * 0.64f), CornerRadius(w * 0.06f)); drawRoundRect(color, Offset(w * 0.58f, h * 0.18f), Size(w * 0.2f, h * 0.64f), CornerRadius(w * 0.06f)) }
+            3 -> { drawPath(tri(w * 0.08f, w * 0.52f), color); drawPath(tri(w * 0.46f, w * 0.90f), color) }
+            else -> { scale(-1f, 1f) { drawPath(tri(w * 0.08f, w * 0.52f), color); drawPath(tri(w * 0.46f, w * 0.90f), color) } }
         }
     }
 }

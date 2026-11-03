@@ -12,6 +12,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -292,6 +293,8 @@ fun Modifier.dropGestures(
                     if (t.press.value < 0.9f) t.press.animateTo(1f, androidx.compose.animation.core.tween(140, easing = androidx.compose.animation.core.FastOutSlowInEasing))
                     t.press.animateTo(0f, Goccia.release)
                 }
+                // il tocco resta a questo tasto: il riquadro che lo contiene non lo riceve
+                up?.consume()
                 if (up != null && !fired) click()
             }
         }
@@ -382,25 +385,38 @@ fun Modifier.copyBlur(fx: CopyFx): Modifier = this.graphicsLayer {
 }
 
 @Composable
-fun CopiedVeil(fx: CopyFx, corner: Dp, modifier: Modifier = Modifier) {
+fun CopiedVeil(fx: CopyFx, corner: Dp, modifier: Modifier = Modifier) = GlassCopied({ fx.p.value }, corner, modifier)
+
+/**
+ * Copiato, in vetro: una goccia con la forma della scheda si gonfia dal centro sopra il contenuto sfocato, il bordo si accende
+ * come i tasti premuti, e al centro una bolla blu con la spunta e la scritta.
+ */
+@Composable
+fun GlassCopied(progress: () -> Float, corner: Dp, modifier: Modifier = Modifier) {
     val dark = isDark()
     val c = Canone.colors
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
     Box(
-        modifier.graphicsLayer { alpha = fx.p.value }.clip(shape)
-            .background(c.bgSurface.copy(alpha = if (dark) 0.38f else 0.46f))
-            .drop(dark, corner = corner, tint = Color.Transparent),
+        modifier.graphicsLayer {
+            val v = progress()
+            alpha = (v * 1.6f).coerceIn(0f, 1f)
+            val s = 0.92f + 0.08f * v
+            scaleX = s; scaleY = s
+        }.clip(shape)
+            .drop(dark, corner = corner, tint = (if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.30f)), press = { progress() * 0.8f }),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "Copiato", style = CanoneType.title3, color = c.labelPrimary,
-            modifier = Modifier.graphicsLayer {
-                val v = fx.p.value
-                val s = 0.86f + 0.14f * v
-                scaleX = s; scaleY = s
-                if (Build.VERSION.SDK_INT >= 31 && v < 0.98f) { val b = (1f - v) * 14f + 0.01f; renderEffect = androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) } else renderEffect = null
-            },
-        )
+        Row(
+            Modifier.graphicsLayer {
+                val v = progress()
+                val s = 0.7f + 0.3f * v
+                scaleX = s; scaleY = s; alpha = ((v - 0.3f) / 0.5f).coerceIn(0f, 1f)
+            }.drop(dark, tint = c.bgSurface.copy(alpha = 0.55f)).padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.size(24.dp).drop(dark, tint = c.accent), contentAlignment = Alignment.Center) { Icon24(Ico.CHECK, Color.White, Modifier.size(14.dp)) }
+            Text("Copiato", style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1)
+        }
     }
 }
 

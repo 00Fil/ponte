@@ -74,11 +74,20 @@ fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.
     // carosello: agenda e studio nello stesso riquadro, si passa con uno swipe
     val pages = androidx.compose.foundation.pager.rememberPagerState(initialPage = if (t.running) 1 else 0) { 2 }
     GlassTile(Modifier.size(cell), Tint.blue, 0, { go(if (pages.currentPage == 1) "studio" else "agenda") }, onLong) {
+        val np = rememberNowPlaying()
+        val palette = remember(np?.art) { moodColors(np?.art) }
         androidx.compose.foundation.pager.HorizontalPager(pages, Modifier.fillMaxSize()) { pg ->
+          Box(Modifier.fillMaxSize()) {
+            // studio: le stesse onde del pomodoro, coi colori della canzone
+            if (pg == 1) {
+                WavesBackground(palette, Color(0xFF05060A), Modifier.matchParentSize())
+                Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.40f)))))
+            }
+            val w = pg == 1
             Column(Modifier.fillMaxSize().padding(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s5), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconBubble(if (pg == 0) 11 else 12)
-                    Text(if (pg == 0) "Agenda" else if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2, maxLines = 1)
+                    Text(if (pg == 0) "Agenda" else if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = if (w) Color.White.copy(alpha = 0.85f) else OnGlass2, maxLines = 1)
                 }
                 if (pg == 0) {
                     if (next == null) Text("Niente in programma", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 3)
@@ -90,16 +99,17 @@ fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.
                         }
                     }
                 } else {
-                    Text("%02d:%02d".format(secs / 60, secs % 60), style = CanoneType.title1.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = if (t.running) OnGlass else OnGlass2, maxLines = 1)
-                    Text(if (today > 0) "$today min oggi" else "Oggi niente", style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
+                    Text("%02d:%02d".format(secs / 60, secs % 60), style = CanoneType.title1.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Color.White, maxLines = 1)
+                    Text(if (today > 0) "$today min oggi" else "Oggi niente", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
                 }
             }
+          }
         }
         // indicatore di pagina
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             repeat(2) { i ->
                 val on = pages.currentPage == i
-                Box(Modifier.size(if (on) 14.dp else 5.dp, 5.dp).clip(CircleShape).background(if (on) Canone.colors.accent else OnGlass3))
+                Box(Modifier.size(if (on) 14.dp else 5.dp, 5.dp).clip(CircleShape).background(if (on) (if (pages.currentPage == 1) Color.White else Canone.colors.accent) else if (pages.currentPage == 1) Color.White.copy(alpha = 0.4f) else OnGlass3))
             }
         }
     }

@@ -261,30 +261,34 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         if (page == "add") AddPage() else ScreenList("Finanze") {
             when (page) {
                 null -> {
-                    // ------------------------------------------------ cruscotto: solo grafici e tasti
+                    // ------------------------------------------------ essenziale: saldo, mese, azioni, andamento, dove, ultimi
                     item {
-                        GlassTile(Modifier.fillMaxWidth(), Tint.money, 0) {
+                        GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0) {
                             Column(Modifier.padding(Space.s5), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
                                 Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Saldo", style = CanoneType.footnote, color = OnGlass2)
+                                    Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
                                     EyeToggle(r, 28.dp)
                                 }
-                                CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 40.sp), OnGlass)
-                                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                                    listOf("Entrate" to earned, "Uscite" to spent).forEach { (l, v) ->
-                                        Column(Modifier.clip(RoundedCornerShape(Radius.md)).background(c.accent.copy(alpha = 0.10f)).padding(horizontal = Space.s3, vertical = Space.s2)) {
-                                            Text(l, style = CanoneType.footnote, color = OnGlass2)
-                                            CountUp(v, CanoneType.bodyMedium, OnGlass)
-                                        }
+                                CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 44.sp, lineHeight = 50.sp, fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(c.lineSeparator))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(32.dp).clip(CircleShape).dropClickable({ step(-1) }, corner = 16.dp), contentAlignment = Alignment.Center) { Text("‹", style = CanoneType.title3, color = c.labelSecondary) }
+                                    Text(title, style = CanoneType.bodyMedium, color = c.labelPrimary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Box(Modifier.size(32.dp).clip(CircleShape).dropClickable({ step(1) }, corner = 16.dp), contentAlignment = Alignment.Center) { Text("›", style = CanoneType.title3, color = c.labelSecondary) }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                    val diff = if (prevSpent > 0) ((spent - prevSpent) * 100 / prevSpent).toInt() else null
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Entrate", style = CanoneType.footnote, color = c.labelTertiary)
+                                        CountUp(earned, CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                                    }
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Uscite", style = CanoneType.footnote, color = c.labelTertiary)
+                                        CountUp(spent, CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                                        if (diff != null && diff != 0) Text((if (diff > 0) "+" else "") + "$diff%", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = if (diff > 0) Tint.third else c.accent)
                                     }
                                 }
                             }
-                        }
-                    }
-                    item {
-                        CCard {
-                            PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
-                            Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) { SOURCES.forEach { (k, n) -> Legend(n, srcColor(k)) } }
                         }
                     }
                     item {
@@ -296,60 +300,30 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         }
                     }
                     item {
-                        Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                            GlassSegmented(listOf("Mese", "Anno"), if (month < 0) 1 else 0, { month = if (it == 1) -1 else now.get(Calendar.MONTH) })
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                CButton("‹", { step(-1) }, kind = ButtonKind.Tertiary)
-                                Text(title, style = CanoneType.title3, color = c.labelPrimary)
-                                CButton("›", { step(1) }, kind = ButtonKind.Tertiary)
-                            }
-                        }
-                    }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Kpi("Entrate", earned, Tint.money, 1, Modifier.weight(1f))
-                                Kpi("Uscite", spent, Tint.rose, 2, Modifier.weight(1f))
-                            }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Kpi("Risparmio", earned - spent, Tint.sky, 3, Modifier.weight(1f))
-                                Kpi("Al giorno", if (daysIn > 0) spent / daysIn else 0, Tint.sun, 4, Modifier.weight(1f))
-                            }
-                            val diff = if (prevSpent > 0) ((spent - prevSpent) * 100 / prevSpent).toInt() else null
-                            if (diff != null) Text(if (diff > 0) "Spesa +$diff% rispetto al periodo prima" else if (diff < 0) "Spesa $diff% rispetto al periodo prima" else "Spesa invariata", style = CanoneType.footnote, color = if (diff > 0) c.critical else c.positive)
-                        }
-                    }
-                    item {
-                        CCard {
-                            SectionTitle(if (month < 0) "Mese per mese" else "Ultimi mesi")
-                            val bars = (0 until (if (month < 0) 12 else 6)).map { i ->
-                                val (y, mo) = if (month < 0) year to i else {
-                                    var mm = month - 5 + i; var yy = year
-                                    while (mm < 0) { mm += 12; yy-- }
-                                    yy to mm
+                        GlassTile(Modifier.fillMaxWidth(), Tint.blue, 1) {
+                            Column(Modifier.padding(Space.s5), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Andamento", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
+                                    if (pace.proj != null) Text("Previsti " + eur((pace.proj * 100).toLong()), style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
                                 }
-                                val (a, b) = range(y, mo)
-                                val l = m.txs.filter { it.ts in a until b }
-                                Triple(listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[mo], l.filter { it.cents > 0 }.sumOf { it.cents }, -l.filter { it.cents < 0 }.sumOf { it.cents })
+                                PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
                             }
-                            Box(Modifier.blurIf(MoneyPrivacy.hidden)) { BarChart(bars, c.accent, c.labelTertiary) }
-                            Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) { Legend("Entrate", c.accent); Legend("Uscite", c.labelTertiary) }
                         }
                     }
                     item {
                         val by = inPeriod.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }.take(4)
-                        if (by.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.night, 5) {
+                        if (by.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.blue, 2) {
                             Column(Modifier.padding(Space.s5).blurIf(MoneyPrivacy.hidden), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Text("Dove spendi di più", style = CanoneType.footnote, color = OnGlass2)
+                                Text("Dove spendi", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
                                 val top = by.first().value.coerceAtLeast(1)
-                                by.forEach { (k, v) ->
+                                by.forEachIndexed { i, (k, v) ->
                                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text(k, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1)
-                                            Text(eur(v), style = CanoneType.bodyMedium, color = OnGlass)
+                                            Text(k, style = CanoneType.body, color = c.labelPrimary, maxLines = 1)
+                                            Text(eur(v), style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary)
                                         }
-                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.14f))) {
-                                            Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / top).clip(CircleShape).background(c.accent))
+                                        Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(c.bgSunken)) {
+                                            Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / top).clip(CircleShape).background(if (i == 0) c.accent else c.accent.copy(alpha = 0.45f)))
                                         }
                                     }
                                 }
@@ -357,24 +331,24 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         }
                     }
                     item {
-                        CCard {
-                            SectionTitle("Dove vanno i soldi")
-                            Box(Modifier.blurIf(MoneyPrivacy.hidden)) { CategoryDonut(inPeriod.filter { it.cents < 0 }, "Nessuna spesa in questo periodo.") }
-                        }
-                    }
-                    item {
-                        val last = m.txs.sortedByDescending { it.ts }.take(4)
-                        if (last.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.ocean, 6, { onSub("moves") }) {
-                            Column(Modifier.padding(Space.s5).blurIf(MoneyPrivacy.hidden), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Text("Ultimi movimenti", style = CanoneType.footnote, color = OnGlass2)
-                                last.forEach { t ->
-                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                        Box(Modifier.size(10.dp).clip(CircleShape).background(Tint.third))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(t.note.ifBlank { t.cat }, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                            Text(t.cat + " · " + srcName(t.src), style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
+                        val last = m.txs.sortedByDescending { it.ts }.take(5)
+                        if (last.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.blue, 3, { onSub("moves") }) {
+                            Column(Modifier.padding(horizontal = Space.s5, vertical = Space.s4)) {
+                                Row(Modifier.fillMaxWidth().padding(bottom = Space.s2), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Ultimi movimenti", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
+                                    Text("›", style = CanoneType.bodyMedium, color = c.labelTertiary)
+                                }
+                                last.forEachIndexed { i, t ->
+                                    if (i > 0) Box(Modifier.fillMaxWidth().padding(start = 40.dp).height(1.dp).background(c.lineSeparator))
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                        Box(Modifier.size(28.dp).clip(CircleShape).background(if (t.cents > 0) c.accent.copy(alpha = 0.18f) else c.bgSunken), contentAlignment = Alignment.Center) {
+                                            Text(if (t.cents > 0) "+" else "−", style = CanoneType.bodyMedium, color = if (t.cents > 0) c.accent else c.labelSecondary)
                                         }
-                                        Text(eur(t.cents), style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1)
+                                        Column(Modifier.weight(1f)) {
+                                            Text(t.note.ifBlank { t.cat }, style = CanoneType.body, color = c.labelPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            Text(t.cat, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
+                                        }
+                                        Text((if (t.cents > 0) "+" else "") + eur(t.cents), style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = if (t.cents > 0) c.accent else c.labelPrimary, maxLines = 1, modifier = Modifier.blurIf(MoneyPrivacy.hidden))
                                     }
                                 }
                             }
