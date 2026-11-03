@@ -87,6 +87,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     val files by r.files.items.collectAsState()
     val money by r.finance.state.collectAsState()
     val missing = missingPerms(ctx)
+    var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -94,7 +95,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
             contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s3, bottom = 24.dp + LocalBarInset.current),
         ) {
             item {
-                // griglia come su iOS: due colonne uguali, quadrati e rettangoli, stesso spazio ovunque
+                // griglia come su iOS: due colonne uguali, quadrati e rettangoli, stesso spazio ovunque; tieni premuto per l'app volante
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val gap = Space.s3
                     val cell = (maxWidth - gap) / 2
@@ -102,20 +103,17 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                     val sq = Modifier.size(cell)
                     Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                         if (missing > 0) FixWidget(missing, Modifier.fillMaxWidth().height(72.dp)) { go("perm") }
-                        PlanWidgets(r, go, cell)
                         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, sq)
-                            BalanceCard(r, money.totalCents, sq) { go("finance") }
+                            PlanWidgets(r, go, cell) { panel = "agenda" }
+                            PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, sq) { panel = "share" }
                         }
-                        AudioTile(r, wide, 4)
-                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            StorageTile(r, sq, 5) { go("clips") }
-                            HeadphonesTile(r, sq, 6)
-                        }
+                        BalanceCard(r, money, wide, { go("finance") }) { panel = "finance" }
+                        AudioTile(r, wide, 4, { go("settings") }) { panel = "audio" }
                     }
                 }
             }
         }
+        QuickPanel(panel, r, go) { panel = null }
     }
 }
 
@@ -132,15 +130,36 @@ private fun FixWidget(n: Int, modifier: Modifier, onClick: () -> Unit) {
 
 /** Il saldo come un riquadro qualsiasi. */
 @Composable
-private fun BalanceCard(r: Router, total: Long, modifier: Modifier, onClick: () -> Unit) {
-    GlassTile(modifier, Tint.money, 3) {
-        Box(Modifier.matchParentSize().dropClickable(onClick, corner = Radius.xl))
+private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClick: () -> Unit, onLong: () -> Unit) {
+    val c = Canone.colors
+    val bars = remember(m.txs) {
+        val cal = Calendar.getInstance()
+        (5 downTo 0).map { k ->
+            val a = Calendar.getInstance().apply { clear(); set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), 1); add(Calendar.MONTH, -k) }
+            val b = (a.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+            -m.txs.filter { it.ts >= a.timeInMillis && it.ts < b.timeInMillis && it.cents < 0 }.sumOf { it.cents }.toFloat()
+        }
+    }
+    GlassTile(modifier, Tint.blue, 3, onClick, onLong) {
         Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Saldo", style = CanoneType.footnote, color = OnGlass2)
-                EyeToggle(r, tint = OnGlass)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TabGlyph(6, c.accent, false, Modifier.size(18.dp))
+                    Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
+                }
+                EyeToggle(r)
             }
-            CountUp(total, CanoneType.title2.copy(fontWeight = FontWeight.SemiBold), OnGlass)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
+                CountUp(m.totalCents, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+                val mx = (bars.maxOrNull() ?: 0f).coerceAtLeast(1f)
+                Canvas(Modifier.size(width = 96.dp, height = 56.dp).blurIf(MoneyPrivacy.hidden)) {
+                    val w = size.width / (bars.size * 2 - 1)
+                    bars.forEachIndexed { i, v ->
+                        val hh = (v / mx).coerceAtLeast(0.06f) * size.height
+                        drawRoundRect(if (i == bars.lastIndex) c.accent else c.accent.copy(alpha = 0.32f), Offset(i * 2 * w, size.height - hh), Size(w, hh), CornerRadius(w / 2))
+                    }
+                }
+            }
         }
     }
 }
@@ -150,7 +169,7 @@ private fun BalanceCard(r: Router, total: Long, modifier: Modifier, onClick: () 
  * seppellendo l'altro, e mostra l'anteprima con "Copiato"; poi si ritira. Due tocchi aprono la pagina.
  */
 @Composable
-private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (String) -> Unit, modifier: Modifier) {
+private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (String) -> Unit, modifier: Modifier, onLong: () -> Unit) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -181,8 +200,8 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
             Box(
                 Modifier.offset(y = lerp(baseY, 0.dp, f)).size(w, lerp(tileH, hh, f)).zIndex(if (mine) 2f else 1f)
                     .graphicsLayer { val o = if (!mine && which != 0) p.value else 0f; alpha = 1f - 0.7f * o; scaleX = 1f - 0.05f * o; scaleY = 1f - 0.05f * o }
-                    .clip(shape).background(if (id == 2) Brush.linearGradient(Tint.mint) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)), shape)
-                    .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg),
+                    .clip(shape).background(if (id == 2) Brush.linearGradient(listOf(c.accent.copy(alpha = 0.18f), c.bgSurface)) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, c.lineSeparator), shape)
+                    .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg).onLongPressOnly(onLong),
             ) {
                 content()
                 if (mine) Box(Modifier.matchParentSize().graphicsLayer { alpha = ((p.value - 0.35f) / 0.5f).coerceIn(0f, 1f) }) {

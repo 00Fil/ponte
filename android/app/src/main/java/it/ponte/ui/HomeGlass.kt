@@ -68,21 +68,16 @@ private val NOISE: Brush by lazy {
     ShaderBrush(BitmapShader(bmp, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT))
 }
 
-/** Palette piene dei riquadri: colore pieno, vetro sopra. */
+/** Il vetro è neutro: del colore restano solo il blu dell'app e, come dettaglio, un terzo colore caldo. */
 object Tint {
-    val sky = listOf(Color(0xFF3E7BFF), Color(0xFF7A4DF0))
-    val sun = listOf(Color(0xFFFF9140), Color(0xFFFF3F78))
-    val mint = listOf(Color(0xFF12C2A0), Color(0xFF2E7BE8))
-    val money = listOf(Color(0xFF16B77A), Color(0xFF0B7A8F))
-    val night = listOf(Color(0xFF6A35D6), Color(0xFF12A4E6))
-    val rose = listOf(Color(0xFFF0489A), Color(0xFFF59E2B))
-    val ocean = listOf(Color(0xFF12A6E6), Color(0xFF5B5BE6))
-    val amber = listOf(Color(0xFFF5A623), Color(0xFFE5532D))
+    val third = Color(0xFFFFB347)
+    val blue = listOf(Color(0xFF3E7BFF), third)
+    val sky = blue; val sun = blue; val mint = blue; val money = blue; val night = blue; val rose = blue; val ocean = blue; val amber = blue
 }
 
-val OnGlass = Color.White
-val OnGlass2 = Color.White.copy(alpha = 0.78f)
-val OnGlass3 = Color.White.copy(alpha = 0.60f)
+val OnGlass: Color @Composable get() = Canone.colors.labelPrimary
+val OnGlass2: Color @Composable get() = Canone.colors.labelSecondary
+val OnGlass3: Color @Composable get() = Canone.colors.labelTertiary
 
 /** Entrata a cascata: ogni riquadro sale e si assesta con una molla, uno dopo l'altro. */
 fun Modifier.stagger(index: Int): Modifier = composed {
@@ -102,29 +97,34 @@ fun Modifier.stagger(index: Int): Modifier = composed {
  * (velo, bordo con dispersione, riflesso). Quadrato o rettangolare lo decide chi lo usa.
  */
 @Composable
-fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
+fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: (() -> Unit)? = null, onLong: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
     val dark = isDark()
+    val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     val t = rememberDropTouch()
-    val drift by rememberInfiniteTransition(label = "luce").animateFloat(0f, 1f, infiniteRepeatable(tween(8000 + index * 900, easing = LinearEasing), RepeatMode.Reverse), label = "d")
-    val brush = remember(colors, dark) { Brush.linearGradient(colors.map { if (dark) it.copy(alpha = 0.92f) else it }) }
+    val drift by rememberInfiniteTransition(label = "luce").animateFloat(0f, 1f, infiniteRepeatable(tween(9000 + index * 900, easing = LinearEasing), RepeatMode.Reverse), label = "d")
+    val blue = c.accent
+    val third = colors.getOrElse(1) { Tint.third }
+    val body = remember(dark) { Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.10f else 0.62f), Color.White.copy(alpha = if (dark) 0.04f else 0.34f))) }
     Box(
         modifier.stagger(index)
             .graphicsLayer { val p = t.press.value; scaleX = 1f - 0.04f * p; scaleY = 1f - 0.04f * p }
             .clip(shape)
-            .background(brush)
+            .background(c.bgSurface.copy(alpha = if (dark) 0.55f else 0.7f))
+            .background(body)
             .drawBehind {
                 val d = drift
-                drawCircle(
-                    Brush.radialGradient(listOf(Color.White.copy(alpha = 0.34f), Color.Transparent), center = Offset(size.width * (0.1f + 0.8f * d), size.height * (0.05f + 0.35f * d)), radius = size.maxDimension * 0.75f),
-                    radius = size.maxDimension * 0.75f, center = Offset(size.width * (0.1f + 0.8f * d), size.height * (0.05f + 0.35f * d)),
-                )
-                drawRect(NOISE, alpha = 0.16f)
+                val at = Offset(size.width * (0.05f + 0.55f * d), size.height * (0.0f + 0.3f * d))
+                drawCircle(Brush.radialGradient(listOf(blue.copy(alpha = if (dark) 0.34f else 0.26f), Color.Transparent), center = at, radius = size.maxDimension * 0.7f), radius = size.maxDimension * 0.7f, center = at)
+                // il terzo colore, solo un dettaglio in un angolo
+                val q = Offset(size.width * 0.96f, size.height * 1.0f)
+                drawCircle(Brush.radialGradient(listOf(third.copy(alpha = if (dark) 0.20f else 0.22f), Color.Transparent), center = q, radius = size.minDimension * 0.42f), radius = size.minDimension * 0.42f, center = q)
+                drawRect(NOISE, alpha = 0.07f)
                 val p = t.press.value
-                if (p > 0.01f) drawRect(Color.White.copy(alpha = 0.16f * p))
+                if (p > 0.01f) drawRect(blue.copy(alpha = 0.10f * p))
             }
             .drop(dark, corner = Radius.xl)
-            .then(if (onClick != null) Modifier.dropGestures(t, onClick) else Modifier),
+            .then(if (onClick != null || onLong != null) Modifier.dropGestures(t, onClick ?: {}, onLong) else Modifier),
         content = content,
     )
 }
@@ -132,12 +132,14 @@ fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: 
 /** Anello di avanzamento su vetro (traccia chiara, arco bianco). */
 @Composable
 fun GlassRingMark(fraction: Float, size: Dp, stroke: Dp = 5.dp, content: @Composable BoxScope.() -> Unit) {
+    val acc = Canone.colors.accent
+    val tr = Canone.colors.labelPrimary.copy(alpha = 0.12f)
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = stroke.toPx()
             val tl = Offset(w / 2, w / 2); val sz = Size(this.size.width - w, this.size.height - w)
-            drawArc(Color.White.copy(alpha = 0.24f), 0f, 360f, false, tl, sz, style = Stroke(w))
-            drawArc(Color.White, -90f, 360f * fraction.coerceIn(0f, 1f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
+            drawArc(tr, 0f, 360f, false, tl, sz, style = Stroke(w))
+            drawArc(acc, -90f, 360f * fraction.coerceIn(0f, 1f), false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
         }
         content()
     }
@@ -145,69 +147,76 @@ fun GlassRingMark(fraction: Float, size: Dp, stroke: Dp = 5.dp, content: @Compos
 
 /** Piccolo tasto bianco traslucido dentro un riquadro. */
 @Composable
-private fun PillOn(label: String, onClick: () -> Unit) {
+fun PillOn(label: String, onClick: () -> Unit) {
     val t = rememberDropTouch()
     Box(
         Modifier.graphicsLayer { val p = t.press.value; scaleX = 1f - 0.06f * p; scaleY = 1f - 0.06f * p }
-            .clip(CircleShape).background(Color.White.copy(alpha = 0.26f)).dropGestures(t, onClick).padding(horizontal = 14.dp, vertical = 7.dp),
+            .clip(CircleShape).background(Canone.colors.accent.copy(alpha = 0.16f)).dropGestures(t, onClick).padding(horizontal = 14.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(label, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1) }
+    ) { Text(label, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Canone.colors.accent, maxLines = 1) }
 }
 
-/** Audio: chi sta suonando tra i dispositivi collegati, da dove esce, e il tasto per fermarlo da qui. */
+/** Elenco dei dispositivi con stato audio e tasto per fermarli (o ascoltarli). */
 @Composable
-fun AudioTile(r: Router, modifier: Modifier, index: Int) {
+fun AudioRows(r: Router, max: Int) {
     val devices by r.devices.collectAsState()
     val playing by r.media.playingNow.collectAsState()
     val holder by r.headphones.holder.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val me = r.deviceId
-    val myName = "Questo telefono"
-    // chi suona per primo, poi i PC da cui si può ascoltare
     val rows = buildList {
-        add(Triple(me, myName, false))
+        add(Triple(me, "Questo telefono", false))
         devices.forEach { add(Triple(it.id, it.name, "audio-src" in it.caps)) }
-    }.sortedByDescending { it.first in playing }.take(3)
-    GlassTile(modifier, Tint.night, index) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TabGlyph(4, OnGlass, false, Modifier.size(18.dp))
-                Text("Audio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2)
-                if (playing.isEmpty()) Text("Silenzio", style = CanoneType.footnote, color = OnGlass3)
-            }
-            rows.forEach { (id, name, src) ->
-                val isPlaying = id in playing
-                val title = playing[id].orEmpty()
-                val pic = DevicePics.rememberPic(id)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(alpha = if (isPlaying) 0.34f else 0.16f)), contentAlignment = Alignment.Center) {
-                        if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass, false, Modifier.size(15.dp))
+    }.sortedByDescending { it.first in playing }.take(max)
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        rows.forEach { (id, name, src) ->
+            val isPlaying = id in playing
+            val title = playing[id].orEmpty()
+            val pic = DevicePics.rememberPic(id)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(30.dp).clip(CircleShape).background(Canone.colors.accent.copy(alpha = if (isPlaying) 0.22f else 0.08f)), contentAlignment = Alignment.Center) {
+                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(15.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(name, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val sub = when {
+                        isPlaying && title.isNotEmpty() -> title
+                        isPlaying -> "In riproduzione"
+                        holder == id -> "Cuffie collegate"
+                        active == id -> "In ascolto qui"
+                        else -> "Fermo"
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(name, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val sub = when {
-                            isPlaying && title.isNotEmpty() -> title
-                            isPlaying -> "In riproduzione"
-                            holder == id -> "Cuffie collegate"
-                            active == id -> "In ascolto qui"
-                            else -> "Fermo"
-                        }
-                        Text(sub, style = CanoneType.footnote.copy(fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)), color = OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    when {
-                        isPlaying -> PillOn("Ferma") { r.media.stopOn(id) }
-                        src && active == id -> PillOn("Ferma") { r.audio.stopListening(id) }
-                        src -> PillOn("Ascolta") { r.audio.listenTo(id) }
-                    }
+                    Text(sub, style = CanoneType.footnote.copy(fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)), color = OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                when {
+                    isPlaying -> PillOn("Ferma") { r.media.stopOn(id) }
+                    src && active == id -> PillOn("Ferma") { r.audio.stopListening(id) }
+                    src -> PillOn("Ascolta") { r.audio.listenTo(id) }
                 }
             }
         }
     }
 }
 
-/** Cuffie in un quadrato: batteria nell'anello, nome e dove sono collegate. Solo se ci sono. */
+/** Audio: chi sta suonando tra i dispositivi collegati e da dove esce. */
 @Composable
-fun HeadphonesTile(r: Router, modifier: Modifier, index: Int) {
+fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onLong: () -> Unit) {
+    val playing by r.media.playingNow.collectAsState()
+    GlassTile(modifier, Tint.blue, index, onClick, onLong) {
+        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TabGlyph(4, Canone.colors.accent, false, Modifier.size(18.dp))
+                Text("Audio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2)
+                if (playing.isEmpty()) Text("Silenzio", style = CanoneType.footnote, color = OnGlass3)
+            }
+            AudioRows(r, 3)
+        }
+    }
+}
+
+/** Cuffie: batteria nell'anello, nome e dove sono collegate. Niente se non ci sono. */
+@Composable
+fun HeadphonesInfo(r: Router) {
     val ctx = LocalContext.current
     val hps by r.headphones.list.collectAsState()
     val holder by r.headphones.holder.collectAsState()
@@ -219,39 +228,18 @@ fun HeadphonesTile(r: Router, modifier: Modifier, index: Int) {
     val battery = remember(connected?.address, tick) { connected?.let { headphonesBattery(ctx, it.address) } }
     val pic = DevicePics.rememberPic(holder)
     val level by androidx.compose.animation.core.animateFloatAsState((battery ?: 0) / 100f, spring(1f, 120f), label = "batteria")
-    GlassTile(modifier, Tint.rose, index) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
-            GlassRingMark(if (battery != null) level else 0f, 64.dp) {
-                Box(Modifier.size(46.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
-                    if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit) else TabGlyph(4, OnGlass, false, Modifier.size(22.dp))
-                }
-            }
-            Column {
-                Text(connected?.name ?: "Cuffie", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    (if (battery != null) "$battery% · " else "") + when (holder) { null -> "Libere"; r.deviceId -> "Questo telefono"; else -> r.deviceName(holder ?: "") },
-                    style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+        GlassRingMark(if (battery != null) level else 0f, 52.dp, 4.dp) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(Canone.colors.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(4, OnGlass2, false, Modifier.size(18.dp))
             }
         }
-    }
-}
-
-/** Spazio usato nel drive condiviso (50 GB). */
-@Composable
-fun StorageTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit) {
-    val ctx = LocalContext.current
-    val all by r.files.items.collectAsState()
-    val hist by r.clipboard.history.collectAsState()
-    val used = all.sumOf { it.size } + hist.sumOf { it.text.length.toLong() }
-    val frac = (used.toFloat() / (50L * 1024 * 1024 * 1024)).coerceIn(0f, 1f)
-    GlassTile(modifier, Tint.ocean, index, onClick) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
-            GlassRingMark(maxOf(frac, 0.02f), 64.dp) { TabGlyph(1, OnGlass, false, Modifier.size(24.dp)) }
-            Column {
-                Text(android.text.format.Formatter.formatShortFileSize(ctx, used), style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1)
-                Text("di 50 GB", style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
-            }
+        Column(Modifier.weight(1f)) {
+            Text(connected?.name ?: "Cuffie", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                (if (battery != null) "$battery% · " else "") + when (holder) { null -> "Libere"; r.deviceId -> "Questo telefono"; else -> r.deviceName(holder ?: "") },
+                style = CanoneType.footnote, color = OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

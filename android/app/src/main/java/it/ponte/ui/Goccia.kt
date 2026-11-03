@@ -526,3 +526,13 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
         }
     }
 }
+
+
+/** Pressione lunga che non disturba il tocco: se scatta, il rilascio viene consumato e il tocco normale non parte. */
+fun Modifier.onLongPressOnly(onLong: () -> Unit): Modifier = this.pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        val done = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); true }
+        if (done == null) { onLong(); waitForUpOrCancellation()?.consume() }
+    }
+}

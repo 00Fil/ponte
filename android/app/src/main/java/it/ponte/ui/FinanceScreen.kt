@@ -267,12 +267,12 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             Column(Modifier.padding(Space.s5), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
                                 Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Saldo", style = CanoneType.footnote, color = OnGlass2)
-                                    EyeToggle(r, 28.dp, tint = OnGlass)
+                                    EyeToggle(r, 28.dp)
                                 }
                                 CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 40.sp), OnGlass)
                                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                                     listOf("Entrate" to earned, "Uscite" to spent).forEach { (l, v) ->
-                                        Column(Modifier.clip(RoundedCornerShape(Radius.md)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                                        Column(Modifier.clip(RoundedCornerShape(Radius.md)).background(c.accent.copy(alpha = 0.10f)).padding(horizontal = Space.s3, vertical = Space.s2)) {
                                             Text(l, style = CanoneType.footnote, color = OnGlass2)
                                             CountUp(v, CanoneType.bodyMedium, OnGlass)
                                         }
@@ -348,8 +348,8 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                             Text(k, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1)
                                             Text(eur(v), style = CanoneType.bodyMedium, color = OnGlass)
                                         }
-                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))) {
-                                            Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / top).clip(CircleShape).background(Color.White))
+                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.14f))) {
+                                            Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / top).clip(CircleShape).background(c.accent))
                                         }
                                     }
                                 }
@@ -369,7 +369,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                                 Text("Ultimi movimenti", style = CanoneType.footnote, color = OnGlass2)
                                 last.forEach { t ->
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                        Box(Modifier.size(10.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)))
+                                        Box(Modifier.size(10.dp).clip(CircleShape).background(Tint.third))
                                         Column(Modifier.weight(1f)) {
                                             Text(t.note.ifBlank { t.cat }, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                             Text(t.cat + " · " + srcName(t.src), style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
