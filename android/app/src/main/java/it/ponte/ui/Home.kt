@@ -90,8 +90,11 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+        val blur by androidx.compose.animation.core.animateFloatAsState(if (panel != null) 26f else 0f, tween(260), label = "sfoca")
         LazyColumn(
-            Modifier.widthIn(max = 720.dp).fillMaxHeight(),
+            Modifier.widthIn(max = 720.dp).fillMaxHeight().graphicsLayer {
+                if (blur > 0.5f && android.os.Build.VERSION.SDK_INT >= 31) renderEffect = androidx.compose.ui.graphics.BlurEffect(blur, blur, androidx.compose.ui.graphics.TileMode.Decal)
+            },
             contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s3, bottom = 24.dp + LocalBarInset.current),
         ) {
             item {

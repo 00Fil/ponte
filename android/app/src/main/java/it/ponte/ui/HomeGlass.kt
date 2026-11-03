@@ -97,33 +97,18 @@ fun Modifier.stagger(index: Int): Modifier = composed {
  * (velo, bordo con dispersione, riflesso). Quadrato o rettangolare lo decide chi lo usa.
  */
 @Composable
-fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: (() -> Unit)? = null, onLong: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
+fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: (() -> Unit)? = null, onLong: (() -> Unit)? = null, acrylic: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     val dark = isDark()
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     val t = rememberDropTouch()
-    val drift by rememberInfiniteTransition(label = "luce").animateFloat(0f, 1f, infiniteRepeatable(tween(9000 + index * 900, easing = LinearEasing), RepeatMode.Reverse), label = "d")
-    val blue = c.accent
-    val third = colors.getOrElse(1) { Tint.third }
-    val body = remember(dark) { Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.10f else 0.62f), Color.White.copy(alpha = if (dark) 0.04f else 0.34f))) }
     Box(
         modifier.stagger(index)
             .graphicsLayer { val p = t.press.value; scaleX = 1f - 0.04f * p; scaleY = 1f - 0.04f * p }
             .clip(shape)
-            .background(c.bgSurface.copy(alpha = if (dark) 0.55f else 0.7f))
-            .background(body)
-            .drawBehind {
-                val d = drift
-                val at = Offset(size.width * (0.05f + 0.55f * d), size.height * (0.0f + 0.3f * d))
-                drawCircle(Brush.radialGradient(listOf(blue.copy(alpha = if (dark) 0.34f else 0.26f), Color.Transparent), center = at, radius = size.maxDimension * 0.7f), radius = size.maxDimension * 0.7f, center = at)
-                // il terzo colore, solo un dettaglio in un angolo
-                val q = Offset(size.width * 0.96f, size.height * 1.0f)
-                drawCircle(Brush.radialGradient(listOf(third.copy(alpha = if (dark) 0.20f else 0.22f), Color.Transparent), center = q, radius = size.minDimension * 0.42f), radius = size.minDimension * 0.42f, center = q)
-                drawRect(NOISE, alpha = 0.07f)
-                val p = t.press.value
-                if (p > 0.01f) drawRect(blue.copy(alpha = 0.10f * p))
-            }
-            .drop(dark, corner = Radius.xl)
+            // acrilico: neutro e quasi opaco, per i menu che galleggiano sopra lo sfondo sfocato
+            .then(if (acrylic) Modifier.background(c.bgSurface.copy(alpha = if (dark) 0.78f else 0.84f)) else Modifier)
+            .drop(dark, corner = Radius.xl, press = { t.press.value }, touch = t)
             .then(if (onClick != null || onLong != null) Modifier.dropGestures(t, onClick ?: {}, onLong) else Modifier),
         content = content,
     )

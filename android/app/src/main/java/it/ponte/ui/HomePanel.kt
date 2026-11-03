@@ -71,7 +71,7 @@ fun QuickPanel(kind: String?, r: Router, go: (String) -> Unit, onDismiss: () -> 
     fun open(to: String) { onDismiss(); go(to) }
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(kind != null, enter = fadeIn(tween(180)), exit = fadeOut(tween(160))) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.38f)).pointerInput(Unit) { detectTapGestures { onDismiss() } })
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.22f)).pointerInput(Unit) { detectTapGestures { onDismiss() } })
         }
         AnimatedVisibility(
             kind != null, Modifier.align(Alignment.Center),
@@ -79,7 +79,7 @@ fun QuickPanel(kind: String?, r: Router, go: (String) -> Unit, onDismiss: () -> 
             exit = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130)),
         ) {
             Box(Modifier.padding(Space.s4).widthIn(max = 420.dp).pointerInput(Unit) { detectTapGestures { } }) {
-                GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0) {
+                GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0, acrylic = true) {
                     Column(Modifier.padding(Space.s5).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
                         when (shown) {
                             "agenda" -> {

@@ -96,7 +96,9 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     val bridge = remember { CalendarBridge(ctx) }
     var granted by remember { mutableStateOf(bridge.granted()) }
     var tick by remember { mutableIntStateOf(0) }
-    var mode by remember { mutableIntStateOf(0) }                       // 0 mese, 1 prossimi, 2 studio
+    val carousel = androidx.compose.foundation.pager.rememberPagerState { 2 }   // 0 agenda, 1 studio: si passa con uno swipe
+    val uiScope = androidx.compose.runtime.rememberCoroutineScope()
+    val mode = if (carousel.currentPage == 1) 2 else 0
     val now = remember { System.currentTimeMillis() }
     var cursor by remember { mutableLongStateOf(Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis) }
     var selected by remember { mutableLongStateOf(dayStart(now)) }
@@ -113,7 +115,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         val o = bridge.observe { tick++ }
         onDispose { bridge.unobserve(o) }
     }
-    LaunchedEffect(sub) { if (sub == "study") { mode = 2; onSub(null) } }
+    LaunchedEffect(sub) { if (sub == "study") { carousel.animateScrollToPage(1); onSub(null) } }
     androidx.activity.compose.BackHandler(enabled = sheet != null) { closeTick++ }
     androidx.compose.runtime.SideEffect {
         val sh = sheet
@@ -171,7 +173,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     }
     val top: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
-            GlassSegmented(listOf("Mese", "Studio"), if (mode == 2) 1 else 0, { mode = if (it == 1) 2 else 0 }, Modifier.weight(1f))
+            GlassSegmented(listOf("Agenda", "Studio"), carousel.targetPage, { uiScope.launch { carousel.animateScrollToPage(it) } }, Modifier.weight(1f))
             CButton("Google", { onSub("cals") }, kind = ButtonKind.Secondary)
         }
     }
@@ -189,33 +191,30 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
             "set" -> StudySettings(r) { onSub(null) }
             "cals" -> CalendarsPage(ctx, bridge, granted, cals, hidden, target, { hidden = it; bridge.hidden = it; tick++ }, { target = it; bridge.target = it }, { ask.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }) { onSub(null) }
             else -> Box(Modifier.fillMaxSize()) {
-                androidx.compose.animation.AnimatedContent(
-                    mode,
-                    transitionSpec = { (fadeIn(tween(260, delayMillis = 70)) + androidx.compose.animation.scaleIn(spring(1f, 420f), 0.97f)) togetherWith fadeOut(tween(110)) },
-                    label = "agendaMode",
-                ) { md ->
-                when (md) {
-                    0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                        Column(Modifier.widthIn(max = 720.dp).fillMaxHeight().padding(top = Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                            Box(Modifier.padding(horizontal = Space.s4)) { top() }
-                            MonthCard(
-                                if (expanded) cursor else selected, selected, expanded, weeks, gridStart, { on(it).map { i -> i.color }.distinct().take(3) }, now,
-                                onPick = { d -> selected = d; haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); if (Calendar.getInstance().apply { timeInMillis = d }.get(Calendar.MONTH) != first.get(Calendar.MONTH)) cursor = Calendar.getInstance().apply { timeInMillis = d; set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis },
-                                onStep = { dir ->
-                                    if (expanded) cursor = Calendar.getInstance().apply { timeInMillis = cursor; add(Calendar.MONTH, dir) }.timeInMillis
-                                    else { selected = addDays(selected, 7 * dir); cursor = Calendar.getInstance().apply { timeInMillis = selected; set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis }
-                                },
-                                onToday = { selected = dayStart(now); cursor = Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis },
-                                onExpand = { expanded = it },
-                            )
-                            DayDrawer(selected, on(selected), expanded, { expanded = it }, { open(it) }, { remove(it) }, Modifier.weight(1f))
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.padding(start = Space.s4, end = Space.s4, top = Space.s2, bottom = Space.s3).widthIn(max = 720.dp)) { top() }
+                    androidx.compose.foundation.pager.HorizontalPager(carousel, Modifier.weight(1f).fillMaxWidth(), userScrollEnabled = sheet == null, beyondViewportPageCount = 1) { md ->
+                        when (md) {
+                            0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                Column(Modifier.widthIn(max = 720.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                    MonthCard(
+                                        if (expanded) cursor else selected, selected, expanded, weeks, gridStart, { on(it).map { i -> i.color }.distinct().take(3) }, now,
+                                        onPick = { d -> selected = d; haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); if (Calendar.getInstance().apply { timeInMillis = d }.get(Calendar.MONTH) != first.get(Calendar.MONTH)) cursor = Calendar.getInstance().apply { timeInMillis = d; set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis },
+                                        onStep = { dir ->
+                                            if (expanded) cursor = Calendar.getInstance().apply { timeInMillis = cursor; add(Calendar.MONTH, dir) }.timeInMillis
+                                            else { selected = addDays(selected, 7 * dir); cursor = Calendar.getInstance().apply { timeInMillis = selected; set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis }
+                                        },
+                                        onToday = { selected = dayStart(now); cursor = Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis },
+                                        onExpand = { expanded = it },
+                                    )
+                                    DayDrawer(selected, on(selected), expanded, { expanded = it }, { open(it) }, { remove(it) }, Modifier.weight(1f))
+                                }
+                            }
+                            else -> ScreenList("Agenda") {
+                                studyItems(r, plan) { onSub("set") }
+                            }
                         }
                     }
-                    else -> ScreenList("Agenda") {
-                        item { top() }
-                        studyItems(r, plan) { onSub("set") }
-                    }
-                }
                 }
                 if (mode != 2) Fab(Modifier.align(Alignment.BottomEnd).padding(end = Space.s4, bottom = LocalBarInset.current + 4.dp)) { sheet = Sheet(null, newDraft(if (mode == 0) selected else dayStart(now)), true) }
                 sheet?.let { sh ->
