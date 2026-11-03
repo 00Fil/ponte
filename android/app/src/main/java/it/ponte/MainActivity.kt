@@ -96,6 +96,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // se l'app si chiude per un errore, al riavvio successivo il dettaglio finisce negli appunti
+        val crash = java.io.File(filesDir, "crash.txt")
+        if (crash.exists()) {
+            try {
+                getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Relay", crash.readText()))
+                android.widget.Toast.makeText(this, "Errore copiato negli appunti", android.widget.Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {}
+            crash.delete()
+        }
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try { crash.writeText("Relay ${BuildConfig.VERSION_NAME}\n" + android.util.Log.getStackTraceString(e).take(6000)) } catch (_: Exception) {}
+            prev?.uncaughtException(t, e)
+        }
         enableEdgeToEdge()
         PonteService.start(this)
         fastestMode()

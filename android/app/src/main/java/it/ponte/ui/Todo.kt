@@ -101,8 +101,7 @@ fun AskBar(r: Router, modifier: Modifier = Modifier) {
                 CField("Chiave Gemini", k, { k = it }, "AIza…", Modifier.weight(1f), secret = true)
                 CButton("Salva", { r.prefs.geminiKey = k; key = k.trim() }, Modifier.padding(top = 22.dp), kind = ButtonKind.Primary)
             }
-            return@Column
-        }
+        } else {
         val shape = RoundedCornerShape(24.dp)
         Row(
             Modifier.fillMaxWidth().height(48.dp).clip(shape).glass(shape).border(1.dp, c.accent.copy(alpha = if (busy) 0.6f else 0.25f), shape).padding(start = Space.s3, end = 4.dp),
@@ -129,6 +128,7 @@ fun AskBar(r: Router, modifier: Modifier = Modifier) {
         }
         AnimatedVisibility(reply.isNotEmpty()) {
             Text(reply, style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.padding(horizontal = Space.s3))
+        }
         }
     }
 }
