@@ -263,14 +263,26 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                 null -> {
                     // ------------------------------------------------ cruscotto: solo grafici e tasti
                     item {
-                        CCard {
-                            Column {
+                        GlassTile(Modifier.fillMaxWidth(), Tint.money, 0) {
+                            Column(Modifier.padding(Space.s5), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
                                 Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
-                                    EyeToggle(r, 28.dp)
+                                    Text("Saldo", style = CanoneType.footnote, color = OnGlass2)
+                                    EyeToggle(r, 28.dp, tint = OnGlass)
                                 }
-                                CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 34.sp), c.labelPrimary)
+                                CountUp(m.totalCents, CanoneType.title1.copy(fontSize = 40.sp), OnGlass)
+                                Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                                    listOf("Entrate" to earned, "Uscite" to spent).forEach { (l, v) ->
+                                        Column(Modifier.clip(RoundedCornerShape(Radius.md)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                                            Text(l, style = CanoneType.footnote, color = OnGlass2)
+                                            CountUp(v, CanoneType.bodyMedium, OnGlass)
+                                        }
+                                    }
+                                }
                             }
+                        }
+                    }
+                    item {
+                        CCard {
                             PaceChart(pace, month < 0, c.accent, Modifier.fillMaxWidth().blurIf(MoneyPrivacy.hidden))
                             Row(horizontalArrangement = Arrangement.spacedBy(Space.s4)) { SOURCES.forEach { (k, n) -> Legend(n, srcColor(k)) } }
                         }
@@ -296,12 +308,12 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Kpi("Entrate", earned, Modifier.weight(1f))
-                                Kpi("Uscite", spent, Modifier.weight(1f))
+                                Kpi("Entrate", earned, Tint.money, 1, Modifier.weight(1f))
+                                Kpi("Uscite", spent, Tint.rose, 2, Modifier.weight(1f))
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                                Kpi("Risparmio", earned - spent, Modifier.weight(1f))
-                                Kpi("Al giorno", if (daysIn > 0) spent / daysIn else 0, Modifier.weight(1f))
+                                Kpi("Risparmio", earned - spent, Tint.sky, 3, Modifier.weight(1f))
+                                Kpi("Al giorno", if (daysIn > 0) spent / daysIn else 0, Tint.sun, 4, Modifier.weight(1f))
                             }
                             val diff = if (prevSpent > 0) ((spent - prevSpent) * 100 / prevSpent).toInt() else null
                             if (diff != null) Text(if (diff > 0) "Spesa +$diff% rispetto al periodo prima" else if (diff < 0) "Spesa $diff% rispetto al periodo prima" else "Spesa invariata", style = CanoneType.footnote, color = if (diff > 0) c.critical else c.positive)
@@ -325,9 +337,47 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                         }
                     }
                     item {
+                        val by = inPeriod.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }.take(4)
+                        if (by.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.night, 5) {
+                            Column(Modifier.padding(Space.s5).blurIf(MoneyPrivacy.hidden), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                Text("Dove spendi di più", style = CanoneType.footnote, color = OnGlass2)
+                                val top = by.first().value.coerceAtLeast(1)
+                                by.forEach { (k, v) ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(k, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1)
+                                            Text(eur(v), style = CanoneType.bodyMedium, color = OnGlass)
+                                        }
+                                        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))) {
+                                            Box(Modifier.fillMaxHeight().fillMaxWidth(v.toFloat() / top).clip(CircleShape).background(Color.White))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item {
                         CCard {
                             SectionTitle("Dove vanno i soldi")
                             Box(Modifier.blurIf(MoneyPrivacy.hidden)) { CategoryDonut(inPeriod.filter { it.cents < 0 }, "Nessuna spesa in questo periodo.") }
+                        }
+                    }
+                    item {
+                        val last = m.txs.sortedByDescending { it.ts }.take(4)
+                        if (last.isNotEmpty()) GlassTile(Modifier.fillMaxWidth(), Tint.ocean, 6, { onSub("moves") }) {
+                            Column(Modifier.padding(Space.s5).blurIf(MoneyPrivacy.hidden), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                Text("Ultimi movimenti", style = CanoneType.footnote, color = OnGlass2)
+                                last.forEach { t ->
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                                        Box(Modifier.size(10.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(t.note.ifBlank { t.cat }, style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            Text(t.cat + " · " + srcName(t.src), style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
+                                        }
+                                        Text(eur(t.cents), style = CanoneType.bodyMedium, color = OnGlass, maxLines = 1)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -419,11 +469,12 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
 }
 
 @Composable
-private fun Kpi(label: String, cents: Long, modifier: Modifier) {
-    val c = Canone.colors
-    Column(modifier.clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-        Text(label, style = CanoneType.footnote, color = c.labelTertiary)
-        CountUp(cents, CanoneType.title3, if (cents < 0) c.criticalOnSubtle else c.labelPrimary)
+private fun Kpi(label: String, cents: Long, colors: List<Color>, index: Int, modifier: Modifier) {
+    GlassTile(modifier.height(108.dp), colors, index) {
+        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = CanoneType.footnote, color = OnGlass2)
+            CountUp(cents, CanoneType.title2.copy(fontWeight = FontWeight.SemiBold), OnGlass)
+        }
     }
 }
 
