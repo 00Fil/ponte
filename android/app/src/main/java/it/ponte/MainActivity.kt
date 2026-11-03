@@ -98,10 +98,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         PonteService.start(this)
-        val router = Ponte.ensure(this)
-        it.ponte.ui.MoneyPrivacy.hidden = router.prefs.hideMoney
-        setContent { PonteTheme { PonteApp(router) } }
+        fastestMode()
+        // Il Router carica archivi e reti: fuori dal thread principale, così la prima schermata non si blocca.
+        val ready = androidx.compose.runtime.mutableStateOf<it.ponte.Router?>(Ponte.router)
+        if (ready.value == null) Thread {
+            val rt = Ponte.ensure(applicationContext)
+            it.ponte.ui.MoneyPrivacy.hidden = rt.prefs.hideMoney
+            runOnUiThread { ready.value = rt }
+        }.start() else it.ponte.ui.MoneyPrivacy.hidden = ready.value!!.prefs.hideMoney
+        setContent { PonteTheme { ready.value?.let { PonteApp(it) } } }
     }
+}
+
+/** Chiede il massimo del ritmo di aggiornamento dello schermo alla risoluzione attuale (120 Hz dove c'è). */
+private fun android.app.Activity.fastestMode() {
+    try {
+        @Suppress("DEPRECATION") val d = windowManager.defaultDisplay
+        val cur = d.mode
+        val best = d.supportedModes.filter { it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight }.maxByOrNull { it.refreshRate } ?: return
+        window.attributes = window.attributes.also { it.preferredDisplayModeId = best.modeId }
+    } catch (_: Throwable) {}
 }
 
 private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Impostazioni")
@@ -186,7 +202,6 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     }
 
     var devOpen by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { kotlinx.coroutines.delay(600); devOpen = true }
     androidx.compose.runtime.LaunchedEffect(devOpen) { if (devOpen) { kotlinx.coroutines.delay(7000); devOpen = false } }
     val np = it.ponte.ui.rememberNowPlaying()
     var dock by remember { mutableIntStateOf(0) }      // 0 niente, 1 goccia staccata, 2 schermo intero, 3 agganciato alla barra
@@ -284,8 +299,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
                         pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })
                     }
-                    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(c.bgCanvas, Color.Transparent))))
-                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
+                                        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
                     // Nei contanti la barra diventa il tasto di conferma (indietro + scorri per registrare).
                     val cashOn = it.ponte.ui.CashBar.on && pager.currentPage == 2
                     val drawerOn = it.ponte.ui.DrawerBar.mode != 0 && pager.currentPage == 3

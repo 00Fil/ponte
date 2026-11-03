@@ -225,10 +225,13 @@ fun OrbitGlow(t: DropTouch, on: Boolean) {
         t.press.animateTo(1f, Goccia.press)
         val t0 = androidx.compose.runtime.withFrameNanos { it }
         val a0 = -2.15f
+        val ease = androidx.compose.animation.core.CubicBezierEasing(0.55f, 0f, 0.25f, 1f)
         try {
             while (true) {
                 androidx.compose.runtime.withFrameNanos { now ->
-                    t.spin = a0 + ((now - t0) / 1_000_000_000.0 * 2.0 * Math.PI / 1.4).toFloat()
+                    val u = ((now - t0) / 1_000_000_000.0 / 1.0)
+                    val n = Math.floor(u).toFloat()
+                    t.spin = a0 + (n + ease.transform((u - n).toFloat())) * 2f * Math.PI.toFloat()
                 }
             }
         } finally {

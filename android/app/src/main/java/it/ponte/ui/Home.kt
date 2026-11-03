@@ -94,18 +94,34 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
             contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + LocalBarInset.current),
             verticalArrangement = Arrangement.spacedBy(Space.s3),
         ) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = Space.s5, bottom = Space.s4), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Action("", "Appunti", true, glyph = 2) { go("clips") }
+                    Action("", "Immagini", false, glyph = 7) { go("images") }
+                    Action("", "Spese", false, glyph = 6) { go("finance") }
+                    Action("", "Agenda", false, glyph = 11) { go("agenda") }
+                }
+            }
             if (missing > 0) item { FixWidget(missing) { go("perm") } }
+            item { HomeLabel("Oggi") }
             item { PlanWidgets(r, go) }
+            item { HomeLabel("Recenti") }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                     PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, Modifier.weight(1f).aspectRatio(1f))
                     BalanceCard(r, money.totalCents, Modifier.weight(1f).aspectRatio(1f)) { go("finance") }
                 }
             }
+            item { HomeLabel("Audio") }
             item { HeadphonesCard(r) }
             item { PcAudioCard(r) }
         }
     }
+}
+
+@Composable
+private fun HomeLabel(text: String) {
+    Text(text, style = CanoneType.footnote, color = Canone.colors.labelTertiary, modifier = Modifier.padding(start = Space.s3, top = Space.s2))
 }
 
 /** Contenitore dei widget: stesso bordo e raggio ovunque. */
