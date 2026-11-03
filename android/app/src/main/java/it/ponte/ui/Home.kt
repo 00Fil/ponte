@@ -147,7 +147,7 @@ private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClic
         Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TabGlyph(6, c.accent, false, Modifier.size(18.dp))
+                    IconBubble(6)
                     Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
                 }
                 EyeToggle(r)

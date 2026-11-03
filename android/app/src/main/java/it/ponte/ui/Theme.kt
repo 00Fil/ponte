@@ -82,7 +82,7 @@ private val Red700 = Color(0xFFA11F24)
 private val Red900 = Color(0xFF3D1517)
 
 val LightColors = CanoneColors(
-    bgCanvas = Neutral50, bgSurface = Neutral0, bgSunken = Neutral100, bgInverse = Neutral925, bgScrim = Color(0x66121212),
+    bgCanvas = Color(0xFFF2F2F7), bgSurface = Neutral0, bgSunken = Neutral100, bgInverse = Neutral925, bgScrim = Color(0x66121212),
     labelPrimary = Neutral925, labelSecondary = Neutral700, labelTertiary = Neutral600, labelDisabled = Neutral500, labelInverse = Neutral0,
     lineSeparator = Neutral200, lineStrong = Neutral300, fillControl = Neutral300, fillSelected = Neutral925,
     accent = Blue500, accentPressed = Blue600, accentSubtle = Blue50, accentOnSubtle = Blue600, accentOnAccent = Neutral0,
@@ -92,9 +92,9 @@ val LightColors = CanoneColors(
 )
 
 val DarkColors = CanoneColors(
-    bgCanvas = Neutral950, bgSurface = Neutral900, bgSunken = Neutral850, bgInverse = Neutral1000, bgScrim = Color(0x99000000),
+    bgCanvas = Color(0xFF000000), bgSurface = Color(0xFF1C1C1E), bgSunken = Color(0xFF2C2C2E), bgInverse = Neutral1000, bgScrim = Color(0x99000000),
     labelPrimary = Neutral1000, labelSecondary = Neutral400, labelTertiary = Neutral500, labelDisabled = Neutral600, labelInverse = Neutral925,
-    lineSeparator = Neutral800, lineStrong = Neutral750, fillControl = Neutral750, fillSelected = Neutral1000,
+    lineSeparator = Color(0xFF2C2C2E), lineStrong = Neutral750, fillControl = Neutral750, fillSelected = Neutral1000,
     accent = Blue400, accentPressed = Blue300, accentSubtle = Blue900, accentOnSubtle = Blue300, accentOnAccent = Neutral0,
     positive = Green300, positiveSubtle = Green900, positiveOnSubtle = Green300,
     caution = Amber300, cautionSubtle = Amber900, cautionOnSubtle = Amber300,

@@ -150,13 +150,9 @@ private object Bevel {
 
 /** Vetro come la barra: velo del colore di fondo (o acrilico quasi opaco dove serve leggere) e bordo di luce. */
 fun Modifier.glass(shape: androidx.compose.ui.graphics.Shape, acrylic: Boolean = false): Modifier = composed {
+    // superfici lineari come nella reference: piano pieno, nessun riflesso. Il vetro resta alle bolle (tasti, barra).
     val c = Canone.colors
-    val dark = isDark()
-    val brush = remember(dark, acrylic, c.bgCanvas, c.bgSurface) {
-        if (acrylic) Brush.verticalGradient(listOf(c.bgSurface.copy(alpha = 0.92f), c.bgSurface.copy(alpha = 0.92f)))
-        else Brush.verticalGradient(listOf(c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f), c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f)))
-    }
-    this.background(brush, shape).drop(dark, tint = Color.Transparent, shape = shape as? androidx.compose.foundation.shape.CornerBasedShape)
+    this.background(if (acrylic) c.bgSurface.copy(alpha = 0.96f) else c.bgSurface, shape)
 }
 
 /** Una goccia: velo, bordo spesso con luce e dispersione, riflesso e contorno tonale. [press] (0..1) è letto solo in fase di disegno. */
@@ -176,12 +172,12 @@ fun Modifier.drop(
     // velo trasparente (si vede cosa c'è sotto), appena colorato di azzurro; nessun riempimento opaco
     val base = if (tint != Color.Unspecified) tint else Goccia.veil(dark)
     val spot = Brush.radialGradient(
-        listOf(white.copy(alpha = if (dark) 0.10f else 0.22f), Color.Transparent),
+        listOf(white.copy(alpha = if (dark) 0.05f else 0.22f), Color.Transparent),
         center = Offset(size.width * 0.26f, size.height * 0.20f), radius = size.height * 1.0f,
     )
     val lift = Brush.verticalGradient(0.55f to Color.Transparent, 1f to white.copy(alpha = if (dark) 0.03f else 0.06f), startY = 0f, endY = size.height)
     // lucido: una fascia di luce nitida sul bordo alto, come il vetro curvo
-    val gloss = Brush.verticalGradient(0f to white.copy(alpha = if (dark) 0.14f else 0.26f), 0.30f to Color.Transparent, startY = 0f, endY = size.height)
+    val gloss = Brush.verticalGradient(0f to white.copy(alpha = if (dark) 0.07f else 0.26f), 0.30f to Color.Transparent, startY = 0f, endY = size.height)
     val glossInset = 2.dp.toPx()
     val wall = 2.dp.toPx()
     val hair = 1.dp.toPx()
@@ -189,7 +185,7 @@ fun Modifier.drop(
     // un solo shader compilato per tutta l'app: i parametri si impostano subito prima di ogni disegno (il disegno ne registra una copia)
     val shader = if (Build.VERSION.SDK_INT >= 33) Bevel.shader else null
     val bevelPx = minOf(size.minDimension * 0.30f, 7.dp.toPx())
-    val strength = if (dark) 0.55f else 0.95f
+    val strength = if (dark) 0.36f else 0.95f
     val brush = Bevel.brush
     onDrawBehind {
         if (fill != null) drawRoundRect(fill, cornerRadius = cr) else drawRoundRect(base, cornerRadius = cr)

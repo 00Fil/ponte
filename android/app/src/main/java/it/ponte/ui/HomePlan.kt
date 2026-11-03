@@ -77,7 +77,7 @@ fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.
         androidx.compose.foundation.pager.HorizontalPager(pages, Modifier.fillMaxSize()) { pg ->
             Column(Modifier.fillMaxSize().padding(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s5), verticalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TabGlyph(if (pg == 0) 11 else 12, Canone.colors.accent, false, Modifier.size(18.dp))
+                    IconBubble(if (pg == 0) 11 else 12)
                     Text(if (pg == 0) "Agenda" else if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2, maxLines = 1)
                 }
                 if (pg == 0) {
