@@ -1,5 +1,6 @@
 package it.ponte.ui
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
