@@ -349,7 +349,7 @@ private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: 
     val shape = RoundedCornerShape(Radius.xl)
     var dy by remember { mutableStateOf(0f) }
     Column(
-        modifier.padding(horizontal = Space.s4).padding(bottom = LocalBarInset.current - 4.dp).fillMaxWidth().clip(shape).glass(shape),
+        modifier.padding(horizontal = Space.s4).padding(bottom = (LocalBarInset.current - 4.dp).coerceAtLeast(0.dp)).fillMaxWidth().clip(shape).glass(shape),
     ) {
         Column(
             Modifier.fillMaxWidth().clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { onExpand(!expanded) }.padding(horizontal = Space.s5, vertical = Space.s3),

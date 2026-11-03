@@ -112,9 +112,11 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                             PlanWidgets(r, go, cell) { panel = "agenda" }
                             PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, sq) { panel = "share" }
                         }
-                        BalanceCard(r, money, wide, { go("finance") }) { panel = "finance" }
-                        AudioTile(r, wide, 4, { go("settings") }) { panel = "audio" }
-                        TodoTile(r, Modifier.fillMaxWidth(), 5, { go("todo") }) { panel = "agenda" }
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            BalanceCard(r, money, sq, { go("finance") }) { panel = "finance" }
+                            TodoTile(r, sq, 4, { go("todo") }) { panel = "agenda" }
+                        }
+                        AudioTile(r, wide, 5, { go("settings") }) { panel = "audio" }
                     }
                 }
             }
@@ -151,37 +153,23 @@ private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClic
     val monthTx = m.txs.filter { it.ts >= monthStart }
     val outM = -monthTx.filter { it.cents < 0 }.sumOf { it.cents }
     val inM = monthTx.filter { it.cents > 0 }.sumOf { it.cents }
+    val cats = monthTx.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }.take(5)
     GlassTile(modifier, Tint.blue, 3, onClick, onLong) {
-        Row(Modifier.fillMaxSize().padding(Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconBubble(6)
-                    Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
-                }
-                CountUp(m.totalCents, CanoneType.title1.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    Column {
-                        Text("Uscite", style = CanoneType.footnote, color = c.labelTertiary)
-                        CountUp(outM, CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
-                    }
-                    Column {
-                        Text("Entrate", style = CanoneType.footnote, color = c.labelTertiary)
-                        CountUp(inM, CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), c.accent)
-                    }
-                }
+        Column(Modifier.fillMaxSize().padding(Space.s3)) {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconBubble(6)
+                Text("Saldo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary, modifier = Modifier.weight(1f))
+                EyeToggle(r, 28.dp)
             }
-            // torta delle spese del mese: blu per la voce più grande, poi blu sempre più tenue
-            val cats = monthTx.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }.take(5)
-            Box(Modifier.fillMaxHeight().aspectRatio(1f)) {
-                Box(Modifier.fillMaxSize().padding(top = 26.dp, end = 4.dp).blurIf(MoneyPrivacy.hidden), contentAlignment = Alignment.Center) {
-                    if (cats.isEmpty()) Canvas(Modifier.fillMaxSize()) { drawCircle(c.bgSunken, size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(size.minDimension * 0.16f)) }
-                    else Donut(cats.mapIndexed { i, e -> e.value.toFloat() to androidx.compose.ui.graphics.lerp(c.accent, c.bgSurface, listOf(0f, 0.38f, 0.58f, 0.72f, 0.82f)[i]) }, Modifier.fillMaxSize())
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(cats.firstOrNull()?.key ?: "—", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.labelTertiary, maxLines = 1)
-                        if (cats.isNotEmpty()) Text("${(cats.first().value * 100 / outM.coerceAtLeast(1))}%", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+            // torta delle spese del mese, sempre rotonda, col saldo al centro
+            Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxHeight().aspectRatio(1f), contentAlignment = Alignment.Center) {
+                    Box(Modifier.matchParentSize().blurIf(MoneyPrivacy.hidden)) {
+                        if (cats.isEmpty()) Canvas(Modifier.fillMaxSize()) { val sw = size.minDimension * 0.10f; drawCircle(c.bgSunken, size.minDimension / 2 - sw / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(sw)) }
+                        else Donut(cats.mapIndexed { i, e -> e.value.toFloat() to androidx.compose.ui.graphics.lerp(c.accent, c.bgSurface, listOf(0f, 0.38f, 0.58f, 0.72f, 0.82f)[i]) }, Modifier.fillMaxSize())
                     }
+                    CountUp(m.totalCents, CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
                 }
-                Box(Modifier.align(Alignment.TopEnd)) { EyeToggle(r, 30.dp) }
             }
         }
     }

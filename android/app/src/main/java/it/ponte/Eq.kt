@@ -23,6 +23,9 @@ object Eq {
     var maxDb = 15; private set
     var freqs: List<Int> = emptyList(); private set
     var available = false; private set
+    /** Sessioni audio a cui l'equalizzatore è agganciato con un effetto vero. */
+    val attached: Int get() = fx.count { it.key != 0 && it.value.eq != null }
+    val globalOk: Boolean get() = fx[0]?.eq != null
 
     val presets = listOf("Piatto" to listOf(0, 0, 0, 0, 0), "Bassi" to listOf(6, 4, 0, -1, -1), "Voce" to listOf(-2, 0, 4, 4, 1), "Acuti" to listOf(-2, -1, 0, 4, 6), "Loudness" to listOf(5, 2, -1, 2, 5))
 
@@ -141,13 +144,12 @@ object Eq {
         var out = ""
         if (ctx.checkSelfPermission("android.permission.DUMP") == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             out = try {
-                val p = ProcessBuilder("dumpsys", "audio").redirectErrorStream(true).start()
-                p.inputStream.bufferedReader().readText().also { p.waitFor() }
+                listOf("audio", "media.audio_flinger").joinToString("\n") { svc -> val p = ProcessBuilder("dumpsys", svc).redirectErrorStream(true).start(); p.inputStream.bufferedReader().readText().also { p.waitFor() } }
             } catch (_: Exception) { "" }
         }
         if (out.isEmpty()) out = kotlinx.coroutines.runBlocking {
             // con il root: prima si concede DUMP all'app (così poi non serve più), poi si legge
-            Root.sh("pm grant ${ctx.packageName} android.permission.DUMP; dumpsys audio")
+            Root.sh("pm grant ${ctx.packageName} android.permission.DUMP; dumpsys audio; dumpsys media.audio_flinger")
         }
         val ids = sidRe.findAll(out).mapNotNull { it.groupValues[1].toIntOrNull() }.filter { it in 1..999_999 }.toSet()
         if (ids.isNotEmpty()) android.os.Handler(android.os.Looper.getMainLooper()).post { ids.forEach { attach(it) } }

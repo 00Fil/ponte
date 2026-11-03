@@ -674,7 +674,9 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                         var ver by remember { mutableIntStateOf(0) }
                         @Suppress("UNUSED_EXPRESSION") ver
                         CCard {
-                            CSwitchRow("Equalizzatore", null, on) { on = it; Eq.enabled = it }
+                            var st by remember { mutableStateOf("") }
+                            androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { st = (if (Eq.globalOk) "Globale attivo · " else "Globale ignorato · ") + "${Eq.attached} app agganciate"; kotlinx.coroutines.delay(2000) } }
+                            CSwitchRow("Equalizzatore", st, on) { on = it; Eq.enabled = it }
                         }
                         if (Eq.available) {
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {

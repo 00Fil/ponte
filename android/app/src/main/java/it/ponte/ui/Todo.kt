@@ -1,7 +1,5 @@
 package it.ponte.ui
 
-import android.content.Intent
-import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -48,7 +46,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import it.ponte.Gemini
 import it.ponte.PlanState
 import it.ponte.Router
 import it.ponte.Task
@@ -77,59 +74,26 @@ private fun Mic(color: Color, modifier: Modifier) {
     }
 }
 
-/** Barra per parlare con Gemini: scrivi o detta, lui aggiunge To-do ed eventi. */
+/** Campo per aggiungere alla To-do. */
 @Composable
-fun AskBar(r: Router, modifier: Modifier = Modifier) {
+fun AddTodo(r: Router, modifier: Modifier = Modifier) {
     val c = Canone.colors
-    val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var reply by remember { mutableStateOf("") }
-    var key by remember { mutableStateOf(r.prefs.geminiKey) }
-    fun send(q: String) {
-        if (q.isBlank() || busy) return
-        busy = true; reply = ""
-        scope.launch { reply = Gemini.ask(r, q); busy = false; text = "" }
-    }
-    val voice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { text = it; send(it) }
-    }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        if (key.isBlank()) {
-            var k by remember { mutableStateOf("") }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                CField("Chiave Gemini", k, { k = it }, "AIza…", Modifier.weight(1f), secret = true)
-                CButton("Salva", { r.prefs.geminiKey = k; key = k.trim() }, Modifier.padding(top = 22.dp), kind = ButtonKind.Primary)
-            }
-        } else {
-        val shape = RoundedCornerShape(24.dp)
-        Row(
-            Modifier.fillMaxWidth().height(48.dp).clip(shape).glass(shape).border(1.dp, c.accent.copy(alpha = if (busy) 0.6f else 0.25f), shape).padding(start = Space.s3, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2),
-        ) {
-            val spin by animateFloatAsState(if (busy) 1f else 0f, spring(0.6f, 120f), label = "scintilla")
-            Sparkle(c.accent, Modifier.size(18.dp).graphicsLayer { rotationZ = 90f * spin; scaleX = 1f + 0.2f * spin; scaleY = 1f + 0.2f * spin })
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (text.isEmpty()) Text(if (busy) "…" else "Chiedi a Gemini", style = CanoneType.body, color = c.labelTertiary, maxLines = 1)
-                BasicTextField(
-                    text, { text = it }, singleLine = true, textStyle = CanoneType.body.copy(color = c.labelPrimary), cursorBrush = SolidColor(c.accent),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send(text) }),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            RoundGlass(40.dp, text.isNotBlank(), {
-                if (text.isNotBlank()) send(text)
-                else try {
-                    voice.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE, "it-IT"))
-                } catch (_: Exception) {}
-            }) {
-                if (text.isNotBlank()) TransportGlyph(1, Color.White, Modifier.size(16.dp)) else Mic(c.labelPrimary, Modifier.size(18.dp))
-            }
+    fun add() { if (text.isNotBlank()) { r.plan.saveTask(Task("", text.trim(), "", 0L, false)); text = "" } }
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        modifier.fillMaxWidth().height(48.dp).clip(shape).glass(shape).padding(start = Space.s4, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (text.isEmpty()) Text("Nuova cosa da fare", style = CanoneType.body, color = c.labelTertiary, maxLines = 1)
+            BasicTextField(
+                text, { text = it }, singleLine = true, textStyle = CanoneType.body.copy(color = c.labelPrimary), cursorBrush = SolidColor(c.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { add() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-        AnimatedVisibility(reply.isNotEmpty()) {
-            Text(reply, style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.padding(horizontal = Space.s3))
-        }
-        }
+        RoundGlass(40.dp, text.isNotBlank(), { add() }) { Text("+", style = CanoneType.title3, color = if (text.isNotBlank()) Color.White else c.labelPrimary) }
     }
 }
 
@@ -162,22 +126,21 @@ fun TodoTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onL
     val p by r.plan.state.collectAsState()
     val open = p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
-        Column(Modifier.fillMaxWidth().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconBubble(12)
                 Text("To-do", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary, modifier = Modifier.weight(1f))
                 if (open.isNotEmpty()) Text("${open.size}", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.accent)
             }
             if (open.isEmpty()) Text("Tutto fatto", style = CanoneType.bodyMedium, color = c.labelTertiary, modifier = Modifier.padding(vertical = 4.dp))
-            open.take(4).forEach { TodoRow(r, it, compact = true) }
-            AskBar(r)
+            open.take(5).forEach { TodoRow(r, it, compact = true) }
         }
     }
 }
 
 /** Pagina To-do nell'Agenda. */
 fun LazyListScope.todoItems(r: Router, p: PlanState) {
-    item { AskBar(r) }
+    item { AddTodo(r) }
     val open = p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
     val done = p.tasks.filter { it.done }
     item {
