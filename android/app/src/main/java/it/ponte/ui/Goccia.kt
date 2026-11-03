@@ -532,7 +532,7 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
 fun Modifier.onLongPressOnly(onLong: () -> Unit): Modifier = this.pointerInput(Unit) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
-        val done = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); true }
+        val done = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(); true }
         if (done == null) { onLong(); waitForUpOrCancellation()?.consume() }
     }
 }
