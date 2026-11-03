@@ -18,6 +18,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -151,7 +155,11 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
             .forEach { e -> out += Item(e.id, 2, e.title, e.start, e.end, e.allDay, Color(e.color or (0xFF shl 24)), e.place, e) }
         out.sortedWith(compareBy<Item> { it.start }.thenBy { !it.allDay })
     }
-    fun on(day: Long) = items.filter { it.start < day + DAY && maxOf(it.end, it.start + 60_000) > day }.sortedWith(compareBy<Item> { !it.allDay }.thenBy { it.start })
+    fun scan(day: Long) = items.filter { it.start < day + DAY && maxOf(it.end, it.start + 60_000) > day }.sortedWith(compareBy<Item> { !it.allDay }.thenBy { it.start })
+    // eventi per giorno calcolati una volta per griglia (non 42 filtri a ogni tocco)
+    val byDay = remember(items, gridStart) { HashMap<Long, List<Item>>(64).apply { for (k in 0 until 42) { val d = addDays(gridStart, k); put(d, scan(d)) } } }
+    val dotsByDay = remember(byDay) { byDay.mapValues { e -> e.value.map { it.color }.distinct().take(3) } }
+    fun on(day: Long) = byDay[day] ?: scan(day)
 
     fun newDraft(day: Long): Draft {
         val t = if (day == dayStart(now)) Calendar.getInstance().apply { timeInMillis = now; add(Calendar.HOUR_OF_DAY, 1); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
@@ -198,7 +206,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 Column(Modifier.widthIn(max = 720.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                                     MonthCard(
-                                        if (expanded) cursor else selected, selected, expanded, weeks, gridStart, { on(it).map { i -> i.color }.distinct().take(3) }, now,
+                                        if (expanded) cursor else selected, selected, expanded, weeks, gridStart, { dotsByDay[it] ?: emptyList() }, now,
                                         onPick = { d -> selected = d; haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); if (Calendar.getInstance().apply { timeInMillis = d }.get(Calendar.MONTH) != first.get(Calendar.MONTH)) cursor = Calendar.getInstance().apply { timeInMillis = d; set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis },
                                         onStep = { dir ->
                                             if (expanded) cursor = Calendar.getInstance().apply { timeInMillis = cursor; add(Calendar.MONTH, dir) }.timeInMillis
@@ -275,24 +283,51 @@ private fun MonthCard(
         Row(Modifier.fillMaxWidth()) {
             listOf("L", "M", "M", "G", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), style = CanoneType.footnote, color = c.labelTertiary, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
         }
-        for (row in 0 until rows) Row(Modifier.fillMaxWidth()) {
-            for (col in 0 until 7) {
-                val day = addDays(start, row * 7 + col)
-                val cal = Calendar.getInstance().apply { timeInMillis = day }
-                val inMonth = cal.get(Calendar.MONTH) == curMonth
-                val isSel = day == selected
-                val isToday = day == dayStart(now)
-                val bg by animateColorAsState(if (isSel) c.accent else Color.Transparent, spring(1f, 420f), label = "g")
-                Column(
-                    Modifier.weight(1f).height(46.dp).padding(2.dp).clip(RoundedCornerShape(Radius.md)).background(bg).dropClickable({ onPick(day) }, corner = Radius.md),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        cal.get(Calendar.DAY_OF_MONTH).toString(), style = CanoneType.body.copy(fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal),
-                        color = if (isSel) Color.White else if (isToday) c.accent else if (inMonth || !expanded) c.labelPrimary else c.labelDisabled,
-                    )
-                    Row(Modifier.height(7.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        dots(day).forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(if (isSel) Color.White else it)) }
+        // griglia leggera: un solo gestore di tocco per tutte le celle e la selezione è una pastiglia che scivola (solo disegno)
+        val today = remember(now) { dayStart(now) }
+        val cells = remember(start, rows, curMonth) {
+            List(rows * 7) { k -> val d = addDays(start, k); val cal = Calendar.getInstance().apply { timeInMillis = d }; Triple(d, cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) == curMonth) }
+        }
+        val selIdx = cells.indexOfFirst { it.first == selected }
+        val selX = remember { androidx.compose.animation.core.Animatable(0f) }
+        val selY = remember { androidx.compose.animation.core.Animatable(0f) }
+        val selA = remember { androidx.compose.animation.core.Animatable(0f) }
+        val first = remember { booleanArrayOf(true) }
+        LaunchedEffect(selIdx, rows) {
+            if (selIdx < 0) { selA.animateTo(0f, tween(120)); return@LaunchedEffect }
+            val tx = (selIdx % 7).toFloat(); val ty = (selIdx / 7).toFloat()
+            if (first[0] || selA.value < 0.05f) { selX.snapTo(tx); selY.snapTo(ty); first[0] = false; selA.animateTo(1f, tween(140)) }
+            else { selA.snapTo(1f); launch { selX.animateTo(tx, spring(0.8f, 700f)) }; selY.animateTo(ty, spring(0.8f, 700f)) }
+        }
+        val accent = c.accent
+        val cellH = 46.dp
+        Column(
+            Modifier.fillMaxWidth()
+                .drawBehind {
+                    val cw = size.width / 7f; val ch = cellH.toPx(); val p = 2.dp.toPx()
+                    if (selA.value > 0.01f) drawRoundRect(accent.copy(alpha = selA.value), Offset(selX.value * cw + p, selY.value * ch + p), Size(cw - 2 * p, ch - 2 * p), CornerRadius(Radius.md.toPx()))
+                }
+                .pointerInput(cells) {
+                    detectTapGestures { o ->
+                        val col = (o.x / (size.width / 7f)).toInt().coerceIn(0, 6)
+                        val row = (o.y / cellH.toPx()).toInt().coerceIn(0, rows - 1)
+                        cells.getOrNull(row * 7 + col)?.let { onPick(it.first) }
+                    }
+                },
+        ) {
+            for (row in 0 until rows) Row(Modifier.fillMaxWidth()) {
+                for (col in 0 until 7) {
+                    val (day, num, inMonth) = cells[row * 7 + col]
+                    val isSel = day == selected
+                    val isToday = day == today
+                    Column(Modifier.weight(1f).height(cellH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text(
+                            num.toString(), style = CanoneType.body.copy(fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal),
+                            color = if (isSel) Color.White else if (isToday) c.accent else if (inMonth || !expanded) c.labelPrimary else c.labelDisabled,
+                        )
+                        Row(Modifier.height(7.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            dots(day).forEach { Box(Modifier.size(5.dp).background(if (isSel) Color.White else it, CircleShape)) }
+                        }
                     }
                 }
             }
