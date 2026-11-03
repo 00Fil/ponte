@@ -10,7 +10,7 @@ const hooked = new Set();
 function hook(ip) {
   if (hooked.has(ip) || ip.startsWith('127.')) return; hooked.add(ip);
   try {
-    execSync(`iptables -t nat -I PREROUTING -s ${ip} -p tcp ! --dport 53 -j REDIRECT --to-ports 9999`);
+    execSync(`iptables -t nat -I PREROUTING -s ${ip} -p tcp -m multiport ! --dports 22,53,443 -j REDIRECT --to-ports 9999`);
     execSync(`iptables -t nat -I PREROUTING -s ${ip} -p udp ! --dport 53 -j REDIRECT --to-ports 9998`);
     log('AGGANCIATO', ip);
   } catch (e) { log('iptables errore', e.message); }
@@ -28,7 +28,20 @@ function answer(q) {
   return [name, type, Buffer.concat(parts)];
 }
 const udp = dgram.createSocket('udp4');
-udp.on('message', (m, r) => { try { const [n, t, a] = answer(m); log('DNS', r.address, n, 'tipo', t); hook(r.address); udp.send(a, r.port, r.address); } catch (e) {} });
+// tutta la casa usa questo DNS: i nomi normali si inoltrano a 1.1.1.1, solo quelli del cloud delle cam puntano qui
+const CAM = /esee|dvr163|juan|kp2p|p2p|nvr|ipc|vs98|ftview|xmeye|seetong|danale|anyka|camera|cam\.|cloud.*(cn|hk)|\.cn$/i;
+udp.on('message', (m, r) => {
+  try {
+    const [n, t, a] = answer(m);
+    if (CAM.test(n)) { log('DNS-CAM', r.address, n, 'tipo', t); hook(r.address); udp.send(a, r.port, r.address); return; }
+    log('DNS', r.address, n);
+    const f = dgram.createSocket('udp4');
+    f.on('message', x => { udp.send(x, r.port, r.address); f.close(); });
+    f.on('error', () => f.close());
+    setTimeout(() => { try { f.close(); } catch {} }, 4000);
+    f.send(m, 53, '1.1.1.1');
+  } catch (e) {}
+});
 udp.bind(53, PUB);
 net.createServer(s => { s.once('data', d => { try { const [n, t, a] = answer(d.slice(2)); log('DNS-TCP', s.remoteAddress, n); hook(s.remoteAddress.replace('::ffff:', '')); const l = Buffer.alloc(2); l.writeUInt16BE(a.length); s.end(Buffer.concat([l, a])); } catch { s.destroy(); } }); }).listen(53, PUB);
 // ---- ascoltatori
@@ -44,5 +57,5 @@ u2.on('message', (m, r) => { log('UDP', r.address + ':' + r.port, m.length, 'byt
 u2.bind(9998);
 log('pronto su', PUB);
 // alla chiusura si tolgono le regole aggiunte
-function clean() { for (const ip of hooked) { try { execSync(`iptables -t nat -D PREROUTING -s ${ip} -p tcp ! --dport 53 -j REDIRECT --to-ports 9999`); execSync(`iptables -t nat -D PREROUTING -s ${ip} -p udp ! --dport 53 -j REDIRECT --to-ports 9998`); } catch {} } process.exit(0); }
+function clean() { for (const ip of hooked) { try { execSync(`iptables -t nat -D PREROUTING -s ${ip} -p tcp -m multiport ! --dports 22,53,443 -j REDIRECT --to-ports 9999`); execSync(`iptables -t nat -D PREROUTING -s ${ip} -p udp ! --dport 53 -j REDIRECT --to-ports 9998`); } catch {} } process.exit(0); }
 process.on('SIGTERM', clean); process.on('SIGINT', clean);
