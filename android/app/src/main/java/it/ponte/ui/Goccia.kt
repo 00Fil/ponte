@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,6 +111,7 @@ uniform float radius;
 uniform float bevel;
 uniform float strength;
 uniform float press;
+uniform float2 light;
 
 float edgeW(float depth) {
   float t = clamp(1.0 - depth / bevel, 0.0, 1.0);
@@ -125,7 +127,7 @@ half4 main(float2 fc) {
   if (depth < 0.0) return half4(0.0);
   float2 s = float2(p.x < 0.0 ? -1.0 : 1.0, p.y < 0.0 ? -1.0 : 1.0);
   float2 n = (q.x > 0.0 || q.y > 0.0) ? normalize(max(q, float2(0.0001))) * s : (q.x > q.y ? float2(s.x, 0.0) : float2(0.0, s.y));
-  float lit = dot(n, normalize(float2(-0.55, -0.83)));
+  float lit = dot(n, light);
   float w = edgeW(depth);
   float hi = max(lit, 0.0) * w;
   float lo = max(-lit, 0.0) * w * 0.45;
@@ -193,6 +195,8 @@ fun Modifier.drop(
         }
         if (brush != null && Build.VERSION.SDK_INT >= 33) {
             shader!!.setFloatUniform("press", p)
+            val sp = touch?.spin ?: Float.NaN
+            if (sp.isNaN()) shader.setFloatUniform("light", -0.55f, -0.83f) else shader.setFloatUniform("light", kotlin.math.cos(sp), kotlin.math.sin(sp))
             drawRoundRect(brush, cornerRadius = cr)
         } else {
             drawRoundRect(edge.copy(alpha = edge.alpha * 0.45f), Offset(wall / 2, wall / 2), Size(size.width - wall, size.height - wall), CornerRadius((r - wall / 2).coerceAtLeast(0f)), style = Stroke(wall))
@@ -207,6 +211,7 @@ class DropTouch {
     var pos by mutableStateOf(Offset.Unspecified)
     var center = Offset.Zero
     var half = 0f
+    var spin by mutableFloatStateOf(Float.NaN)
 }
 
 @Composable
@@ -215,20 +220,19 @@ fun rememberDropTouch() = remember { DropTouch() }
 /** Attesa: lo stesso bagliore della pressione resta acceso e gira dentro la goccia. Nessun elemento aggiunto. */
 @Composable
 fun OrbitGlow(t: DropTouch, on: Boolean) {
-    val d = androidx.compose.ui.platform.LocalDensity.current
     LaunchedEffect(on) {
         if (!on) return@LaunchedEffect
         t.press.animateTo(1f, Goccia.press)
         val t0 = androidx.compose.runtime.withFrameNanos { it }
+        val a0 = -2.15f
         try {
             while (true) {
                 androidx.compose.runtime.withFrameNanos { now ->
-                    val a = ((now - t0) / 1_000_000_000.0) * 2.0 * Math.PI / 1.2
-                    val r = t.half * 0.78f
-                    t.pos = Offset(t.center.x + r * Math.cos(a).toFloat(), t.center.y + r * Math.sin(a).toFloat())
+                    t.spin = a0 + ((now - t0) / 1_000_000_000.0 * 2.0 * Math.PI / 1.4).toFloat()
                 }
             }
         } finally {
+            t.spin = Float.NaN
             t.press.animateTo(0f, Goccia.release)
         }
     }
