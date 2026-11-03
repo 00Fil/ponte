@@ -98,7 +98,7 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         contentAlignment = Alignment.Center,
     ) {
         // il vetro si deforma, l'etichetta resta ferma
-        Box(Modifier.matchParentSize().onSizeChanged { touch.center = Offset(it.width / 2f, it.height / 2f) }.dropDeform(touch).then(glass))
+        Box(Modifier.matchParentSize().onSizeChanged { touch.center = Offset(it.width / 2f, it.height / 2f); touch.half = minOf(it.width, it.height) / 2f }.dropDeform(touch).then(glass))
         Box(contentAlignment = Alignment.Center) {
             Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5).alpha(if (busy) 0.55f else 1f), maxLines = 1)
         }

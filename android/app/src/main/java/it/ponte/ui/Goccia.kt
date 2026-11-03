@@ -206,6 +206,7 @@ class DropTouch {
     val press = Animatable(0f)
     var pos by mutableStateOf(Offset.Unspecified)
     var center = Offset.Zero
+    var half = 0f
 }
 
 @Composable
@@ -222,8 +223,8 @@ fun OrbitGlow(t: DropTouch, on: Boolean) {
         try {
             while (true) {
                 androidx.compose.runtime.withFrameNanos { now ->
-                    val a = ((now - t0) / 1_000_000_000.0) * 2.0 * Math.PI / 1.6
-                    val r = 14.dp.value * d.density
+                    val a = ((now - t0) / 1_000_000_000.0) * 2.0 * Math.PI / 1.2
+                    val r = t.half * 0.78f
                     t.pos = Offset(t.center.x + r * Math.cos(a).toFloat(), t.center.y + r * Math.sin(a).toFloat())
                 }
             }
