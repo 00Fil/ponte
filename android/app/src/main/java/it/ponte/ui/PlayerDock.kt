@@ -1,5 +1,7 @@
 package it.ponte.ui
 
+import it.ponte.Ponte
+
 import androidx.compose.ui.input.pointer.positionChange
 
 import android.media.session.PlaybackState
@@ -25,6 +27,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -180,6 +188,8 @@ fun FullPlayer(np: NowPlaying, onClose: () -> Unit) {
                 }, Modifier.weight(1f))
                 SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
             }
+            Spacer(Modifier.height(14.dp))
+            Ponte.router?.let { OtherDevicesMedia(it, it.deviceId) }
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -272,6 +282,108 @@ fun DockSong(np: NowPlaying, onOpen: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.footnote.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (np.artist.isNotEmpty()) Text(np.artist, style = CanoneType.footnote.copy(fontSize = 11.sp), color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+// ---------------------------------------------------------------- player universale
+
+private fun mediaName(r: it.ponte.Router, id: String) = if (id == r.deviceId) "Questo telefono" else r.deviceName(id)
+
+/** Posizione stimata di un player remoto (avanza da sola mentre suona). */
+@Composable
+private fun livePos(m: it.ponte.RemoteMedia): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(m.playing, m.at) { while (m.playing) { now = System.currentTimeMillis(); delay(500) } }
+    return if (m.playing) (m.pos + (now - m.at)).coerceAtMost(if (m.dur > 0) m.dur else Long.MAX_VALUE) else m.pos
+}
+
+/** Una riga per dispositivo: cosa suona, i comandi e il volume di quel dispositivo. */
+@Composable
+fun DeviceMediaRow(r: it.ponte.Router, m: it.ponte.RemoteMedia, onDark: Boolean = false) {
+    val c = Canone.colors
+    val fg = if (onDark) Color.White else c.labelPrimary
+    val fg2 = if (onDark) Color.White.copy(alpha = 0.7f) else c.labelTertiary
+    val shape = RoundedCornerShape(Radius.lg)
+    var vol by remember(m.id, m.vol) { mutableStateOf(m.vol / 100f) }
+    Column(Modifier.fillMaxWidth().clip(shape).glass(shape).padding(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Column(Modifier.weight(1f)) {
+                Text(mediaName(r, m.id), style = CanoneType.footnote.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = if (m.playing) c.accent else fg2, maxLines = 1)
+                Text(m.title.ifEmpty { "Niente in riproduzione" }, style = CanoneType.bodyMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (m.artist.isNotEmpty()) Text(m.artist, style = CanoneType.footnote, color = fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            GlassTransport(listOf(0, if (m.playing) 2 else 1, 3), { i -> r.media.cmd(m.id, when (i) { 0 -> "prev"; 1 -> if (m.playing) "pause" else "play"; else -> "next" }) }, Modifier.width(150.dp))
+        }
+        if (m.vol >= 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+            SpeakerIcon(false, fg2, Modifier.size(14.dp))
+            DropSlider(vol, { f -> vol = f }, Modifier.weight(1f), onFinish = { f -> r.media.cmd(m.id, "vol", (f * 100).toLong()) })
+            SpeakerIcon(true, fg2, Modifier.size(14.dp))
+        }
+    }
+}
+
+/** Tutti i dispositivi con un player, tranne [except]. */
+@Composable
+fun OtherDevicesMedia(r: it.ponte.Router, except: String?, onDark: Boolean = false) {
+    val all by r.media.media.collectAsState()
+    val list = all.values.filter { it.id != except }.sortedByDescending { it.playing }
+    if (list.isEmpty()) return
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s2)) { list.forEach { DeviceMediaRow(r, it, onDark) } }
+}
+
+/** Goccia del player quando qui non suona niente ma suona un altro dispositivo: lo mostra e lo comanda. */
+@Composable
+fun RemoteDrop(r: it.ponte.Router, m: it.ponte.RemoteMedia, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Canone.colors
+    val shape = RoundedCornerShape(28.dp)
+    Row(
+        modifier.widthIn(max = 440.dp).fillMaxWidth().height(56.dp).clip(shape).glass(shape, acrylic = true).dropClickable(onOpen, corner = 28.dp).padding(start = 18.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(m.title.ifEmpty { "Senza titolo" }, style = CanoneType.footnote.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(mediaName(r, m.id), style = CanoneType.footnote.copy(fontSize = 11.sp), color = c.accent, maxLines = 1)
+        }
+        GlassTransport(listOf(if (m.playing) 2 else 1, 3), { i -> r.media.cmd(m.id, if (i == 0) (if (m.playing) "pause" else "play") else "next") }, Modifier.width(96.dp))
+    }
+}
+
+/** Il player universale a schermo intero per un dispositivo remoto. */
+@Composable
+fun RemoteFullPlayer(r: it.ponte.Router, m: it.ponte.RemoteMedia, onClose: () -> Unit) {
+    val c = Canone.colors
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    val pos = livePos(m)
+    var seek by remember(m.id) { mutableStateOf<Float?>(null) }
+    var vol by remember(m.id, m.vol) { mutableStateOf(m.vol / 100f) }
+    Box(Modifier.fillMaxSize().background(c.bgCanvas).pointerInput(Unit) { detectTapGestures { } }) {
+        Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.align(Alignment.CenterHorizontally).size(width = 42.dp, height = 5.dp).clip(CircleShape).background(c.lineStrong).clickable(onClick = onClose))
+            Spacer(Modifier.height(Space.s5))
+            Text(mediaName(r, m.id), style = CanoneType.footnote.copy(letterSpacing = 1.2.sp), color = c.accent)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(m.title.ifEmpty { "Niente in riproduzione" }, style = CanoneType.title1, color = c.labelPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(m.artist, style = CanoneType.body, color = c.labelSecondary, maxLines = 1)
+            }
+            if (m.dur > 0) Column {
+                val shown = seek ?: (pos.toFloat() / m.dur)
+                DropSlider(shown, { seek = it }, onFinish = { f -> r.media.cmd(m.id, "seek", (f * m.dur).toLong()); seek = null })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(clockText((shown * m.dur).toLong()), style = CanoneType.footnote, color = c.labelTertiary)
+                    Text("−" + clockText(m.dur - (shown * m.dur).toLong()), style = CanoneType.footnote, color = c.labelTertiary)
+                }
+            }
+            GlassTransport(listOf(0, if (m.playing) 2 else 1, 3), { i -> r.media.cmd(m.id, when (i) { 0 -> "prev"; 1 -> if (m.playing) "pause" else "play"; else -> "next" }) })
+            if (m.vol >= 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
+                DropSlider(vol, { vol = it }, Modifier.weight(1f), onFinish = { f -> r.media.cmd(m.id, "vol", (f * 100).toLong()) })
+                SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
+            }
+            Spacer(Modifier.height(Space.s3))
+            OtherDevicesMedia(r, m.id)
+            Spacer(Modifier.height(Space.s5))
         }
     }
 }

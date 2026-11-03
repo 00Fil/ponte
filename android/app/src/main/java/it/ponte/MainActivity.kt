@@ -206,6 +206,9 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     var devOpen by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(devOpen) { if (devOpen) { kotlinx.coroutines.delay(7000); devOpen = false } }
     val np = it.ponte.ui.rememberNowPlaying()
+    val allMedia by r.media.media.collectAsState()
+    var remoteId by remember { mutableStateOf<String?>(null) }
+    var remoteOpen by remember { mutableStateOf(false) }
     var dock by remember { mutableIntStateOf(0) }      // 0 niente, 1 goccia staccata, 2 schermo intero, 3 agganciato alla barra
     var prevDock by remember { mutableIntStateOf(1) }  // dove tornare chiudendo lo schermo intero
     androidx.compose.runtime.LaunchedEffect(np?.title, np?.playing) {
@@ -360,6 +363,19 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                             )
                         }
                     }
+                    // player universale: qui non suona niente ma suona un altro dispositivo
+                    if (np == null && !cashOn && !drawerOn) {
+                        val rm = allMedia.values.filter { m -> m.id != r.deviceId && (m.playing || m.id == remoteId) }.maxByOrNull { m -> if (m.playing) m.at + 1_000_000_000L else m.at }
+                        androidx.compose.animation.AnimatedVisibility(
+                            rm != null, Modifier.align(Alignment.BottomCenter),
+                            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.8f, 380f)) { it / 2 } + fadeIn(tween(160)),
+                            exit = androidx.compose.animation.slideOutVertically(tween(180)) { it / 2 } + fadeOut(tween(140)),
+                        ) {
+                            var last by remember { mutableStateOf(rm) }
+                            if (rm != null) last = rm
+                            last?.let { m -> it.ponte.ui.RemoteDrop(r, m, { remoteId = m.id; remoteOpen = true }, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom + 66.dp + 12.dp)) }
+                        }
+                    }
                     if (cashOn) it.ponte.ui.CashConfirmBar(layer, Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
                     else if (drawerOn) it.ponte.ui.DrawerBarUi(layer, Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
                     else it.ponte.ui.GlassTabBar(
@@ -371,6 +387,16 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     )
                 }
             }
+        }
+        val openRemote = if (remoteOpen) remoteId?.let { allMedia[it] } else null
+        androidx.compose.animation.AnimatedVisibility(
+            openRemote != null, Modifier.fillMaxSize().zIndex(5f),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.9f, 320f)) { it } + fadeIn(tween(160)),
+            exit = androidx.compose.animation.slideOutVertically(tween(240)) { it } + fadeOut(tween(200)),
+        ) {
+            var last by remember { mutableStateOf(openRemote) }
+            if (openRemote != null) last = openRemote
+            last?.let { m -> it.ponte.ui.RemoteFullPlayer(r, m) { remoteOpen = false } }
         }
         androidx.compose.animation.AnimatedVisibility(
             dock == 2 && np != null, Modifier.fillMaxSize().zIndex(5f),

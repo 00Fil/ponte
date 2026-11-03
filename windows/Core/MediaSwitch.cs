@@ -31,20 +31,71 @@ public sealed class MediaSwitch
         return d;
     }
 
+    private async Task<GlobalSystemMediaTransportControlsSession?> CurrentAsync()
+    {
+        var mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        var all = mgr.GetSessions();
+        return all.FirstOrDefault(x => x.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing) ?? mgr.GetCurrentSession();
+    }
+
     private async Task AnnounceAsync()
     {
-        var title = "";
-        if (_playing)
+        string title = "", artist = "";
+        long pos = 0, dur = 0;
+        var playing = _playing;
+        try
+        {
+            var s = await CurrentAsync();
+            if (s != null)
+            {
+                var p = await s.TryGetMediaPropertiesAsync();
+                title = p.Title ?? ""; artist = p.Artist ?? "";
+                var tl = s.GetTimelineProperties();
+                pos = (long)tl.Position.TotalMilliseconds; dur = (long)tl.EndTime.TotalMilliseconds;
+                playing = playing || s.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            }
+        }
+        catch (Exception) { }
+        int vol = -1;
+        try { using var dev = _enum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); vol = (int)Math.Round(dev.AudioEndpointVolume.MasterVolumeLevelScalar * 100); } catch (Exception) { }
+        _r.Send(Proto.NewMsg("media.state", ("playing", playing), ("title", title), ("artist", artist), ("pos", pos), ("dur", dur), ("vol", vol)));
+    }
+
+    /// <summary>Comando dal player universale di un altro dispositivo: play, pause, next, prev, seek (ms), vol (0..100).</summary>
+    public void OnCmd(JsonObject m)
+    {
+        var a = m.S("a");
+        long v = m["v"] is JsonValue jv && jv.TryGetValue<long>(out var lv) ? lv : 0;
+        _ = Task.Run(async () =>
         {
             try
             {
-                var mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-                var s = mgr.GetSessions().FirstOrDefault(x => x.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing);
-                if (s != null) title = (await s.TryGetMediaPropertiesAsync()).Title ?? "";
+                if (a == "vol")
+                {
+                    using var dev = _enum.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                    dev.AudioEndpointVolume.MasterVolumeLevelScalar = Math.Clamp(v / 100f, 0f, 1f);
+                }
+                else
+                {
+                    if (a == "pause") _quietUntil = DateTime.UtcNow.AddSeconds(5);
+                    var s = await CurrentAsync();
+                    if (s != null)
+                    {
+                        switch (a)
+                        {
+                            case "play": await s.TryPlayAsync(); break;
+                            case "pause": await s.TryPauseAsync(); break;
+                            case "next": await s.TrySkipNextAsync(); break;
+                            case "prev": await s.TrySkipPreviousAsync(); break;
+                            case "seek": await s.TryChangePlaybackPositionAsync(TimeSpan.FromMilliseconds(v).Ticks); break;
+                        }
+                    }
+                }
+                await Task.Delay(700);
+                await AnnounceAsync();
             }
             catch (Exception) { }
-        }
-        _r.Send(Proto.NewMsg("media.state", ("playing", _playing), ("title", title)));
+        });
     }
 
     public void OnState(JsonObject m)
@@ -77,7 +128,7 @@ public sealed class MediaSwitch
                 {
                     var was = _playing;
                     Poll();
-                    if (was != _playing || ++_beat % 15 == 0) await AnnounceAsync();
+                    if (was != _playing || ++_beat % 8 == 0) await AnnounceAsync();
                 }
                 catch (Exception) { }
                 await Task.Delay(1_000);

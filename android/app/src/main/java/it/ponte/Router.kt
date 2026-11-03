@@ -235,6 +235,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "media.take" -> media.onTake(m)
             "media.state" -> media.onState(m)
             "media.pause" -> media.onPauseReq()
+            "media.cmd" -> media.onCmd(m)
             "fin" -> finance.onRemote(m.optJSONObject("doc"))
             "plan" -> plan.onRemote(m.optJSONObject("doc"))
         }

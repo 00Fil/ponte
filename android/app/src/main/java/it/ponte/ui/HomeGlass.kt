@@ -153,6 +153,7 @@ fun PillOn(label: String, onClick: () -> Unit) {
 fun AudioRows(r: Router, max: Int) {
     val devices by r.devices.collectAsState()
     val playing by r.media.playingNow.collectAsState()
+    val known by r.media.media.collectAsState()
     val holder by r.headphones.holder.collectAsState()
     val active by r.audio.activeSource.collectAsState()
     val me = r.deviceId
@@ -182,6 +183,7 @@ fun AudioRows(r: Router, max: Int) {
                 }
                 when {
                     isPlaying -> PillOn("Ferma") { r.media.stopOn(id) }
+                    (known[id]?.title ?: "").isNotEmpty() -> PillOn("Riprendi") { r.media.cmd(id, "play") }
                     src && active == id -> PillOn("Ferma") { r.audio.stopListening(id) }
                     src -> PillOn("Ascolta") { r.audio.listenTo(id) }
                 }

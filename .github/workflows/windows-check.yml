@@ -2,7 +2,7 @@ name: Windows check
 
 on:
   push:
-    branches: [windows-port, agenda-studio, studio-in-agenda, mood-sync, home-rework, polish-2, cuffie, fixes-3, fixes-4, win-restyle, glass-ring, ring-solid, dock-merge, home-glass]
+    branches: [windows-port, agenda-studio, studio-in-agenda, mood-sync, home-rework, polish-2, cuffie, fixes-3, fixes-4, win-restyle, glass-ring, ring-solid, dock-merge, home-glass, glass-all]
 
 jobs:
   windows:
