@@ -73,17 +73,17 @@ fun Icon24(kind: Int, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** Anello che gira: l'attesa di un'operazione, stessa linea ovunque. */
+/** L'attesa di un'operazione, stessa linea ovunque: pista piena e un arco pieno di lunghezza fissa che gira, senza code sfumate né punte. */
 @Composable
 fun BusyArc(color: Color, modifier: Modifier = Modifier, stroke: Float = 2.4f) {
     val t = rememberInfiniteTransition(label = "attesa")
-    val a by t.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "giro")
-    val sweep by t.animateFloat(70f, 250f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "arco")
+    val a by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "giro")
+    val track = Canone.colors.lineSeparator
     Canvas(modifier) {
         val w = stroke * (size.minDimension / 24f)
         val inset = w / 2f
-        rotate(a) {
-            drawArc(Brush.sweepGradient(listOf(color.copy(alpha = 0f), color)), 0f, sweep, false, Offset(inset, inset), Size(size.width - w, size.height - w), style = Stroke(w, cap = StrokeCap.Round))
-        }
+        val tl = Offset(inset, inset); val sz = Size(size.width - w, size.height - w)
+        drawArc(track, 0f, 360f, false, tl, sz, style = Stroke(w))
+        rotate(a) { drawArc(color, 0f, 100f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round)) }
     }
 }

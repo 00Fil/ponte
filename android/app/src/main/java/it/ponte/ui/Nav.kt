@@ -96,7 +96,7 @@ fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = 
         ) {
             val fg = if (accent) c.accentOnSubtle else c.labelPrimary
             when (state) {
-                1 -> { BusyArc(c.accent, Modifier.size(58.dp).padding(3.dp)); if (glyph != null) TabGlyph(glyph, fg.copy(alpha = 0.45f), false, Modifier.size(24.dp)) }
+                1 -> { BusyArc(c.accent, Modifier.size(58.dp).padding(3.dp)); if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) }
                 2 -> Icon24(Ico.CHECK, c.positive, Modifier.size(26.dp))
                 else -> if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) else Text(symbol, style = CanoneType.title2, color = fg)
             }
