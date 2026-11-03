@@ -89,6 +89,7 @@ uniform float amount;     // spostamento massimo sul bordo, in pixel
 uniform float aberr;      // 0..1: separazione dei colori
 uniform float sat;
 uniform float magnify;    // 0..1: ingrandimento al centro
+uniform float ring;       // 0 = lastra piena; >0 = anello: metà dello spessore, il vetro è solo la fascia
 
 half4 main(float2 fc) {
   float2 c = size * 0.5;
@@ -96,9 +97,17 @@ half4 main(float2 fc) {
   float2 hb = rectSize * 0.5 - float2(radius);
   float2 q = abs(p) - hb;
   float sd = length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
-  float depth = -sd;
   float2 s = float2(p.x < 0.0 ? -1.0 : 1.0, p.y < 0.0 ? -1.0 : 1.0);
   float2 n = (q.x > 0.0 || q.y > 0.0) ? normalize(max(q, float2(0.0001))) * s : (q.x > q.y ? float2(s.x, 0.0) : float2(0.0, s.y));
+  float cover = 1.0;
+  if (ring > 0.0) {
+    float L = length(p);
+    float rm = rectSize.x * 0.5 - ring;
+    sd = abs(L - rm) - ring;
+    n = (L > 0.0001 ? p / L : float2(1.0, 0.0)) * (L >= rm ? 1.0 : -1.0);
+    cover = clamp(0.5 - sd, 0.0, 1.0);
+  }
+  float depth = -sd;
   float t = clamp(1.0 - depth / edge, 0.0, 1.0);
   float bend = t * t * (3.0 - 2.0 * t);
   bend = bend * bend;
@@ -111,13 +120,14 @@ half4 main(float2 fc) {
   half3 rgb = half3(r.r, g.g, b.b);
   float l = dot(rgb, half3(0.213, 0.715, 0.072));
   rgb = mix(half3(l), rgb, half(sat));
-  return half4(clamp(rgb, 0.0, 1.0), (r.a + g.a + b.a) / 3.0);
+  half a = (r.a + g.a + b.a) / 3.0;
+  return half4(clamp(rgb, 0.0, 1.0) * half(cover), a * half(cover));
 }
 """
 
 private class LensParams(
     val w: Float, val h: Float, val rectW: Float, val rectH: Float, val radius: Float,
-    val edge: Float, val amount: Float, val aberr: Float, val sat: Float, val magnify: Float, val blur: Float,
+    val edge: Float, val amount: Float, val aberr: Float, val sat: Float, val magnify: Float, val blur: Float, val ring: Float = 0f,
 )
 
 private fun lensEffect(p: LensParams): RenderEffect? {
@@ -143,6 +153,7 @@ private fun lensEffect33(p: LensParams): RenderEffect {
     sh.setFloatUniform("aberr", p.aberr)
     sh.setFloatUniform("sat", p.sat)
     sh.setFloatUniform("magnify", p.magnify)
+    sh.setFloatUniform("ring", p.ring)
     val bend = AndroidRenderEffect.createRuntimeShaderEffect(sh, "content")
     val e = if (p.blur > 0.5f) AndroidRenderEffect.createChainEffect(bend, AndroidRenderEffect.createBlurEffect(p.blur, p.blur, Shader.TileMode.CLAMP)) else bend
     return e.asComposeRenderEffect()
@@ -166,16 +177,17 @@ internal fun Glass(
     blur: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
     corner: androidx.compose.ui.unit.Dp? = null,
+    ring: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val d = LocalDensity.current
     val margin = 28.dp
-    val effect = remember(width, height, edge, amount, aberr, sat, magnify, blur, corner, d.density) {
+    val effect = remember(width, height, edge, amount, aberr, sat, magnify, blur, corner, ring, d.density) {
         with(d) {
             val m = margin.toPx()
             lensEffect(
                 LensParams(
                     width.toPx() + 2 * m, height.toPx() + 2 * m, width.toPx(), height.toPx(), corner?.toPx() ?: (height.toPx() / 2f),
-                    edge.toPx(), amount.toPx(), aberr, sat, magnify, blur.toPx(),
+                    edge.toPx(), amount.toPx(), aberr, sat, magnify, blur.toPx(), ring.toPx(),
                 ),
             )
         }

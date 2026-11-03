@@ -43,6 +43,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -138,19 +142,35 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     val breathe by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(3200), androidx.compose.animation.core.RepeatMode.Reverse), label = "respiro")
     val strength by animateFloatAsState(if (t.running) 1f else if (np?.playing == true) 0.7f else 0.4f, tween(900), label = "forza")
     val shape = RoundedCornerShape(36.dp)
-    Column(
-        Modifier.fillMaxWidth().clip(shape).background(c.bgSurface)
-            .drawBehind {
-                val cols = listOf(m0, m1, m2)
-                val rad = size.maxDimension * 0.75f
-                val a = (if (dark) 0.50f else 0.34f) * strength * (0.82f + 0.18f * breathe)
-                for (i in 0 until 3) {
-                    val ang = (drift + i / 3f) * 2f * Math.PI.toFloat()
-                    val ctr = Offset(size.width * (0.5f + 0.42f * kotlin.math.cos(ang)), size.height * (0.5f + 0.38f * kotlin.math.sin(ang * (1f + i * 0.3f))))
-                    drawCircle(Brush.radialGradient(listOf(cols[i].copy(alpha = a), Color.Transparent), ctr, rad), rad, ctr)
-                }
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    var bgPos by remember { mutableStateOf(Offset.Zero) }
+    var ringPos by remember { mutableStateOf(Offset.Zero) }
+    Box(Modifier.fillMaxWidth().clip(shape).androidx_onPos { bgPos = it }) {
+    Box(
+        Modifier.matchParentSize().androidx_record(layer) {
+            drawRect(c.bgSurface)
+            val cols = listOf(m0, m1, m2)
+            val rad = size.maxDimension * 0.75f
+            val a = (if (dark) 0.50f else 0.34f) * strength * (0.82f + 0.18f * breathe)
+            for (i in 0 until 3) {
+                val ang = (drift + i / 3f) * 2f * Math.PI.toFloat()
+                val ctr = Offset(size.width * (0.5f + 0.42f * kotlin.math.cos(ang)), size.height * (0.5f + 0.38f * kotlin.math.sin(ang * (1f + i * 0.3f))))
+                drawCircle(Brush.radialGradient(listOf(cols[i].copy(alpha = a), Color.Transparent), ctr, rad), rad, ctr)
             }
-            .padding(Space.s5),
+            // tacche del quadrante: sotto l'anello, così il vetro le piega
+            val half = 132.dp.toPx()
+            val ctr = ringPos - bgPos + Offset(half, half)
+            val rm = half - 10.dp.toPx()
+            for (k in 0 until 60) {
+                val ang = k * 6.0 * Math.PI / 180.0
+                val major = k % 5 == 0
+                val r0 = rm - (if (major) 9.dp.toPx() else 5.dp.toPx()); val r1 = rm + (if (major) 9.dp.toPx() else 5.dp.toPx())
+                drawLine(c.labelPrimary.copy(alpha = if (major) 0.55f else 0.30f), Offset(ctr.x + (r0 * kotlin.math.cos(ang)).toFloat(), ctr.y + (r0 * kotlin.math.sin(ang)).toFloat()), Offset(ctr.x + (r1 * kotlin.math.cos(ang)).toFloat(), ctr.y + (r1 * kotlin.math.sin(ang)).toFloat()), if (major) 2.dp.toPx() else 1.dp.toPx())
+            }
+        },
+    )
+    Column(
+        Modifier.fillMaxWidth().padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -158,22 +178,8 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
             CButton("Durate", onSettings, kind = ButtonKind.Tertiary)
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(264.dp), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val w = 10.dp.toPx()
-                    val inset = 14.dp.toPx()
-                    val tl = Offset(inset, inset); val sz = Size(size.width - inset * 2, size.height - inset * 2)
-                    drawArc(c.labelPrimary.copy(alpha = 0.07f), 0f, 360f, false, tl, sz, style = Stroke(w))
-                    if (progress > 0.002f) {
-                        val sweep = 360f * progress
-                        // alone morbido sotto l'arco, poi l'arco a gradiente con la testa tonda
-                        drawArc(tint.copy(alpha = 0.22f), -90f, sweep, false, tl - Offset(5.dp.toPx(), 5.dp.toPx()), Size(sz.width + 10.dp.toPx(), sz.height + 10.dp.toPx()), style = Stroke(w + 10.dp.toPx(), cap = StrokeCap.Round))
-                        drawArc(Brush.sweepGradient(listOf(tint.copy(alpha = 0.55f), tint, tint.copy(alpha = 0.55f)), center), -90f, sweep, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round))
-                    }
-                    val ang = Math.toRadians((-90.0 + 360.0 * progress))
-                    val r0 = sz.width / 2
-                    drawCircle(Color.White, w * 0.32f, Offset(center.x + (r0 * kotlin.math.cos(ang)).toFloat(), center.y + (r0 * kotlin.math.sin(ang)).toFloat()))
-                }
+            Box(Modifier.size(264.dp).androidx_onPos { ringPos = it }, contentAlignment = Alignment.Center) {
+                GlassRing(layer, { ringPos - bgPos }, 264.dp, 10.dp, progress, tint)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 64.sp, lineHeight = 72.sp, fontWeight = FontWeight.Light, fontFeatureSettings = "tnum"), c.labelPrimary)
                     Text(
@@ -222,6 +228,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
                 r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus")
             }, Modifier.weight(1f).height(56.dp))
         }
+    }
     }
 }
 
@@ -313,4 +320,64 @@ private fun SettingsPage(r: Router, p: PlanState) {
         Stepper("Obiettivo di oggi", p.cfg("goal", 120), "min", 30, 600, 30) { r.plan.setCfg("goal", it) }
     }
     Text("Le durate valgono dal prossimo pomodoro e sono le stesse su tutti i tuoi dispositivi.", style = CanoneType.footnote, color = Canone.colors.labelTertiary)
+}
+
+
+private fun Modifier.androidx_onPos(f: (Offset) -> Unit): Modifier =
+    this.then(Modifier.onGloballyPositioned { f(it.positionInRoot()) })
+
+private fun Modifier.androidx_record(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, body: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit): Modifier =
+    this.then(Modifier.drawWithContent { layer.record { body() }; drawLayer(layer) })
+
+/** Anello (o un suo arco) con estremità tonde: serve a ritagliare il vetro. */
+private class RingShape(val half: Float, val frac: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline {
+        val outer = androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height)
+        val inner = outer.deflate(half * 2f)
+        val p = androidx.compose.ui.graphics.Path()
+        if (frac >= 0.999f) {
+            p.fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+            p.addOval(outer); p.addOval(inner)
+            return androidx.compose.ui.graphics.Outline.Generic(p)
+        }
+        if (frac <= 0.002f) return androidx.compose.ui.graphics.Outline.Generic(p)
+        val sweep = 360f * frac
+        p.arcTo(outer, -90f, sweep, true)
+        p.arcTo(inner, -90f + sweep, -sweep, false)
+        p.close()
+        val rm = size.width / 2f - half
+        val c = Offset(size.width / 2f, size.height / 2f)
+        fun cap(deg: Double): androidx.compose.ui.graphics.Path {
+            val a = Math.toRadians(deg)
+            val o = Offset(c.x + (rm * kotlin.math.cos(a)).toFloat(), c.y + (rm * kotlin.math.sin(a)).toFloat())
+            return androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(o.x - half, o.y - half, o.x + half, o.y + half)) }
+        }
+        val u1 = androidx.compose.ui.graphics.Path.combine(androidx.compose.ui.graphics.PathOperation.Union, p, cap(-90.0))
+        val u2 = androidx.compose.ui.graphics.Path.combine(androidx.compose.ui.graphics.PathOperation.Union, u1, cap(-90.0 + sweep))
+        return androidx.compose.ui.graphics.Outline.Generic(u2)
+    }
+}
+
+/**
+ * La barra di avanzamento del pomodoro, tutta di vetro: una fascia che piega la luce (rifrazione) e fa vedere le tacche del quadrante;
+ * la parte già trascorsa ha solo una tinta leggera. Niente ombre né aloni.
+ */
+@Composable
+private fun GlassRing(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, origin: () -> Offset, size: androidx.compose.ui.unit.Dp, half: androidx.compose.ui.unit.Dp, progress: Float, tint: Color) {
+    val dark = isDark()
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val halfPx = with(d) { half.toPx() }
+    val track = remember(halfPx) { RingShape(halfPx, 1f) }
+    val arc = remember(halfPx, progress) { RingShape(halfPx, progress) }
+    Box(Modifier.size(size)) {
+        Glass(layer, origin, size, size, edge = half * 0.95f, amount = 7.dp, aberr = 0.28f, sat = 1.5f, magnify = 0f, blur = 0.dp, corner = size / 2, ring = half)
+        Box(Modifier.fillMaxSize().clip(track).background(Color.White.copy(alpha = if (dark) 0.05f else 0.20f)))
+        Box(Modifier.fillMaxSize().clip(arc).background(tint.copy(alpha = if (dark) 0.42f else 0.34f)))
+        Canvas(Modifier.fillMaxSize()) {
+            val w = 1.dp.toPx()
+            val edge = Color.White.copy(alpha = if (dark) 0.28f else 0.60f)
+            drawCircle(edge, size.width / 2f - w / 2f, style = Stroke(w))
+            drawCircle(edge, size.width / 2f - half.toPx() * 2f + w / 2f, style = Stroke(w))
+        }
+    }
 }
