@@ -65,7 +65,7 @@ fun CCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Column(
-        modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s5),
+        modifier.fillMaxWidth().clip(shape).glass(shape).padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
         content = content,
     )
@@ -117,7 +117,7 @@ fun CBadge(text: String, tone: Tone = Tone.Neutral) {
         Tone.Accent -> c.accent
     }
     Row(
-        Modifier.height(26.dp).clip(CircleShape).background(c.bgSunken).padding(horizontal = Space.s3),
+        Modifier.height(26.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)).padding(horizontal = Space.s3),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(dot))
@@ -249,8 +249,7 @@ fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { inner ->
                 Box(
-                    Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(Radius.md)).background(c.bgSurface)
-                        .border(BorderStroke(1.5.dp, c.lineStrong), RoundedCornerShape(Radius.md)).padding(horizontal = Space.s4),
+                    Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(Radius.md)).glass(RoundedCornerShape(Radius.md)).padding(horizontal = Space.s4),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (value.isEmpty()) Text(placeholder, style = if (mono) CanoneType.figure else CanoneType.body, color = c.labelTertiary, maxLines = 1)
@@ -265,4 +264,42 @@ fun CField(label: String, value: String, onChange: (String) -> Unit, placeholder
 fun CText(text: String, tertiary: Boolean = false, modifier: Modifier = Modifier) {
     val c = Canone.colors
     Text(text, style = CanoneType.footnote, color = if (tertiary) c.labelTertiary else c.labelSecondary, modifier = modifier)
+}
+
+
+/** Avanzamento di vetro: pista tenue e riempimento blu; con valore negativo scorre senza fine. */
+@Composable
+fun GlassProgress(fraction: Float, modifier: Modifier = Modifier) {
+    val c = Canone.colors
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "avanzamento")
+    val run by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1300, easing = androidx.compose.animation.core.FastOutSlowInEasing)), label = "scorre")
+    androidx.compose.foundation.Canvas(modifier.fillMaxWidth().padding(vertical = Space.s2).height(8.dp)) {
+        val h = size.height
+        drawRoundRect(c.labelPrimary.copy(alpha = 0.08f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2))
+        if (fraction >= 0f) drawRoundRect(c.accent, size = androidx.compose.ui.geometry.Size(size.width * fraction.coerceIn(0f, 1f), h), cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2))
+        else { val w = size.width * 0.3f; drawRoundRect(c.accent, androidx.compose.ui.geometry.Offset((size.width + w) * run - w, 0f), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(h / 2)) }
+    }
+}
+
+
+/** Campo di ricerca di vetro: lente, testo, croce per svuotare. */
+@Composable
+fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+    val c = Canone.colors
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier.fillMaxWidth().height(44.dp).clip(shape).glass(shape).padding(horizontal = Space.s4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+            val w = size.width
+            drawCircle(c.labelTertiary, w * 0.34f, androidx.compose.ui.geometry.Offset(w * 0.42f, w * 0.42f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.11f))
+            drawLine(c.labelTertiary, androidx.compose.ui.geometry.Offset(w * 0.68f, w * 0.68f), androidx.compose.ui.geometry.Offset(w * 0.94f, w * 0.94f), w * 0.12f, androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text(placeholder, style = CanoneType.body, color = c.labelTertiary, maxLines = 1)
+            BasicTextField(value, onChange, singleLine = true, textStyle = CanoneType.body.copy(color = c.labelPrimary), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
+        }
+        if (value.isNotEmpty()) Box(Modifier.size(28.dp).clip(CircleShape).clickable { onChange("") }, contentAlignment = Alignment.Center) { Icon24(Ico.CLOSE, c.labelTertiary, Modifier.size(14.dp)) }
+    }
 }

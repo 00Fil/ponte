@@ -90,8 +90,7 @@ internal fun PickField(label: String, value: String, modifier: Modifier = Modifi
     androidx.compose.foundation.layout.Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Text(label, style = CanoneType.footnote, color = c.labelSecondary)
         Box(
-            Modifier.fillMaxWidth().height(44.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.md)).background(c.bgSurface)
-                .border(androidx.compose.foundation.BorderStroke(1.5.dp, c.lineStrong), androidx.compose.foundation.shape.RoundedCornerShape(Radius.md)).dropClickable(onClick, corner = Radius.md).padding(horizontal = Space.s4),
+            Modifier.fillMaxWidth().height(44.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.md)).glass(androidx.compose.foundation.shape.RoundedCornerShape(Radius.md)).dropClickable(onClick, corner = Radius.md).padding(horizontal = Space.s4),
             contentAlignment = Alignment.CenterStart,
         ) { Text(value, style = CanoneType.body, color = c.labelPrimary, maxLines = 1) }
     }

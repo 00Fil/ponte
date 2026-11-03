@@ -203,7 +203,7 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
             Box(
                 Modifier.offset(y = lerp(baseY, 0.dp, f)).size(w, lerp(tileH, hh, f)).zIndex(if (mine) 2f else 1f)
                     .graphicsLayer { val o = if (!mine && which != 0) p.value else 0f; alpha = 1f - 0.7f * o; scaleX = 1f - 0.05f * o; scaleY = 1f - 0.05f * o }
-                    .clip(shape).background(if (id == 2) Brush.linearGradient(listOf(c.accent.copy(alpha = 0.18f), c.bgSurface)) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, c.lineSeparator), shape)
+                    .clip(shape).background(if (id == 2) Brush.linearGradient(listOf(c.accent.copy(alpha = 0.12f), Color.Transparent)) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, c.lineSeparator), shape)
                     .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg).onLongPressOnly(onLong),
             ) {
                 content()

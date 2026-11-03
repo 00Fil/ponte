@@ -143,6 +143,22 @@ half4 main(float2 fc) {
 }
 """
 
+private object Bevel {
+    val shader: android.graphics.RuntimeShader? by lazy { if (Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(BEVEL_AGSL) else null }
+    val brush: ShaderBrush? by lazy { shader?.let { ShaderBrush(it) } }
+}
+
+/** Vetro come la barra: velo del colore di fondo (o acrilico quasi opaco dove serve leggere) e bordo di luce. */
+fun Modifier.glass(shape: androidx.compose.ui.graphics.Shape, acrylic: Boolean = false): Modifier = composed {
+    val c = Canone.colors
+    val dark = isDark()
+    val brush = remember(dark, acrylic, c.bgCanvas, c.bgSurface) {
+        if (acrylic) Brush.verticalGradient(listOf(c.bgSurface.copy(alpha = 0.92f), c.bgSurface.copy(alpha = 0.92f)))
+        else Brush.verticalGradient(listOf(c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f), c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f)))
+    }
+    this.background(brush, shape).drop(dark, tint = Color.Transparent, shape = shape as? androidx.compose.foundation.shape.CornerBasedShape)
+}
+
 /** Una goccia: velo, bordo spesso con luce e dispersione, riflesso e contorno tonale. [press] (0..1) è letto solo in fase di disegno. */
 fun Modifier.drop(
     dark: Boolean,
@@ -151,8 +167,9 @@ fun Modifier.drop(
     tint: Color = Color.Unspecified,
     press: () -> Float = { 0f },
     touch: DropTouch? = null,
+    shape: androidx.compose.foundation.shape.CornerBasedShape? = null,
 ): Modifier = this.drawWithCache {
-    val r = corner?.toPx() ?: (size.minDimension / 2f)
+    val r = shape?.topStart?.toPx(size, this) ?: corner?.toPx() ?: (size.minDimension / 2f)
     val cr = CornerRadius(r)
     val ink = Goccia.ink(dark)
     val white = Color.White
@@ -169,15 +186,11 @@ fun Modifier.drop(
     val wall = 2.dp.toPx()
     val hair = 1.dp.toPx()
     val edge = Goccia.edge(dark)
-    val shader = if (Build.VERSION.SDK_INT >= 33) {
-        android.graphics.RuntimeShader(BEVEL_AGSL).apply {
-            setFloatUniform("size", size.width, size.height)
-            setFloatUniform("radius", r)
-            setFloatUniform("bevel", minOf(size.minDimension * 0.30f, 7.dp.toPx()))
-            setFloatUniform("strength", if (dark) 0.55f else 0.95f)
-        }
-    } else null
-    val brush = shader?.let { ShaderBrush(it) }
+    // un solo shader compilato per tutta l'app: i parametri si impostano subito prima di ogni disegno (il disegno ne registra una copia)
+    val shader = if (Build.VERSION.SDK_INT >= 33) Bevel.shader else null
+    val bevelPx = minOf(size.minDimension * 0.30f, 7.dp.toPx())
+    val strength = if (dark) 0.55f else 0.95f
+    val brush = Bevel.brush
     onDrawBehind {
         if (fill != null) drawRoundRect(fill, cornerRadius = cr) else drawRoundRect(base, cornerRadius = cr)
         drawRoundRect(lift, cornerRadius = cr)
@@ -194,7 +207,11 @@ fun Modifier.drop(
             drawRoundRect(glow, cornerRadius = cr)
         }
         if (brush != null && Build.VERSION.SDK_INT >= 33) {
-            shader!!.setFloatUniform("press", p)
+            shader!!.setFloatUniform("size", size.width, size.height)
+            shader.setFloatUniform("radius", r)
+            shader.setFloatUniform("bevel", bevelPx)
+            shader.setFloatUniform("strength", strength)
+            shader.setFloatUniform("press", p)
             val sp = touch?.spin ?: Float.NaN
             if (sp.isNaN()) shader.setFloatUniform("light", -0.55f, -0.83f) else shader.setFloatUniform("light", kotlin.math.cos(sp), kotlin.math.sin(sp))
             drawRoundRect(brush, cornerRadius = cr)

@@ -214,7 +214,7 @@ fun GlassTransport(kinds: List<Int>, onClick: (Int) -> Unit, modifier: Modifier 
         val h = maxHeight - pad * 2
         Box(
             Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }
-                .clip(CircleShape).background(c.bgSunken).drop(dark),
+                .clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)).drop(dark),
         ) {
             Row(
                 Modifier.fillMaxSize().padding(pad).pointerInput(n) {
@@ -337,7 +337,7 @@ fun PlayerCard(np: NowPlaying, modifier: Modifier = Modifier, footer: (@Composab
       }
         Column(Modifier.fillMaxWidth().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                Box(Modifier.size(84.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(84.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Radius.lg)).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                     np.art?.let { androidx.compose.foundation.Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
                         ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(32.dp))
                 }

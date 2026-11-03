@@ -53,7 +53,7 @@ fun HeadphonesCard(r: Router) {
     val shape = RoundedCornerShape(Radius.xl)
     val ring = if ((battery ?: 100) < 20) c.critical else c.positive
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s3),
+        Modifier.fillMaxWidth().clip(shape).glass(shape).padding(Space.s3),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
@@ -65,7 +65,7 @@ fun HeadphonesCard(r: Router) {
                 if (battery != null && !switching) drawArc(ring, -90f, 360f * level, false, tl, sz, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
             }
             if (switching) BusyArc(c.accent, Modifier.matchParentSize(), stroke = 3.4f)
-            Box(Modifier.size(52.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(52.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                 if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
                 else TabGlyph(4, c.labelSecondary, false, Modifier.size(24.dp))
             }
@@ -93,7 +93,7 @@ fun PcAudioCard(r: Router) {
         sources.forEach { d ->
             val dp = DevicePics.rememberPic(d.id)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                Box(Modifier.size(40.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(40.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                     if (dp != null) Image(dp, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit) else TabGlyph(1, c.labelTertiary, false, Modifier.size(20.dp))
                 }
                 Column(Modifier.weight(1f)) {

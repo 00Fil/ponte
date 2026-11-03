@@ -73,6 +73,9 @@ import it.ponte.DevCal
 import it.ponte.DevEvent
 import it.ponte.Ev
 import it.ponte.Router
+import it.ponte.PlanState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -100,9 +103,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     val bridge = remember { CalendarBridge(ctx) }
     var granted by remember { mutableStateOf(bridge.granted()) }
     var tick by remember { mutableIntStateOf(0) }
-    val carousel = androidx.compose.foundation.pager.rememberPagerState { 2 }   // 0 agenda, 1 studio: si passa con uno swipe
-    val uiScope = androidx.compose.runtime.rememberCoroutineScope()
-    val mode = if (carousel.currentPage == 1) 2 else 0
+    val mode = 0
     val now = remember { System.currentTimeMillis() }
     var cursor by remember { mutableLongStateOf(Calendar.getInstance().apply { set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis) }
     var selected by remember { mutableLongStateOf(dayStart(now)) }
@@ -119,7 +120,6 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         val o = bridge.observe { tick++ }
         onDispose { bridge.unobserve(o) }
     }
-    LaunchedEffect(sub) { if (sub == "study") { carousel.animateScrollToPage(1); onSub(null) } }
     androidx.activity.compose.BackHandler(enabled = sheet != null) { closeTick++ }
     androidx.compose.runtime.SideEffect {
         val sh = sheet
@@ -181,7 +181,8 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     }
     val top: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
-            GlassSegmented(listOf("Agenda", "Studio"), carousel.targetPage, { uiScope.launch { carousel.animateScrollToPage(it) } }, Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
+            TomatoButton(plan) { onSub("study") }
             CButton("Google", { onSub("cals") }, kind = ButtonKind.Secondary)
         }
     }
@@ -196,12 +197,16 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
         label = "agenda",
     ) { page ->
         when (page) {
-            "set" -> StudySettings(r) { onSub(null) }
+            "set" -> StudySettings(r) { onSub("study") }
+            "study" -> ScreenList("Studio") {
+                item { BackRow("Agenda", "Studio") { onSub(null) } }
+                studyItems(r, plan) { onSub("set") }
+            }
             "cals" -> CalendarsPage(ctx, bridge, granted, cals, hidden, target, { hidden = it; bridge.hidden = it; tick++ }, { target = it; bridge.target = it }, { ask.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) }) { onSub(null) }
             else -> Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.padding(start = Space.s4, end = Space.s4, top = Space.s2, bottom = Space.s3).widthIn(max = 720.dp)) { top() }
-                    androidx.compose.foundation.pager.HorizontalPager(carousel, Modifier.weight(1f).fillMaxWidth(), userScrollEnabled = sheet == null, beyondViewportPageCount = 1) { md ->
+                    Box(Modifier.weight(1f).fillMaxWidth()) { val md = 0
                         when (md) {
                             0 -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 Column(Modifier.widthIn(max = 720.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
@@ -263,13 +268,7 @@ private fun MonthCard(
     var dx by remember { mutableStateOf(0f) }
     var dy by remember { mutableStateOf(0f) }
     Column(
-        Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(shape).background(c.bgSurface).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape)
-            .pointerInput(expanded) {
-                detectHorizontalDragGestures(onDragEnd = { if (dx < -90f) onStep(1) else if (dx > 90f) onStep(-1); dx = 0f }, onDragCancel = { dx = 0f }) { _, d -> dx += d }
-            }
-            .pointerInput(expanded) {
-                detectVerticalDragGestures(onDragEnd = { if (dy < -50f) onExpand(false) else if (dy > 50f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
-            }
+        Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(shape).glass(shape)
             .animateContentSize(spring(1f, 420f))
             .padding(horizontal = Space.s3, vertical = Space.s2),
     ) {
@@ -345,12 +344,10 @@ private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: 
     val shape = RoundedCornerShape(Radius.xl)
     var dy by remember { mutableStateOf(0f) }
     Column(
-        modifier.padding(horizontal = Space.s4).padding(bottom = LocalBarInset.current - 4.dp).fillMaxWidth().clip(shape).background(c.bgSurface).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape),
+        modifier.padding(horizontal = Space.s4).padding(bottom = LocalBarInset.current - 4.dp).fillMaxWidth().clip(shape).glass(shape),
     ) {
         Column(
-            Modifier.fillMaxWidth().pointerInput(expanded) {
-                detectVerticalDragGestures(onDragEnd = { if (dy < -40f) onExpand(false) else if (dy > 40f) onExpand(true); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d }
-            }.padding(horizontal = Space.s5, vertical = Space.s3),
+            Modifier.fillMaxWidth().clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) { onExpand(!expanded) }.padding(horizontal = Space.s5, vertical = Space.s3),
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(4.dp).clip(CircleShape).background(c.lineStrong))
             Row(Modifier.fillMaxWidth().padding(top = Space.s2), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -374,27 +371,8 @@ private fun DayDrawer(day: Long, list: List<Item>, expanded: Boolean, onExpand: 
 /** Trascina a sinistra per eliminare. */
 @Composable
 private fun SwipeRow(canDelete: Boolean, onDelete: () -> Unit, content: @Composable () -> Unit) {
-    val c = Canone.colors
-    val off = remember { androidx.compose.animation.core.Animatable(0f) }
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val limit = with(density) { 110.dp.toPx() }
-    val shape = RoundedCornerShape(Radius.lg)
-    Box(Modifier.fillMaxWidth()) {
-        if (canDelete) Box(Modifier.matchParentSize().clip(shape).background(c.critical), contentAlignment = Alignment.CenterEnd) {
-            Text("×", style = CanoneType.title3, color = Color.White, modifier = Modifier.padding(end = Space.s5))
-        }
-        Box(
-            Modifier.offset { androidx.compose.ui.unit.IntOffset(off.value.toInt(), 0) }.then(
-                if (!canDelete) Modifier else Modifier.pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = { scope.launch { if (off.value < -limit) { off.animateTo(-4000f, tween(180)); onDelete(); off.snapTo(0f) } else off.animateTo(0f, spring(0.8f, 400f)) } },
-                        onDragCancel = { scope.launch { off.animateTo(0f, spring(0.8f, 400f)) } },
-                    ) { _, d -> scope.launch { off.snapTo((off.value + d).coerceIn(-limit * 1.6f, 0f)) } }
-                },
-            ),
-        ) { content() }
-    }
+    // niente swipe: si elimina dal dettaglio dell'evento
+    content()
 }
 
 @Composable
@@ -402,7 +380,7 @@ private fun EventRow(i: Item, onClick: () -> Unit) {
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.lg)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(c.bgSunken).dropClickable(onClick, corner = Radius.lg).padding(Space.s3),
+        Modifier.fillMaxWidth().clip(shape).background(c.labelPrimary.copy(alpha = 0.07f)).dropClickable(onClick, corner = Radius.lg).padding(Space.s3),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Box(Modifier.width(4.dp).height(38.dp).clip(CircleShape).background(i.color))
@@ -417,7 +395,7 @@ private fun EventRow(i: Item, onClick: () -> Unit) {
 
 /** Cassetto che sale dal basso con velo scuro; si chiude toccando fuori o trascinando giù. */
 @Composable
-private fun SheetHost(onDismiss: () -> Unit, closeTick: Int, content: @Composable (close: () -> Unit) -> Unit) {
+internal fun SheetHost(onDismiss: () -> Unit, closeTick: Int, content: @Composable (close: () -> Unit) -> Unit) {
     val c = Canone.colors
     val drag = remember { androidx.compose.animation.core.Animatable(0f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -428,16 +406,16 @@ private fun SheetHost(onDismiss: () -> Unit, closeTick: Int, content: @Composabl
     LaunchedEffect(closeTick) { if (closeTick != lastTick) { lastTick = closeTick; close() } }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
         androidx.compose.animation.AnimatedVisibility(shown, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { close() } })
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f)).pointerInput(Unit) { detectTapGestures { close() } })
         }
         androidx.compose.animation.AnimatedVisibility(
-            shown, Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBarInset.current - 6.dp),
+            shown, Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBarInset.current + Space.s3),
             enter = androidx.compose.animation.slideInVertically(spring(0.88f, 360f)) { it }, exit = androidx.compose.animation.slideOutVertically(tween(220)) { it },
         ) {
             val shape = RoundedCornerShape(Radius.xl)
             Column(
-                Modifier.widthIn(max = 560.dp).padding(horizontal = Space.s4).fillMaxWidth().heightIn(max = maxHeight * 0.80f).offset { androidx.compose.ui.unit.IntOffset(0, drag.value.toInt()) }
-                    .clip(shape).background(c.bgSurface).imePadding()
+                Modifier.widthIn(max = 560.dp).padding(horizontal = Space.s4).fillMaxWidth().heightIn(max = maxHeight * 0.72f).offset { androidx.compose.ui.unit.IntOffset(0, drag.value.toInt()) }
+                    .clip(shape).glass(shape, acrylic = true).imePadding()
                     .pointerInput(Unit) { detectTapGestures { } },
             ) {
                 Box(
@@ -536,7 +514,7 @@ private fun DetailSheet(i: Item, cals: List<DevCal>) {
 @Composable
 private fun DetailRow(label: String, value: String) {
     val c = Canone.colors
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.bgSunken).padding(Space.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(c.labelPrimary.copy(alpha = 0.07f)).padding(Space.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, style = CanoneType.footnote, color = c.labelTertiary)
         Text(value, style = CanoneType.body, color = c.labelPrimary)
     }
@@ -579,5 +557,33 @@ private fun CalendarsPage(
                 }, Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+
+/** Tasto pomodoro: porta allo Studio; col timer acceso mostra il tempo che resta. */
+@Composable
+private fun TomatoButton(plan: PlanState, onClick: () -> Unit) {
+    val c = Canone.colors
+    val t = rememberDropTouch()
+    val tm = plan.timer
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(tm.running, tm.endAt) { while (tm.running) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+    val left = ((tm.endAt - now).coerceAtLeast(0L) / 1000).toInt()
+    Row(
+        Modifier.height(44.dp).dropGestures(t, onClick).dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
+            val w = size.width
+            drawCircle(Color(0xFFE5483B), w * 0.40f, Offset(w / 2, w * 0.56f))
+            drawCircle(Color.White.copy(alpha = 0.35f), w * 0.10f, Offset(w * 0.36f, w * 0.44f))
+            val leaf = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.5f, w * 0.22f); lineTo(w * 0.26f, w * 0.10f); lineTo(w * 0.42f, w * 0.26f); lineTo(w * 0.5f, w * 0.04f)
+                lineTo(w * 0.58f, w * 0.26f); lineTo(w * 0.76f, w * 0.10f); close()
+            }
+            drawPath(leaf, Color(0xFF3FAE5A))
+        }
+        if (tm.running) Text("%02d:%02d".format(left / 60, left % 60), style = CanoneType.bodyMedium.copy(fontFeatureSettings = "tnum"), color = c.labelPrimary)
     }
 }

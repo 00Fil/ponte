@@ -17,6 +17,7 @@ import java.io.File
 
 /** Immagine scelta per ogni dispositivo (un PNG, anche un render 3D con sfondo trasparente). Resta su questo telefono, accanto all'id del dispositivo. */
 object DevicePics {
+    private val mem = HashMap<String, ImageBitmap?>()
     val rev = mutableIntStateOf(0)
 
     private fun file(ctx: Context, id: String) = File(File(ctx.filesDir, "devpics").apply { mkdirs() }, id.filter { it.isLetterOrDigit() || it == '-' } + ".png")
@@ -41,10 +42,14 @@ object DevicePics {
     fun rememberPic(id: String?): ImageBitmap? {
         val ctx = LocalContext.current
         val v = rev.intValue
-        val pic by produceState<ImageBitmap?>(null, id, v) {
-            value = if (id == null) null else withContext(Dispatchers.IO) {
-                file(ctx, id).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }
-            }
+        val key = "$id@$v"
+        // in memoria: scorrendo le liste la stessa immagine non si rilegge dal disco a ogni riga
+        val pic by produceState(mem[key], id, v) {
+            if (id == null) { value = null; return@produceState }
+            if (mem.containsKey(key)) { value = mem[key]; return@produceState }
+            val b = withContext(Dispatchers.IO) { file(ctx, id).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path)?.asImageBitmap() } }
+            mem[key] = b
+            value = b
         }
         return pic
     }

@@ -65,7 +65,7 @@ fun NavTile(icon: Int, title: String, value: String, note: String, tint: List<Co
     val c = Canone.colors
     val shape = RoundedCornerShape(Radius.xl)
     Row(
-        modifier.height(76.dp).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
+        modifier.height(76.dp).clip(shape).glass(shape)
             .dropClickable(onClick).padding(horizontal = Space.s3),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {

@@ -230,7 +230,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                             }
                         }
                     }
-                    Box(Modifier.clip(CircleShape).background(c.bgSunken).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
+                    Box(Modifier.clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)).dropClickable({ showNote = !showNote }, corner = 100.dp).padding(horizontal = Space.s3, vertical = Space.s2)) {
                         Text(if (showNote) "Nascondi nota" else "+ Nota", style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
                     }
                 }
@@ -481,7 +481,7 @@ private fun Kpi(label: String, cents: Long, colors: List<Color>, index: Int, mod
 @Composable
 private fun Stat(label: String, value: String, modifier: Modifier) {
     val c = Canone.colors
-    Column(modifier.clip(RoundedCornerShape(Radius.lg)).background(c.bgSunken).padding(Space.s3)) {
+    Column(modifier.clip(RoundedCornerShape(Radius.lg)).background(c.labelPrimary.copy(alpha = 0.07f)).padding(Space.s3)) {
         Text(label, style = CanoneType.footnote, color = c.labelTertiary)
         Text(value, style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary, maxLines = 1)
     }
@@ -731,7 +731,7 @@ private fun Trend(points: List<Float>, accent: Color, modifier: Modifier) {
         if (s != null) Text(
             "${s + 1} · " + eur((points[s] * 100).toLong()),
             style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary,
-            modifier = Modifier.align(Alignment.TopStart).clip(RoundedCornerShape(Radius.sm)).background(c.bgSunken).padding(horizontal = Space.s2, vertical = 2.dp).blurIf(MoneyPrivacy.hidden),
+            modifier = Modifier.align(Alignment.TopStart).clip(RoundedCornerShape(Radius.sm)).background(c.labelPrimary.copy(alpha = 0.07f)).padding(horizontal = Space.s2, vertical = 2.dp).blurIf(MoneyPrivacy.hidden),
         )
     }
 }
@@ -762,7 +762,7 @@ private fun AmountPad(value: String, modifier: Modifier = Modifier, onChange: (S
                     Box(
                         Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)
                             .dropGestures(t, { if (k == "⌫") onChange(value.dropLast(1)) else press(k) }, if (k == "⌫") ({ onChange("") }) else null)
-                            .dropDeform(t).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape),
+                            .dropDeform(t).clip(shape).glass(shape),
                         contentAlignment = Alignment.Center,
                     ) { Text(k, style = CanoneType.title2.copy(fontWeight = FontWeight.Medium), color = c.labelPrimary) }
                 }

@@ -66,7 +66,7 @@ fun CoverBubble(np: NowPlaying, onClick: () -> Unit, modifier: Modifier = Modifi
     val t = rememberDropTouch()
     Box(modifier.size(46.dp).dropGestures(t, onClick), contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t))
-        Box(Modifier.size(34.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
             np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelSecondary, false, Modifier.size(18.dp))
         }
     }
@@ -92,7 +92,7 @@ fun MiniPlayer(np: NowPlaying, layer: GraphicsLayer, onOpen: () -> Unit, onClose
             Modifier.fillMaxSize().dropClickable(onOpen, corner = 100.dp).padding(start = 8.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                 np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelSecondary, false, Modifier.size(20.dp))
             }
             Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -148,7 +148,7 @@ fun FullPlayer(np: NowPlaying, onClose: () -> Unit) {
             Spacer(Modifier.weight(0.6f))
             Box(
                 Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f).shadow(28.dp, RoundedCornerShape(Radius.xl), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.35f))
-                    .clip(RoundedCornerShape(Radius.xl)).background(c.bgSunken),
+                    .clip(RoundedCornerShape(Radius.xl)).background(c.labelPrimary.copy(alpha = 0.07f)),
                 contentAlignment = Alignment.Center,
             ) {
                 np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(64.dp))
@@ -226,7 +226,7 @@ fun DockedStrip(np: NowPlaying, layer: GraphicsLayer, onOpen: () -> Unit, onDeta
         Box(Modifier.fillMaxSize().clip(shape).border(androidx.compose.foundation.BorderStroke(1.dp, c.lineSeparator), shape))
         Column(Modifier.fillMaxSize().dropClickable(onOpen, corner = 26.dp).padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                     np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelSecondary, false, Modifier.size(18.dp))
                 }
                 Column(Modifier.weight(1f)) {
@@ -266,7 +266,7 @@ fun DockSong(np: NowPlaying, onOpen: () -> Unit) {
         Modifier.fillMaxSize().dropClickable(onOpen, corner = 26.dp).padding(start = 16.dp, end = 18.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
             np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelSecondary, false, Modifier.size(15.dp))
         }
         Column(Modifier.weight(1f)) {

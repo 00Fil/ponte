@@ -74,7 +74,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
                     SectionTitle("Spazio sul server")
                     if (storage != null) {
                         val usedFrac = (storage.total - storage.free).toFloat() / storage.total.coerceAtLeast(1)
-                        LinearProgressIndicator(progress = { usedFrac.coerceIn(0f, 1f) }, Modifier.fillMaxWidth().padding(vertical = Space.s2))
+                        GlassProgress(usedFrac)
                         CRow("${fmt(storage.free)} liberi su ${fmt(storage.total)}", "Backup di questo telefono sul server: ${fmt(storage.deviceBytes)} (${storage.deviceFiles} file)")
                     } else CText(if (st.storageError.isNotEmpty()) "Non riesco a leggere lo spazio: ${st.storageError}" else "Controllo il server…")
                     CButton("Aggiorna", { r.scope.launch { b.refreshStorage() } }, kind = ButtonKind.Tertiary)
@@ -109,8 +109,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
                     }
                     if (st.lastBackup > 0) CText("Ultimo backup: ${day(st.lastBackup)}", tertiary = true)
                     if (running) {
-                        if (st.total > 0) LinearProgressIndicator(progress = { st.done.toFloat() / st.total }, Modifier.fillMaxWidth().padding(vertical = Space.s2))
-                        else LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = Space.s2))
+                        GlassProgress(if (st.total > 0) st.done.toFloat() / st.total else -1f)
                         CText(buildString {
                             append(st.step)
                             if (st.total > 0) append("\n${st.done}/${st.total} file · ${fmt(st.bytes)}")

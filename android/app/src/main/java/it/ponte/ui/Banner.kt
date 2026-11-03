@@ -56,8 +56,7 @@ fun BoxScope.BannerHost() {
         val shape = RoundedCornerShape(26.dp)
         last?.let { n ->
             Row(
-                Modifier.widthIn(max = 520.dp).fillMaxWidth().shadow(18.dp, shape, ambientColor = c.labelPrimary.copy(alpha = 0.2f)).clip(shape).background(c.bgSurface)
-                    .border(BorderStroke(1.dp, c.lineSeparator), shape)
+                Modifier.widthIn(max = 520.dp).fillMaxWidth().shadow(18.dp, shape, ambientColor = c.labelPrimary.copy(alpha = 0.2f)).clip(shape).glass(shape)
                     .pointerInput(n.id) { var dy = 0f; detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy < -20f) Notify.banner.value = null }) { _, a -> dy += a } }
                     .padding(start = Space.s4, top = Space.s3, bottom = Space.s3, end = Space.s3),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),

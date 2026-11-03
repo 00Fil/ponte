@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -139,18 +141,14 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     val breathe by inf.animateFloat(0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(3200), androidx.compose.animation.core.RepeatMode.Reverse), label = "respiro")
     val strength by animateFloatAsState(if (t.running) 1f else if (np?.playing == true) 0.7f else 0.4f, tween(900), label = "forza")
     val shape = RoundedCornerShape(36.dp)
+    // versione immersiva: col pomodoro acceso il timer va a tutto schermo sulle onde
+    var immersive by remember { mutableStateOf(false) }
+    LaunchedEffect(t.running, t.startedAt) { immersive = t.running && mine }
+    if (immersive) PomodoroImmersive(r, p, secs, progress, palette) { immersive = false }
+    Box(Modifier.fillMaxWidth().clip(shape)) {
+    WavesBackground(palette, c.bgCanvas, Modifier.matchParentSize())
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(c.bgSurface)
-            .drawBehind {
-                val cols = listOf(m0, m1, m2)
-                val rad = size.maxDimension * 0.75f
-                val a = (if (dark) 0.50f else 0.34f) * strength * (0.82f + 0.18f * breathe)
-                for (i in 0 until 3) {
-                    val ang = (drift + i / 3f) * 2f * Math.PI.toFloat()
-                    val ctr = Offset(size.width * (0.5f + 0.42f * kotlin.math.cos(ang)), size.height * (0.5f + 0.38f * kotlin.math.sin(ang * (1f + i * 0.3f))))
-                    drawCircle(Brush.radialGradient(listOf(cols[i].copy(alpha = a), Color.Transparent), ctr, rad), rad, ctr)
-                }
-            }
+        Modifier.fillMaxWidth()
             .padding(Space.s5),
         verticalArrangement = Arrangement.spacedBy(Space.s4),
     ) {
@@ -222,6 +220,41 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
             }, Modifier.weight(1f).height(56.dp))
         }
     }
+    }
+}
+
+/** Il pomodoro a tutto schermo: onde con i colori del brano, il tempo grande al centro, pochi tasti di vetro. */
+@Composable
+private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Float, palette: List<Color>, onMinimize: () -> Unit) {
+    val t = p.timer
+    val focus = t.phase == "focus"
+    val rounds = p.cfg("rounds", 4)
+    androidx.compose.ui.window.Dialog(onMinimize, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF05060A))) {
+            WavesBackground(palette, Color(0xFF05060A), Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
+            Column(
+                Modifier.fillMaxSize().systemBarsPadding().padding(Space.s5),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium.copy(letterSpacing = 2.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(top = Space.s6))
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4)) {
+                    RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 104.sp, lineHeight = 112.sp, fontWeight = FontWeight.Thin, fontFeatureSettings = "tnum"), Color.White)
+                    Box(Modifier.width(220.dp).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Color.White))
+                    }
+                    Row(horizontalArrangement = Arrangement.Center) {
+                        for (i in 0 until rounds) Box(Modifier.padding(horizontal = 3.dp).size(7.dp).clip(CircleShape).background(if (i < t.cycle % rounds) Color.White else Color.White.copy(alpha = 0.25f)))
+                    }
+                }
+                Row(Modifier.widthIn(max = 440.dp).fillMaxWidth().padding(bottom = Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    CButton("Ferma", { r.plan.timerStop(); onMinimize() }, Modifier.weight(1f).height(56.dp))
+                    CButton("Salta", { r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus") }, Modifier.weight(1f).height(56.dp))
+                    CButton("Riduci", onMinimize, Modifier.weight(1f).height(56.dp))
+                }
+            }
+        }
+    }
 }
 
 
@@ -259,7 +292,7 @@ private fun TodayCard(p: PlanState) {
                 Text(if (s == 1) "1 giorno" else "$s giorni", style = CanoneType.title3, color = c.labelPrimary)
             }
         }
-        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(c.bgSunken)) {
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(c.labelPrimary.copy(alpha = 0.07f))) {
             Box(Modifier.fillMaxWidth(frac).fillMaxHeight().clip(CircleShape).background(if (frac >= 1f) c.positive else c.accent))
         }
         Text("Obiettivo ${hm(goal)}" + if (today >= goal) " · raggiunto" else "", style = CanoneType.footnote, color = c.labelTertiary)

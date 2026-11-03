@@ -191,11 +191,13 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
         renderEffect = if (v < 0.995f && android.os.Build.VERSION.SDK_INT >= 31) { val b = (1f - v) * 20f + 0.01f; androidx.compose.ui.graphics.BlurEffect(b, b, androidx.compose.ui.graphics.TileMode.Decal) } else null
     }
     val filter = if (tab == 1) "screenshot" else "file"
-    val grouped = remember(history) {
+    var query by remember { mutableStateOf("") }
+    val shown = remember(history, query) { if (query.isBlank()) history else history.filter { it.text.contains(query.trim(), ignoreCase = true) } }
+    val grouped = remember(shown) {
         val fmt = java.text.SimpleDateFormat("d MMMM", java.util.Locale.ITALY)
         val today = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
         fun label(ts: Long) = if (ts >= today) "Oggi" else if (ts >= today - 86_400_000L) "Ieri" else fmt.format(java.util.Date(ts))
-        buildList<Pair<String?, it.ponte.ClipItem?>> { var last = ""; history.forEach { h -> val d = label(h.ts); if (d != last) { add(d to null); last = d }; add(null to h) } }
+        buildList<Pair<String?, it.ponte.ClipItem?>> { var last = ""; shown.forEach { h -> val d = label(h.ts); if (d != last) { add(d to null); last = d }; add(null to h) } }
     }
     val list = if (tab == 0) emptyList() else all.filter { it.kind == filter && (folder == null || placed[it.fid] == folder) }
 
@@ -261,8 +263,9 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                 GlassSegmented(listOf("Appunti", "Immagini", "File"), tabSel, { onTab(keys[it]); folder = null })
             }
             if (tab == 0) {
-                if (history.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
-                    Box(tabFx) { CText("Niente per ora", tertiary = true) }
+                item(key = "search", span = { GridItemSpan(maxLineSpan) }) { SearchField(query, { query = it }, "Cerca negli appunti") }
+                if (shown.isEmpty()) item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
+                    Box(tabFx) { CText(if (query.isBlank()) "Niente per ora" else "Nessun risultato", tertiary = true) }
                 }
                 items(grouped, key = { (d, h) -> if (h == null) "d$d" else "c" + h.ts + h.text.hashCode() }, span = { GridItemSpan(maxLineSpan) }) { (day, h) ->
                     if (h == null) {
@@ -277,7 +280,7 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
                         val kind = when { link -> "Link"; code -> "Codice"; h.text.count { it == '\n' } >= 2 -> "Testo lungo"; else -> "Testo" }
                         val shape2 = RoundedCornerShape(Radius.lg)
                         Box(
-                            Modifier.then(tabFx).fillMaxWidth().clip(shape2).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape2)
+                            Modifier.then(tabFx).fillMaxWidth().clip(shape2).glass(shape2)
                                 .dropClickable({ r.clipboard.copyLocal(h.text); fx.play(rowScope) }, corner = Radius.lg),
                         ) {
                             Row(Modifier.copyBlur(fx).padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
@@ -326,15 +329,14 @@ fun ShareScreen(r: Router, tabKey: String?, onTab: (String?) -> Unit, onBackup: 
             }
             items(list, key = { it.fid }) { e ->
                 Column(
-                    Modifier.then(tabFx).clip(RoundedCornerShape(Radius.lg)).background(c.bgSurface)
-                        .border(BorderStroke(1.dp, c.lineSeparator), RoundedCornerShape(Radius.lg))
+                    Modifier.then(tabFx).clip(RoundedCornerShape(Radius.lg)).glass(RoundedCornerShape(Radius.lg))
                         .dropClickable({ open(e) }, { peek = e }, Radius.lg).padding(Space.s2),
                     verticalArrangement = Arrangement.spacedBy(Space.s2),
                 ) {
                     val bmp by produceState<Bitmap?>(null, e.path) {
                         value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null
                     }
-                    Box(Modifier.fillMaxWidth().aspectRatio(1.3f).clip(RoundedCornerShape(Radius.lg - Space.s2)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().aspectRatio(1.3f).clip(RoundedCornerShape(Radius.lg - Space.s2)).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
                         bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                             ?: Text(e.name.substringAfterLast('.', "file").take(5), style = CanoneType.figure, color = c.labelTertiary)
                     }
@@ -384,14 +386,14 @@ private fun DriveUsage(all: List<FileEntry>, clipBytes: Long) {
     fun f(n: Long) = Formatter.formatShortFileSize(ctx, n)
     fun frac(n: Long) = (n.toFloat() / DRIVE_CAP).coerceIn(0f, 1f)
     val shape = RoundedCornerShape(Radius.lg)
-    Column(Modifier.fillMaxWidth().padding(bottom = Space.s2).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+    Column(Modifier.fillMaxWidth().padding(bottom = Space.s2).clip(shape).glass(shape).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Text(f(used), style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
             Text(" di 50 GB", style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.padding(bottom = 2.dp))
             Spacer(Modifier.weight(1f))
             Text("${all.size} elementi", style = CanoneType.footnote, color = c.labelTertiary)
         }
-        Row(Modifier.fillMaxWidth().height(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.bgSunken)) {
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(c.labelPrimary.copy(alpha = 0.07f))) {
             val parts = listOf(img to c.accent, oth to Color(0xFFFF9F0A), clipBytes to Color(0xFF34C759))
             parts.forEach { (n, col) -> if (n > 0) Box(Modifier.fillMaxHeight().weight(maxOf(frac(n), 0.004f)).background(col)) }
             Spacer(Modifier.weight(maxOf(1f - frac(used), 0.0001f)))
@@ -433,41 +435,28 @@ private fun RoundIcon(icon: Int, tint: Color, onClick: () -> Unit) {
 @Composable
 private fun Peek(e: FileEntry, folders: List<String>, current: String?, onShare: () -> Unit, onOpen: () -> Unit, onFolder: (String?) -> Unit, onNew: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
     val c = Canone.colors
+    val ctx = LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
     LaunchedEffect(e.fid) { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }
     val bmp by produceState<Bitmap?>(null, e.path) { value = if (e.mime.startsWith("image/")) withContext(Dispatchers.IO) { decodeThumb(e.path) } else null }
-    val grow = remember { androidx.compose.animation.core.Animatable(0.86f) }
-    LaunchedEffect(e.fid) { grow.animateTo(1f, androidx.compose.animation.core.spring(0.8f, 420f)) }
-    androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null, onClick = onClose),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                Modifier.fillMaxSize().systemBarsPadding().padding(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s6 + Space.s4)
-                    .graphicsLayer { scaleX = grow.value; scaleY = grow.value; alpha = ((grow.value - 0.86f) / 0.14f).coerceIn(0f, 1f) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3),
-            ) {
-                Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface), contentAlignment = Alignment.Center) {
-                    bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-                        ?: Text(e.name, style = CanoneType.title3, color = c.labelPrimary, modifier = Modifier.padding(Space.s6))
-                }
-                Text(e.name, style = CanoneType.footnote, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.xl)).background(c.bgSurface).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}.padding(Space.s3),
-                    verticalArrangement = Arrangement.spacedBy(Space.s2),
-                ) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        (listOf<String?>(null) + folders).forEach { f -> FolderTile(f ?: "Nessuna", current == f, Ico.FOLDER, { onFolder(f) }, null) }
-                        FolderTile("Nuova", false, Ico.FOLDER_PLUS, onNew, null)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        RoundIcon(Ico.SHARE, c.labelPrimary, onShare)
-                        RoundIcon(Ico.OPEN, c.labelPrimary, onOpen)
-                        RoundIcon(Ico.TRASH, c.critical, onDelete)
-                    }
-                }
-            }
+    // stesso cassetto della modifica di un evento: sopra la barra, mai a tutto schermo
+    SheetHost(onClose, 0) { close ->
+        Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(Radius.lg)).background(c.labelPrimary.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+            bmp?.let { Image(it.asImageBitmap(), e.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                ?: Text(e.name.substringAfterLast('.', "file").take(5), style = CanoneType.title2, color = c.labelTertiary)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(e.name, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(Formatter.formatShortFileSize(ctx, e.size), style = CanoneType.footnote, color = c.labelTertiary)
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+            (listOf<String?>(null) + folders).forEach { f -> FolderTile(f ?: "Nessuna", current == f, Ico.FOLDER, { onFolder(f) }, null) }
+            FolderTile("Nuova", false, Ico.FOLDER_PLUS, onNew, null)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            CButton("Condividi", { onShare(); close() }, Modifier.weight(1f))
+            CButton("Apri", { onOpen(); close() }, Modifier.weight(1f))
+            CButton("Elimina", { onDelete() }, Modifier.weight(1f), kind = ButtonKind.Destructive)
         }
     }
 }
@@ -479,7 +468,7 @@ private fun StatusBubble(label: String, tone: Tone, on: Boolean) {
     val col = when (tone) { Tone.Positive -> c.positive; Tone.Caution -> c.caution; Tone.Critical -> c.critical; else -> c.labelDisabled }
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "stato")
     val a by pulse.animateFloat(1f, if (on) 0.35f else 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1100), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulsa")
-    Row(Modifier.height(28.dp).clip(RoundedCornerShape(50)).background(c.bgSunken).padding(horizontal = Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.height(28.dp).clip(RoundedCornerShape(50)).background(c.labelPrimary.copy(alpha = 0.07f)).padding(horizontal = Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.size(8.dp).graphicsLayer { alpha = a }.clip(androidx.compose.foundation.shape.CircleShape).background(col))
         Text(label, style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
     }
@@ -507,8 +496,8 @@ fun DevicesCard(r: Router, bare: Boolean = false) {
     var last by remember { mutableStateOf<Device?>(null) }
     rows.firstOrNull { it.id == open }?.let { last = it }
 
-    Column(if (bare) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().clip(shape).border(BorderStroke(1.dp, c.lineSeparator), shape)) {
-        Column(Modifier.fillMaxWidth().then(if (bare) Modifier else Modifier.background(c.bgSurface)).padding(horizontal = Space.s3, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+    Column(if (bare) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().clip(shape).glass(shape)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.s3, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             // testata compatta: titolo e conteggio su una riga, stato di server e P2P a destra
             Row(Modifier.fillMaxWidth().padding(horizontal = Space.s1), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 Text("Dispositivi", style = CanoneType.bodyMedium, color = c.labelPrimary)
@@ -552,7 +541,7 @@ fun DevicesCard(r: Router, bare: Boolean = false) {
             val d = last
             if (d != null) {
                 val pic = DevicePics.rememberPic(d.id)
-                Column(Modifier.fillMaxWidth().background(c.bgSunken).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Column(Modifier.fillMaxWidth().background(c.labelPrimary.copy(alpha = 0.07f)).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                     CRow("Collegamento", when {
                         d.id == r.deviceId -> "Questo dispositivo"
                         d.via == "lan" -> "Diretto, rete locale o privata"
@@ -697,20 +686,20 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                                     val f = Eq.freqs[i]
                                     Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
                                         Text(if (f >= 1000) "${f / 1000} kHz" else "$f Hz", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
-                                        androidx.compose.material3.Slider(v, { v = it; Eq.setLevel(i, v.toInt()) }, Modifier.weight(1f), valueRange = Eq.minDb.toFloat()..Eq.maxDb.toFloat())
+                                        DropSlider((v - Eq.minDb) / (Eq.maxDb - Eq.minDb).toFloat(), { f -> v = Eq.minDb + f * (Eq.maxDb - Eq.minDb); Eq.setLevel(i, v.toInt()) }, Modifier.weight(1f))
                                         Text("${v.toInt()} dB", style = CanoneType.footnote.copy(fontFeatureSettings = "tnum"), color = c.labelTertiary, modifier = Modifier.width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
                                     }
                                 }
                                 var b by remember(ver) { mutableStateOf(Eq.bassLevel.toFloat()) }
                                 Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
                                     Text("Bassi", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
-                                    androidx.compose.material3.Slider(b, { b = it; Eq.bassLevel = b.toInt() }, Modifier.weight(1f), valueRange = 0f..100f)
+                                    DropSlider(b / 100f, { f -> b = f * 100f; Eq.bassLevel = b.toInt() }, Modifier.weight(1f))
                                     Spacer(Modifier.width(48.dp))
                                 }
                                 var g by remember(ver) { mutableStateOf(Eq.gain.toFloat()) }
                                 Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
                                     Text("Volume", style = CanoneType.footnote, color = c.labelSecondary, modifier = Modifier.width(64.dp))
-                                    androidx.compose.material3.Slider(g, { g = it; Eq.gain = g.toInt() }, Modifier.weight(1f), valueRange = 0f..12f)
+                                    DropSlider(g / 12f, { f -> g = f * 12f; Eq.gain = g.toInt() }, Modifier.weight(1f))
                                     Text("+${g.toInt()} dB", style = CanoneType.footnote, color = c.labelTertiary, modifier = Modifier.width(48.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
                                 }
                             }

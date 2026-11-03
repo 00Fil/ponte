@@ -58,8 +58,7 @@ fun DevicesMorph(r: Router, open: Boolean, onClose: () -> Unit = {}, onToggle: (
         val h = lerp(30.dp, with(d) { full.toDp() }.coerceAtLeast(120.dp), p)
         val shape = RoundedCornerShape(lerp(15.dp, Radius.xl, p))
         Box(
-            Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).offset(x = lerp(0.dp, -bleed, p)).size(w, h).clip(shape).background(c.bgSurface.copy(alpha = 0.96f))
-                .border(BorderStroke(1.dp, c.lineSeparator), shape)
+            Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).offset(x = lerp(0.dp, -bleed, p)).size(w, h).clip(shape).glass(shape, acrylic = true)
                 .then(if (p < 0.5f) Modifier.dropClickable(onToggle, corner = 15.dp) else Modifier)
                 .pointerInput(open) {
                     if (!open) return@pointerInput
