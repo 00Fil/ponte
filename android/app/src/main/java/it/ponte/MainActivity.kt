@@ -165,8 +165,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     // Le pagine si preparano una alla volta a riposo, così il primo passaggio su ognuna non compone nulla al volo.
     var warm by remember { mutableIntStateOf(1) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(1800)
-        for (k in 2..TABS.size - 1) { warm = k; kotlinx.coroutines.delay(700) }
+        kotlinx.coroutines.delay(900)
+        for (k in 2..TABS.size - 1) { warm = k; kotlinx.coroutines.delay(250) }
     }
     // Posizione continua tra le pagine (es. 1,4 = a metà tra la seconda e la terza): titolo e barra la seguono col dito.
     val pos = { pager.currentPage + pager.currentPageOffsetFraction }
@@ -240,7 +240,6 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
                     val off = kotlin.math.abs((pager.currentPage - t) + pager.currentPageOffsetFraction)
-                    alpha = 1f - (off * 0.45f).coerceIn(0f, 0.6f)
                     val sc = 1f - (off * 0.05f).coerceIn(0f, 0.06f)
                     scaleX = sc; scaleY = sc
                 },
@@ -295,8 +294,14 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                 Box(Modifier.statusBarsPadding().zIndex(2f)) { header() }
                 val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
                 val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                val strip by androidx.compose.animation.core.animateDpAsState(if (dock == 3 || (dock == 2 && prevDock == 3)) 62.dp else 0.dp, androidx.compose.animation.core.spring(0.9f, 400f), label = "striscia")
-                val inset = 66.dp + 10.dp + navBottom + strip
+                // fusione: la goccia scende nella barra e la barra si allarga (con un piccolo rimbalzo d'acqua) per accogliere il brano
+                val docked = np != null && (dock == 3 || (dock == 2 && prevDock == 3))
+                val merge = remember { androidx.compose.animation.core.Animatable(0f) }
+                androidx.compose.runtime.LaunchedEffect(docked) {
+                    if (docked) { kotlinx.coroutines.delay(150); merge.animateTo(1f, androidx.compose.animation.core.spring(0.62f, 230f)) }
+                    else merge.animateTo(0f, androidx.compose.animation.core.spring(1f, 520f))
+                }
+                val inset = 66.dp + 10.dp + navBottom + if (docked) it.ponte.ui.SONG_H else 0.dp
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
                         pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })
@@ -315,7 +320,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                                 settle.snapTo(0f)
                                 rise.animateTo(1f, tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing))
                                 settle.animateTo(1f, androidx.compose.animation.core.spring(0.55f, 320f))
-                            } else { settle.snapTo(1f); rise.animateTo(0f, tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+                            } else { settle.snapTo(0f); rise.animateTo(0f, tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
                         }
                         // quanto sta sopra il bordo alto della barra (dp): parte dentro la barra, sale oltre il punto di distacco e ricade nella sua posizione
                         val upDp = { -61f + (40f + 61f) * rise.value + (14f - 40f) * settle.value }
@@ -354,13 +359,6 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                                     },
                             )
                         }
-                                            androidx.compose.animation.AnimatedVisibility(
-                            dock == 3 || (dock == 2 && prevDock == 3), Modifier.align(Alignment.BottomCenter),
-                            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.9f, 420f)) { it / 2 } + fadeIn(tween(160)),
-                            exit = androidx.compose.animation.slideOutVertically(tween(180)) { it / 2 } + fadeOut(tween(140)),
-                        ) {
-                            it.ponte.ui.DockedStrip(np, layer, { prevDock = 3; dock = 2 }, { dock = 1 }, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom + 66.dp + 4.dp))
-                        }
                     }
                     if (cashOn) it.ponte.ui.CashConfirmBar(layer, Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
                     else if (drawerOn) it.ponte.ui.DrawerBarUi(layer, Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom))
@@ -368,6 +366,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                         layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
                         Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom)
                             .then(it.ponte.ui.swipeUpObserver(dock == 3) { dock = 1 }),
+                        merge = { merge.value },
+                        song = if (np != null) ({ it.ponte.ui.DockSong(np) { prevDock = 3; dock = 2 } }) else null,
                     )
                 }
             }

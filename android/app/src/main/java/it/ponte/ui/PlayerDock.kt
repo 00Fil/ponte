@@ -256,3 +256,22 @@ fun swipeUpObserver(enabled: Boolean, onUp: () -> Unit): Modifier = if (!enabled
         }
     }
 }
+
+
+/** Il brano dentro la bolla della barra: copertina piccola, titolo e autore, niente separatori. Tocco = schermo intero. */
+@Composable
+fun DockSong(np: NowPlaying, onOpen: () -> Unit) {
+    val c = Canone.colors
+    Row(
+        Modifier.fillMaxSize().dropClickable(onOpen, corner = 26.dp).padding(start = 16.dp, end = 18.dp, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+            np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelSecondary, false, Modifier.size(15.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.footnote.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (np.artist.isNotEmpty()) Text(np.artist, style = CanoneType.footnote.copy(fontSize = 11.sp), color = c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}

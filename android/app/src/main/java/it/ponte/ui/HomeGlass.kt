@@ -80,9 +80,12 @@ val OnGlass2: Color @Composable get() = Canone.colors.labelSecondary
 val OnGlass3: Color @Composable get() = Canone.colors.labelTertiary
 
 /** Entrata a cascata: ogni riquadro sale e si assesta con una molla, uno dopo l'altro. */
+object HomeIntro { var played = false }
+
 fun Modifier.stagger(index: Int): Modifier = composed {
-    val a = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { delay(index * 70L); a.animateTo(1f, spring(0.78f, 170f)) }
+    // solo la prima volta: tornando sulla pagina i riquadri sono già al loro posto
+    val a = remember { Animatable(if (HomeIntro.played) 1f else 0f) }
+    LaunchedEffect(Unit) { if (a.value < 1f) { delay(index * 70L); a.animateTo(1f, spring(0.78f, 170f)) }; HomeIntro.played = true }
     graphicsLayer {
         val v = a.value
         alpha = v.coerceIn(0f, 1f)
@@ -107,8 +110,12 @@ fun GlassTile(modifier: Modifier, colors: List<Color>, index: Int = 0, onClick: 
             .graphicsLayer { val p = t.press.value; scaleX = 1f - 0.04f * p; scaleY = 1f - 0.04f * p }
             .clip(shape)
             // acrilico: neutro e quasi opaco, per i menu che galleggiano sopra lo sfondo sfocato
-            .then(if (acrylic) Modifier.background(c.bgSurface.copy(alpha = if (dark) 0.78f else 0.84f)) else Modifier)
-            .drop(dark, corner = Radius.xl, press = { t.press.value }, touch = t)
+            // come la barra: velo del colore di fondo, nessun bianco; acrilico quasi opaco per i menu sopra lo sfondo sfocato
+            .background(
+                if (acrylic) Brush.verticalGradient(listOf(c.bgSurface.copy(alpha = if (dark) 0.80f else 0.86f), c.bgSurface.copy(alpha = if (dark) 0.80f else 0.86f)))
+                else Brush.verticalGradient(listOf(c.bgCanvas.copy(alpha = if (dark) 0.42f else 0.50f), c.bgCanvas.copy(alpha = if (dark) 0.30f else 0.36f))),
+            )
+            .drop(dark, corner = Radius.xl, tint = Color.Transparent, press = { t.press.value }, touch = t)
             .then(if (onClick != null || onLong != null) Modifier.dropGestures(t, onClick ?: {}, onLong) else Modifier),
         content = content,
     )

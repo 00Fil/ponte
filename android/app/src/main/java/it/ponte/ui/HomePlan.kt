@@ -70,21 +70,37 @@ fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.
     val total = (when (t.phase) { "short" -> p.cfg("short", 5); "long" -> p.cfg("long", 15); else -> p.cfg("focus", 25) }) * 60_000L
     val left = if (t.running) (t.endAt - tick).coerceIn(0L, total) else total
     val secs = ((left + 999) / 1000).toInt()
-    GlassTile(Modifier.size(cell), Tint.blue, 0, { go("agenda") }, onLong) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TabGlyph(11, Canone.colors.accent, false, Modifier.size(18.dp))
-                Text("Agenda", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2, maxLines = 1)
-            }
-            if (next == null) Text("Niente in programma", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 3)
-            else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(next.title, style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Tint.third))
-                    Text(if (next.allDay) dayLabel(next.start) else dayLabel(next.start) + " " + fmt(next.start, "HH:mm"), style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+    val today = p.sessions.filter { it.start >= dayStart(now) }.sumOf { it.minutes }
+    // carosello: agenda e studio nello stesso riquadro, si passa con uno swipe
+    val pages = androidx.compose.foundation.pager.rememberPagerState(initialPage = if (t.running) 1 else 0) { 2 }
+    GlassTile(Modifier.size(cell), Tint.blue, 0, { go(if (pages.currentPage == 1) "studio" else "agenda") }, onLong) {
+        androidx.compose.foundation.pager.HorizontalPager(pages, Modifier.fillMaxSize()) { pg ->
+            Column(Modifier.fillMaxSize().padding(start = Space.s4, end = Space.s4, top = Space.s4, bottom = Space.s5), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TabGlyph(if (pg == 0) 11 else 12, Canone.colors.accent, false, Modifier.size(18.dp))
+                    Text(if (pg == 0) "Agenda" else if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = OnGlass2, maxLines = 1)
+                }
+                if (pg == 0) {
+                    if (next == null) Text("Niente in programma", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 3)
+                    else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(next.title, style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(Tint.third))
+                            Text(if (next.allDay) dayLabel(next.start) else dayLabel(next.start) + " " + fmt(next.start, "HH:mm"), style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+                        }
+                    }
+                } else {
+                    Text("%02d:%02d".format(secs / 60, secs % 60), style = CanoneType.title1.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = if (t.running) OnGlass else OnGlass2, maxLines = 1)
+                    Text(if (today > 0) "$today min oggi" else "Oggi niente", style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
                 }
             }
-            if (t.running) RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), Canone.colors.accent)
+        }
+        // indicatore di pagina
+        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            repeat(2) { i ->
+                val on = pages.currentPage == i
+                Box(Modifier.size(if (on) 14.dp else 5.dp, 5.dp).clip(CircleShape).background(if (on) Canone.colors.accent else OnGlass3))
+            }
         }
     }
 }

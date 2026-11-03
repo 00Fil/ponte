@@ -120,8 +120,8 @@ private class LensParams(
     val edge: Float, val amount: Float, val aberr: Float, val sat: Float, val magnify: Float, val blur: Float,
 )
 
-private fun lensEffect(p: LensParams): RenderEffect? {
-    if (Build.VERSION.SDK_INT >= 33) return lensEffect33(p)
+private fun lensEffect(p: LensParams, sh: Any? = null): RenderEffect? {
+    if (Build.VERSION.SDK_INT >= 33) return lensEffect33(p, sh as? android.graphics.RuntimeShader)
     if (Build.VERSION.SDK_INT >= 31) {
         val sat = android.graphics.ColorMatrix().apply { setSaturation(p.sat) }
         return AndroidRenderEffect.createColorFilterEffect(
@@ -133,8 +133,9 @@ private fun lensEffect(p: LensParams): RenderEffect? {
 }
 
 @RequiresApi(33)
-private fun lensEffect33(p: LensParams): RenderEffect {
-    val sh = android.graphics.RuntimeShader(GLASS_AGSL)
+private fun lensEffect33(p: LensParams, cached: android.graphics.RuntimeShader? = null): RenderEffect {
+    // lo shader si compila una volta sola per lastra: quando la lastra cambia misura si aggiornano solo i parametri
+    val sh = cached ?: android.graphics.RuntimeShader(GLASS_AGSL)
     sh.setFloatUniform("size", p.w, p.h)
     sh.setFloatUniform("rectSize", p.rectW, p.rectH)
     sh.setFloatUniform("radius", p.radius)
@@ -169,6 +170,7 @@ internal fun Glass(
 ) {
     val d = LocalDensity.current
     val margin = 28.dp
+    val shader = remember { if (Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(GLASS_AGSL) else null }
     val effect = remember(width, height, edge, amount, aberr, sat, magnify, blur, corner, d.density) {
         with(d) {
             val m = margin.toPx()
@@ -177,6 +179,7 @@ internal fun Glass(
                     width.toPx() + 2 * m, height.toPx() + 2 * m, width.toPx(), height.toPx(), corner?.toPx() ?: (height.toPx() / 2f),
                     edge.toPx(), amount.toPx(), aberr, sat, magnify, blur.toPx(),
                 ),
+                shader,
             )
         }
     }
@@ -211,10 +214,12 @@ fun GlassTabBar(
     current: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    merge: () -> Float = { 0f },
+    song: (@Composable () -> Unit)? = null,
 ) {
     val c = Canone.colors
     val dark = isSystemInDarkTheme()
-    val shape = CircleShape
+    val shape = RoundedCornerShape(33.dp)
     val white = Color.White
     val n = labels.size
     val scope = rememberCoroutineScope()
@@ -236,7 +241,11 @@ fun GlassTabBar(
     }
     val pillPos = { if (holding || settling) follow.value else pos() }
 
-    val barH = 66.dp
+    val rowH = 66.dp
+    // il player agganciato allarga la barra verso l'alto: i dati del brano stanno nello stesso vetro, sopra le icone
+    val m = merge()
+    val extra = SONG_H * m.coerceAtLeast(0f)
+    val barH = rowH + extra
     BoxWithConstraints(
         modifier.onGloballyPositioned { origin = it.positionInParent() }
             .widthIn(max = 440.dp).fillMaxWidth().height(barH)
@@ -246,7 +255,7 @@ fun GlassTabBar(
         val padX = 6.dp
         val padY = 5.dp
         val pillW = (barW - padX * 2) / n
-        val pillH = barH - padY * 2
+        val pillH = rowH - padY * 2
 
         // Tutto ciò che sta nella barra (vetro, bordo, icone) viene registrato in barLayer: la bolla lo rifrange,
         // così sotto la lente anche le icone si piegano e si ingrandiscono, come su iOS.
@@ -254,7 +263,7 @@ fun GlassTabBar(
             // 1) il vetro della barra: rifrazione, sfocatura poca, colori vivi
             Glass(
                 layer, { origin }, barW, barH,
-                edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 14.dp,
+                edge = 12.dp, amount = 5.dp, aberr = 0.18f, sat = 1.5f, magnify = 0f, blur = 14.dp, corner = 33.dp,
             )
             // 2) velo: dà corpo e leggibilità alle icone sopra uno sfondo sfocato più denso
             Box(
@@ -267,10 +276,14 @@ fun GlassTabBar(
                 ),
             )
             // 3) contorno tonale (niente bordi bianchi) e riflesso morbido in alto a sinistra
-            Box(Modifier.fillMaxSize().drop(dark, tint = Color.Transparent))
+            Box(Modifier.fillMaxSize().drop(dark, corner = 33.dp, tint = Color.Transparent))
+            // 3b) il brano, piccolo, nella stessa bolla
+            if (song != null && m > 0.02f) Box(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(extra).graphicsLayer { alpha = ((m - 0.35f) / 0.65f).coerceIn(0f, 1f); translationY = (1f - m.coerceAtMost(1f)) * 10.dp.toPx() },
+            ) { song() }
             // 4) icone ed etichette. Il dito che tiene premuto sposta la bolla; al rilascio la scheda sotto la bolla diventa attiva.
             Row(
-                Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY).pointerInput(n) {
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(rowH).padding(horizontal = padX, vertical = padY).pointerInput(n) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val itemPx = size.width / n
@@ -316,7 +329,7 @@ fun GlassTabBar(
         }
 
         // 5) la bolla di vetro sopra la barra: rifrange la barra intera (vetro + icone), si allunga appena con la velocità
-        Box(Modifier.fillMaxSize().padding(horizontal = padX, vertical = padY)) {
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(rowH).padding(horizontal = padX, vertical = padY)) {
             Box(
                 Modifier.graphicsLayer {
                     val px = pillW.toPx()
@@ -328,7 +341,7 @@ fun GlassTabBar(
             ) {
                 Glass(
                     barLayer,
-                    { Offset(with(dens) { padX.toPx() + pillPos() * pillW.toPx() }, with(dens) { padY.toPx() }) },
+                    { Offset(with(dens) { padX.toPx() + pillPos() * pillW.toPx() }, with(dens) { (SONG_H * merge().coerceAtLeast(0f) + padY).toPx() }) },
                     pillW, pillH,
                     edge = 10.dp, amount = 8.dp, aberr = 0.30f, sat = 1.3f, magnify = 0f, blur = 0.dp,
                 )
@@ -337,3 +350,7 @@ fun GlassTabBar(
         }
     }
 }
+
+
+/** Altezza in più della barra quando il player ci si fonde. */
+val SONG_H = 44.dp
