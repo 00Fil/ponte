@@ -363,14 +363,14 @@ private class RingShape(val half: Float, val frac: Float) : androidx.compose.ui.
  * la parte già trascorsa ha solo una tinta leggera. Niente ombre né aloni.
  */
 @Composable
-private fun GlassRing(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, origin: () -> Offset, size: androidx.compose.ui.unit.Dp, half: androidx.compose.ui.unit.Dp, progress: Float, tint: Color) {
+private fun GlassRing(layer: androidx.compose.ui.graphics.layer.GraphicsLayer, origin: () -> Offset, diameter: androidx.compose.ui.unit.Dp, half: androidx.compose.ui.unit.Dp, progress: Float, tint: Color) {
     val dark = isDark()
     val d = androidx.compose.ui.platform.LocalDensity.current
     val halfPx = with(d) { half.toPx() }
     val track = remember(halfPx) { RingShape(halfPx, 1f) }
     val arc = remember(halfPx, progress) { RingShape(halfPx, progress) }
-    Box(Modifier.size(size)) {
-        Glass(layer, origin, size, size, edge = half * 0.95f, amount = 7.dp, aberr = 0.28f, sat = 1.5f, magnify = 0f, blur = 0.dp, corner = size / 2, ring = half)
+    Box(Modifier.size(diameter)) {
+        Glass(layer, origin, diameter, diameter, edge = half * 0.95f, amount = 7.dp, aberr = 0.28f, sat = 1.5f, magnify = 0f, blur = 0.dp, corner = diameter / 2, ring = half)
         Box(Modifier.fillMaxSize().clip(track).background(Color.White.copy(alpha = if (dark) 0.05f else 0.20f)))
         Box(Modifier.fillMaxSize().clip(arc).background(tint.copy(alpha = if (dark) 0.42f else 0.34f)))
         Canvas(Modifier.fillMaxSize()) {
