@@ -182,6 +182,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     val top: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
+            TodoButton(plan) { onSub("todo") }
             TomatoButton(plan) { onSub("study") }
             CButton("Google", { onSub("cals") }, kind = ButtonKind.Secondary)
         }
@@ -198,6 +199,10 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     ) { page ->
         when (page) {
             "set" -> StudySettings(r) { onSub("study") }
+            "todo" -> ScreenList("To-do") {
+                item { BackRow("Agenda", "To-do") { onSub(null) } }
+                todoItems(r, plan)
+            }
             "study" -> ScreenList("Studio") {
                 item { BackRow("Agenda", "Studio") { onSub(null) } }
                 studyItems(r, plan) { onSub("set") }
@@ -560,6 +565,21 @@ private fun CalendarsPage(
     }
 }
 
+
+/** Tasto To-do: spunta e quante cose restano. */
+@Composable
+private fun TodoButton(plan: PlanState, onClick: () -> Unit) {
+    val c = Canone.colors
+    val t = rememberDropTouch()
+    val n = plan.tasks.count { !it.done }
+    Row(
+        Modifier.height(44.dp).dropGestures(t, onClick).dropDeform(t).drop(isDark(), press = { t.press.value }, touch = t).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(22.dp).drop(isDark(), tint = c.accent), contentAlignment = Alignment.Center) { Icon24(Ico.CHECK, Color.White, Modifier.size(13.dp)) }
+        if (n > 0) Text("$n", style = CanoneType.bodyMedium.copy(fontFeatureSettings = "tnum"), color = c.labelPrimary)
+    }
+}
 
 /** Tasto pomodoro: porta allo Studio; col timer acceso mostra il tempo che resta. */
 @Composable

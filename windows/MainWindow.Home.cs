@@ -18,6 +18,8 @@ public sealed partial class MainWindow
         return $"{c.R:X2}{c.G:X2}{c.B:X2}";
     }
 
+    private bool _homeIntro = true;
+
     private void RenderHome()
     {
         var h = Reset("Home");
@@ -68,6 +70,9 @@ public sealed partial class MainWindow
         row2.Children.Add(act);
         h.Children.Add(row2);
 
+        // l'ingresso a cascata solo quando si arriva sulla Home, non a ogni aggiornamento o tocco
+        if (!_homeIntro) return;
+        _homeIntro = false;
         var i = 0;
         foreach (var el in h.Children) Enter(el, 0, 8, 360, 40 * i++);
     }
@@ -157,7 +162,7 @@ public sealed partial class MainWindow
         bal.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetRow(bal, 1);
         col.Children.Add(bal);
-        var w = Widget(col, 170);
+        var w = Widget(col, 190);
         w.Tapped += (_, _) => Select(2);
         Bounce(w, 1.02f);
         return w;

@@ -114,6 +114,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                         }
                         BalanceCard(r, money, wide, { go("finance") }) { panel = "finance" }
                         AudioTile(r, wide, 4, { go("settings") }) { panel = "audio" }
+                        TodoTile(r, Modifier.fillMaxWidth(), 5, { go("todo") }) { panel = "agenda" }
                     }
                 }
             }
@@ -150,7 +151,6 @@ private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClic
     val monthTx = m.txs.filter { it.ts >= monthStart }
     val outM = -monthTx.filter { it.cents < 0 }.sumOf { it.cents }
     val inM = monthTx.filter { it.cents > 0 }.sumOf { it.cents }
-    val letters = remember { (5 downTo 0).map { k -> listOf("G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D")[Calendar.getInstance().apply { add(Calendar.MONTH, -k) }.get(Calendar.MONTH)] } }
     GlassTile(modifier, Tint.blue, 3, onClick, onLong) {
         Row(Modifier.fillMaxSize().padding(Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
@@ -170,20 +170,18 @@ private fun BalanceCard(r: Router, m: it.ponte.Money, modifier: Modifier, onClic
                     }
                 }
             }
-            Column(Modifier.width(118.dp).fillMaxHeight(), horizontalAlignment = Alignment.End) {
-                EyeToggle(r, 30.dp)
-                val mx = (bars.maxOrNull() ?: 0f).coerceAtLeast(1f)
-                Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = Space.s2).blurIf(MoneyPrivacy.hidden)) {
-                    val w = size.width / (bars.size * 2 - 1)
-                    bars.forEachIndexed { i, v ->
-                        drawRoundRect(c.bgSunken, Offset(i * 2 * w, 0f), Size(w, size.height), CornerRadius(w / 2))
-                        val hh = (v / mx).coerceAtLeast(0.06f) * size.height
-                        drawRoundRect(if (i == bars.lastIndex) c.accent else c.accent.copy(alpha = 0.35f), Offset(i * 2 * w, size.height - hh), Size(w, hh), CornerRadius(w / 2))
+            // torta delle spese del mese: blu per la voce più grande, poi blu sempre più tenue
+            val cats = monthTx.filter { it.cents < 0 }.groupBy { it.cat }.mapValues { -it.value.sumOf { t -> t.cents } }.entries.sortedByDescending { it.value }.take(5)
+            Box(Modifier.fillMaxHeight().aspectRatio(1f)) {
+                Box(Modifier.fillMaxSize().padding(top = 26.dp, end = 4.dp).blurIf(MoneyPrivacy.hidden), contentAlignment = Alignment.Center) {
+                    if (cats.isEmpty()) Canvas(Modifier.fillMaxSize()) { drawCircle(c.bgSunken, size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(size.minDimension * 0.16f)) }
+                    else Donut(cats.mapIndexed { i, e -> e.value.toFloat() to androidx.compose.ui.graphics.lerp(c.accent, c.bgSurface, listOf(0f, 0.38f, 0.58f, 0.72f, 0.82f)[i]) }, Modifier.fillMaxSize())
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(cats.firstOrNull()?.key ?: "—", style = CanoneType.footnote.copy(fontSize = 10.sp), color = c.labelTertiary, maxLines = 1)
+                        if (cats.isNotEmpty()) Text("${(cats.first().value * 100 / outM.coerceAtLeast(1))}%", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    letters.forEachIndexed { i, l -> Text(l, style = CanoneType.footnote.copy(fontSize = 10.sp), color = if (i == letters.lastIndex) c.accent else c.labelTertiary, modifier = Modifier.width(118.dp / 11), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
-                }
+                Box(Modifier.align(Alignment.TopEnd)) { EyeToggle(r, 30.dp) }
             }
         }
     }

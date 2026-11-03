@@ -190,6 +190,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     "finance" -> { finSub = null; select(2) }
                     "agenda" -> { agSub = null; select(3) }
                     "studio" -> { agSub = "study"; select(3) }
+                    "todo" -> { agSub = "todo"; select(3) }
                     "perm" -> { setSub = "perm"; select(4) }
                     "backup" -> onBackup()
                     "fin-add" -> { finSub = "add"; select(2) }

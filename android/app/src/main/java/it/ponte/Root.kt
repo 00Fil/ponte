@@ -57,6 +57,16 @@ object Root {
         }
     }
 
+    /** Comando shell come root; restituisce l'uscita (vuota se il root non c'è). */
+    suspend fun sh(cmd: String): String = withContext(Dispatchers.IO) {
+        if (!available()) return@withContext ""
+        try {
+            val p = ProcessBuilder(suBin, "-c", cmd).redirectErrorStream(true).start()
+            val out = p.inputStream.bufferedReader().readText()
+            p.waitFor(10, TimeUnit.SECONDS); out
+        } catch (_: Exception) { "" }
+    }
+
     /** Esegue RootBt con i privilegi di sistema. Restituisce true se Android ha accettato la richiesta. */
     suspend fun bluetooth(ctx: Context, action: String, address: String): Boolean = withContext(Dispatchers.IO) {
         if (!available()) return@withContext false

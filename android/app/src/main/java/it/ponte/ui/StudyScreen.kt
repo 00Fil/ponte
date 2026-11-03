@@ -36,6 +36,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -148,7 +149,7 @@ private fun PomodoroCard(r: Router, p: PlanState, onSettings: () -> Unit) {
     LaunchedEffect(t.running, t.startedAt) { immersive = t.running && mine }
     if (immersive) PomodoroImmersive(r, p, secs, progress, palette) { immersive = false }
     Box(Modifier.fillMaxWidth().clip(shape)) {
-    WavesBackground(palette, c.bgCanvas, Modifier.matchParentSize())
+    WavesBackground(listOf(if (focus) Color(0xFF3E7BFF) else Color(0xFF34C759), palette.firstOrNull() ?: tint), c.bgCanvas, Modifier.matchParentSize())
     Column(
         Modifier.fillMaxWidth()
             .padding(Space.s5),
@@ -235,29 +236,38 @@ private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Floa
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val navB = with(dens) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(24.dp)
     val topB = with(dens) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
+    // colore fisso della fase (blu lavoro, verde pausa) sempre presente, la canzone aggiunge il secondo tono delle onde
+    val phaseC by androidx.compose.animation.animateColorAsState(if (focus) Color(0xFF3E7BFF) else Color(0xFF34C759), tween(1200), label = "fase")
+    val waves = listOf(phaseC, palette.firstOrNull() ?: phaseC.copy(red = (phaseC.red + 0.3f).coerceAtMost(1f)))
+    // battito a ogni secondo
+    val beat = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(secs) { beat.snapTo(1.035f); beat.animateTo(1f, spring(0.55f, 260f)) }
     androidx.compose.ui.window.Dialog(onMinimize, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF05060A))) {
-            WavesBackground(palette, Color(0xFF05060A), Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.45f)))))
-            Column(
-                Modifier.fillMaxSize().padding(top = topB, bottom = navB + 40.dp).padding(horizontal = Space.s5),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium.copy(letterSpacing = 2.sp), color = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(top = Space.s6))
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-                    RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 104.sp, lineHeight = 112.sp, fontWeight = FontWeight.Thin, fontFeatureSettings = "tnum"), Color.White)
-                    Box(Modifier.width(220.dp).height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Color.White))
-                    }
+        Box(Modifier.fillMaxSize().background(Color(0xFF070A14))) {
+            WavesBackground(waves, Color(0xFF070A14), Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.30f), phaseC.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.50f)))))
+            Text(
+                when (t.phase) { "short" -> "Pausa"; "long" -> "Pausa lunga"; else -> "Concentrazione" }, style = CanoneType.bodyMedium.copy(letterSpacing = 2.sp), color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = topB + Space.s6),
+            )
+            // numero al centro esatto, dentro l'anello che avanza
+            Box(Modifier.align(Alignment.Center).size(300.dp).graphicsLayer { scaleX = beat.value; scaleY = beat.value }, contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                    val w = 5.dp.toPx()
+                    drawCircle(Color.White.copy(alpha = 0.14f), size.minDimension / 2 - w, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+                    drawArc(Color.White, -90f, 360f * progress.coerceIn(0f, 1f), false, androidx.compose.ui.geometry.Offset(w, w), androidx.compose.ui.geometry.Size(size.width - 2 * w, size.height - 2 * w), style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontSize = 84.sp, lineHeight = 92.sp, fontWeight = FontWeight.Thin, fontFeatureSettings = "tnum"), Color.White)
                     Row(horizontalArrangement = Arrangement.Center) {
                         for (i in 0 until rounds) Box(Modifier.padding(horizontal = 3.dp).size(7.dp).clip(CircleShape).background(if (i < t.cycle % rounds) Color.White else Color.White.copy(alpha = 0.25f)))
                     }
                 }
-                Row(Modifier.widthIn(max = 440.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    CButton("Ferma", { r.plan.timerStop(); onMinimize() }, Modifier.weight(1f).height(56.dp))
-                    CButton("Salta", { r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus") }, Modifier.weight(1f).height(56.dp))
-                    CButton("Riduci", onMinimize, Modifier.weight(1f).height(56.dp))
-                }
+            }
+            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = navB + 40.dp).padding(horizontal = Space.s5).widthIn(max = 440.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                CButton("Ferma", { r.plan.timerStop(); onMinimize() }, Modifier.weight(1f).height(56.dp))
+                CButton("Salta", { r.plan.timerPhase(if (focus) (if ((t.cycle + 1) % rounds == 0) "long" else "short") else "focus") }, Modifier.weight(1f).height(56.dp))
+                CButton("Riduci", onMinimize, Modifier.weight(1f).height(56.dp))
             }
         }
     }

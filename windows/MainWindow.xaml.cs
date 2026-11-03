@@ -162,6 +162,7 @@ public sealed partial class MainWindow : Window
         var dir = i >= _tab ? 1 : -1;
         var changed = i != _tab || PageTitle.Text.Length == 0;
         var first = _nav.Count == 0;
+        if (changed && i == 0) _homeIntro = true;
         _tab = i;
         PageTitle.Text = Tabs[i];
         for (var p = 0; p < _pages.Length; p++) _pages[p].Visibility = p == i ? Visibility.Visible : Visibility.Collapsed;

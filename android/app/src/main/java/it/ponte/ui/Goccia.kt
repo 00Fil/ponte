@@ -403,7 +403,7 @@ fun GlassCopied(progress: () -> Float, corner: Dp, modifier: Modifier = Modifier
             val s = 0.92f + 0.08f * v
             scaleX = s; scaleY = s
         }.clip(shape)
-            .drop(dark, corner = corner, tint = (if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.30f)), press = { progress() * 0.8f }),
+            .drop(dark, corner = corner, tint = c.bgSurface.copy(alpha = if (dark) 0.84f else 0.86f), press = { progress() * 0.8f }),
         contentAlignment = Alignment.Center,
     ) {
         Row(

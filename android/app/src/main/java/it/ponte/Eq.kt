@@ -14,6 +14,9 @@ object Eq {
     private val fx = java.util.concurrent.ConcurrentHashMap<Int, Fx>()
     private var eq: Equalizer? = null
     private var sp: android.content.SharedPreferences? = null
+    private var app: Context? = null
+    @Volatile private var real = false
+    private var lastScan = 0L
 
     var bands = 0; private set
     var minDb = -15; private set
@@ -61,6 +64,7 @@ object Eq {
             val g = make(0)
             fx[0] = g
             g.eq?.let { e ->
+                real = true
                 eq = e; bands = e.numberOfBands.toInt()
                 minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
                 freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
@@ -79,7 +83,8 @@ object Eq {
                         if (i.action == android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION) {
                             if (fx[sid] == null) {
                                 val x = make(sid); fx[sid] = x
-                                if (!available) x.eq?.let { e ->
+                                if (!real) x.eq?.let { e ->
+                                    real = true
                                     eq = e; bands = e.numberOfBands.toInt()
                                     minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
                                     freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
@@ -91,6 +96,9 @@ object Eq {
                     }
                 }, f, androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
             } catch (_: Throwable) {}
+            // senza effetto globale le bande si mostrano lo stesso (le 5 classiche) e si applicano appena c'è una sessione
+            if (!available) { bands = 5; freqs = listOf(60, 230, 910, 3600, 14000); minDb = -15; maxDb = 15; available = true }
+            app = ctx.applicationContext
             watchPlayers(ctx.applicationContext)
             watchdog()
         }
@@ -100,7 +108,8 @@ object Eq {
     private fun attach(sid: Int) {
         if (sid <= 0 || fx[sid] != null) return
         val x = make(sid); fx[sid] = x
-        if (!available) x.eq?.let { e ->
+        if (!real) x.eq?.let { e ->
+            real = true
             eq = e; bands = e.numberOfBands.toInt()
             minDb = e.bandLevelRange[0] / 100; maxDb = e.bandLevelRange[1] / 100
             freqs = (0 until bands).map { e.getCenterFreq(it.toShort()) / 1000 }
@@ -124,11 +133,32 @@ object Eq {
         } catch (_: Throwable) {}
     }
 
+    private val sidRe = Regex("(?i)session(?:\\s*id)?[:= ]+(\\d+)")
+
+    /** Le sessioni audio di tutte le app, lette da dumpsys: col permesso DUMP (concedibile via root) o direttamente col root. */
+    private fun scanDump() {
+        val ctx = app ?: return
+        var out = ""
+        if (ctx.checkSelfPermission("android.permission.DUMP") == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            out = try {
+                val p = ProcessBuilder("dumpsys", "audio").redirectErrorStream(true).start()
+                p.inputStream.bufferedReader().readText().also { p.waitFor() }
+            } catch (_: Exception) { "" }
+        }
+        if (out.isEmpty()) out = kotlinx.coroutines.runBlocking {
+            // con il root: prima si concede DUMP all'app (così poi non serve più), poi si legge
+            Root.sh("pm grant ${ctx.packageName} android.permission.DUMP; dumpsys audio")
+        }
+        val ids = sidRe.findAll(out).mapNotNull { it.groupValues[1].toIntOrNull() }.filter { it in 1..999_999 }.toSet()
+        if (ids.isNotEmpty()) android.os.Handler(android.os.Looper.getMainLooper()).post { ids.forEach { attach(it) } }
+    }
+
     /** Se un'altra app si prende gli effetti, li si ricrea e si riapplicano: l'equalizzatore resta sempre attivo. */
     private fun watchdog() {
         val h = android.os.Handler(android.os.Looper.getMainLooper())
         h.postDelayed(object : Runnable {
             override fun run() {
+                if (enabled && System.currentTimeMillis() - lastScan > 15_000) { lastScan = System.currentTimeMillis(); Thread { scanDump() }.start() }
                 if (enabled) fx.entries.toList().forEach { (sid, x) ->
                     val lost = try { x.eq?.hasControl() == false } catch (_: Throwable) { true }
                     if (lost) { x.release(); fx[sid] = make(sid) }

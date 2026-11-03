@@ -82,6 +82,10 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit().putInt("idleMinutes", v).apply()
 
     /** Importi nascosti nelle dashboard (Home e Finanze). */
+    var geminiKey: String
+        get() = sp.getString("geminiKey", "") ?: ""
+        set(v) = sp.edit().putString("geminiKey", v.trim()).apply()
+
     var hideMoney: Boolean
         get() = sp.getBoolean("hideMoney", false)
         set(v) = sp.edit().putBoolean("hideMoney", v).apply()

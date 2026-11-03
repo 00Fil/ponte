@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -227,44 +229,44 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
         else np?.controller?.transportControls?.let { t -> when (a) { "play" -> t.play(); "pause" -> t.pause(); "next" -> t.skipToNext(); "prev" -> t.skipToPrevious() } }
     }
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                val shape = RoundedCornerShape(14.dp)
-                Box(Modifier.size(58.dp).clip(shape).background(c.bgSunken), contentAlignment = Alignment.Center) {
-                    val art = if (focusRemote == null) np?.art else null
-                    if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    else IconBubble(4)
+        Row(Modifier.fillMaxSize().padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            // copertina a tutta altezza
+            val shape = RoundedCornerShape(18.dp)
+            Box(Modifier.fillMaxHeight().aspectRatio(1f).clip(shape).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                val art = if (focusRemote == null) np?.art else null
+                if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else {
+                    val pic = DevicePics.rememberPic(focusRemote?.id ?: me)
+                    if (pic != null && title.isNotEmpty()) Image(pic, null, Modifier.fillMaxSize().padding(18.dp), contentScale = ContentScale.Fit)
+                    else Box(Modifier.size(44.dp).drop(dark, tint = c.accent), contentAlignment = Alignment.Center) { TabGlyph(4, Color.White, false, Modifier.size(22.dp)) }
                 }
-                Column(Modifier.weight(1f)) {
+                if (playing) Box(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 7.dp, vertical = 5.dp)) { EqBars(Color.White) }
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 2.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(where, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = if (playing) c.accent else OnGlass3, maxLines = 1)
                     Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (artist.isNotEmpty()) Text(artist, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (title.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        if (playing) EqBars(c.accent)
-                        Text(where, style = CanoneType.footnote.copy(fontWeight = FontWeight.Medium), color = if (playing) c.accent else OnGlass3, maxLines = 1)
-                    }
                 }
-                if (title.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RoundGlass(40.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(16.dp)) }
+                if (title.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    RoundGlass(38.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(15.dp)) }
                     RoundGlass(46.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(18.dp)) }
-                    RoundGlass(40.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(16.dp)) }
+                    RoundGlass(38.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(15.dp)) }
                 }
-            }
-            // dispositivi: bolla con la foto, anello blu se suona; un tocco lo ferma o lo fa ripartire
-            val list = buildList { add(me); devices.forEach { add(it.id) } }.take(6)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
-                list.forEach { id ->
-                    val on = if (id == me) localOn else known[id]?.playing == true
-                    val pic = DevicePics.rememberPic(id)
-                    RoundGlass(34.dp, false, {
-                        if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
-                        else r.media.cmd(id, if (on) "pause" else "play")
-                    }, ring = if (on) c.accent else null) {
-                        if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(15.dp))
+                // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
+                val list = buildList { add(me); devices.forEach { add(it.id) } }.take(5)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    list.forEach { id ->
+                        val on = if (id == me) localOn else known[id]?.playing == true
+                        val pic = DevicePics.rememberPic(id)
+                        RoundGlass(30.dp, false, {
+                            if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
+                            else r.media.cmd(id, if (on) "pause" else "play")
+                        }, ring = if (on) c.accent else null) {
+                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(13.dp))
+                        }
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                val n = list.count { id -> if (id == me) localOn else known[id]?.playing == true }
-                if (n > 0) Text(if (n == 1) "1 in riproduzione" else "$n in riproduzione", style = CanoneType.footnote, color = OnGlass3, maxLines = 1)
             }
         }
     }

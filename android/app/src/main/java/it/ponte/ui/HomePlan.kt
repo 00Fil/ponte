@@ -80,7 +80,8 @@ fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.
           Box(Modifier.fillMaxSize()) {
             // studio: le stesse onde del pomodoro, coi colori della canzone
             if (pg == 1) {
-                WavesBackground(palette, Color(0xFF05060A), Modifier.matchParentSize())
+                val ph = if (t.phase == "focus") Color(0xFF3E7BFF) else Color(0xFF34C759)
+                WavesBackground(listOf(ph, palette.firstOrNull() ?: ph), Color(0xFF070A14), Modifier.matchParentSize())
                 Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.40f)))))
             }
             val w = pg == 1
