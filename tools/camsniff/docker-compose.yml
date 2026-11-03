@@ -1,0 +1,10 @@
+services:
+  camsniff:
+    build: .
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW]
+    environment:
+      - PUBLIC_IP=${PUBLIC_IP}
+    volumes:
+      - ./data:/data
+    restart: "no"
