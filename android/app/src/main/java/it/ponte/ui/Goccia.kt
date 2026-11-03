@@ -205,10 +205,33 @@ fun Modifier.drop(
 class DropTouch {
     val press = Animatable(0f)
     var pos by mutableStateOf(Offset.Unspecified)
+    var center = Offset.Zero
 }
 
 @Composable
 fun rememberDropTouch() = remember { DropTouch() }
+
+/** Attesa: lo stesso bagliore della pressione resta acceso e gira dentro la goccia. Nessun elemento aggiunto. */
+@Composable
+fun OrbitGlow(t: DropTouch, on: Boolean) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    LaunchedEffect(on) {
+        if (!on) return@LaunchedEffect
+        t.press.animateTo(1f, Goccia.press)
+        val t0 = androidx.compose.runtime.withFrameNanos { it }
+        try {
+            while (true) {
+                androidx.compose.runtime.withFrameNanos { now ->
+                    val a = ((now - t0) / 1_000_000_000.0) * 2.0 * Math.PI / 1.6
+                    val r = 14.dp.value * d.density
+                    t.pos = Offset(t.center.x + r * Math.cos(a).toFloat(), t.center.y + r * Math.sin(a).toFloat())
+                }
+            }
+        } finally {
+            t.press.animateTo(0f, Goccia.release)
+        }
+    }
+}
 
 /**
  * Tocco normale e uguale per tutti: la goccia si gonfia e si illumina quando la premi, torna a posto con una molla morbida quando

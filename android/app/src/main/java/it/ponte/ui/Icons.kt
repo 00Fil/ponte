@@ -73,24 +73,17 @@ fun Icon24(kind: Int, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** L'attesa di un'operazione: pista piena e un bagliore di luce rifratta (quello della pressione) che scorre fluido lungo l'anello. */
+/** L'attesa di un'operazione, stessa linea ovunque: pista piena e un arco pieno di lunghezza fissa che gira, senza code sfumate né punte. */
 @Composable
 fun BusyArc(color: Color, modifier: Modifier = Modifier, stroke: Float = 2.4f) {
     val t = rememberInfiniteTransition(label = "attesa")
-    val a by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart), label = "giro")
+    val a by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "giro")
     val track = Canone.colors.lineSeparator
     Canvas(modifier) {
         val w = stroke * (size.minDimension / 24f)
         val inset = w / 2f
         val tl = Offset(inset, inset); val sz = Size(size.width - w, size.height - w)
-        val rad = sz.width / 2f
         drawArc(track, 0f, 360f, false, tl, sz, style = Stroke(w))
-        val ang = Math.toRadians((a - 50f).toDouble())
-        val at = Offset(center.x + rad * kotlin.math.cos(ang).toFloat(), center.y + rad * kotlin.math.sin(ang).toFloat())
-        drawCircle(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color(0xFF6FB4FF).copy(alpha = 0.22f), Color.Transparent), center = at, radius = w * 3.6f),
-            radius = w * 3.6f, center = at,
-        )
         rotate(a) { drawArc(color, 0f, 100f, false, tl, sz, style = Stroke(w, cap = StrokeCap.Round)) }
     }
 }

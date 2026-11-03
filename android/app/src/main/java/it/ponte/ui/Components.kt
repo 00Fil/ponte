@@ -1,5 +1,7 @@
 package it.ponte.ui
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
@@ -90,15 +92,15 @@ fun CButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, k
         ButtonKind.Destructive -> Modifier.drop(dark, fill = Brush.verticalGradient(listOf(c.critical.copy(alpha = 0.92f), c.critical)), press = { touch.press.value }, touch = touch)
         ButtonKind.Tertiary -> Modifier.clip(CircleShape).drawBehind { drawRect(c.accent.copy(alpha = 0.12f * touch.press.value)) }
     }
+    OrbitGlow(touch, busy)
     Box(
         modifier.minimumInteractiveComponentSize().height(44.dp).dropGestures(touch, onClick, enabled = enabled && !busy).alpha(if (enabled) 1f else 0.4f),
         contentAlignment = Alignment.Center,
     ) {
         // il vetro si deforma, l'etichetta resta ferma
-        Box(Modifier.matchParentSize().dropDeform(touch).then(glass))
+        Box(Modifier.matchParentSize().onSizeChanged { touch.center = Offset(it.width / 2f, it.height / 2f) }.dropDeform(touch).then(glass))
         Box(contentAlignment = Alignment.Center) {
-            Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5).alpha(if (busy) 0f else 1f), maxLines = 1)
-            if (busy) BusyArc(fg, Modifier.size(22.dp))
+            Text(label, style = CanoneType.bodyMedium, color = fg, modifier = Modifier.padding(horizontal = Space.s5).alpha(if (busy) 0.55f else 1f), maxLines = 1)
         }
     }
 }

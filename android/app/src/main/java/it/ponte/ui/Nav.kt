@@ -1,5 +1,6 @@
 package it.ponte.ui
 
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -89,14 +90,15 @@ fun Action(symbol: String, label: String, accent: Boolean, modifier: Modifier = 
     val c = Canone.colors
     val dark = isDark()
     val t = rememberDropTouch()
+    OrbitGlow(t, state == 1)
     Column(modifier.dropGestures(t, onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s2)) {
         Box(
-            Modifier.size(58.dp).dropDeform(t).drop(dark, tint = if (accent) c.accent.copy(alpha = if (dark) 0.38f else 0.26f) else Color.Unspecified, press = { t.press.value }, touch = t),
+            Modifier.size(58.dp).onSizeChanged { t.center = Offset(it.width / 2f, it.height / 2f) }.dropDeform(t).drop(dark, tint = if (accent) c.accent.copy(alpha = if (dark) 0.38f else 0.26f) else Color.Unspecified, press = { t.press.value }, touch = t),
             contentAlignment = Alignment.Center,
         ) {
             val fg = if (accent) c.accentOnSubtle else c.labelPrimary
             when (state) {
-                1 -> { BusyArc(c.accent, Modifier.size(58.dp).padding(3.dp)); if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) }
+                1 -> if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp))
                 2 -> Icon24(Ico.CHECK, c.positive, Modifier.size(26.dp))
                 else -> if (glyph != null) TabGlyph(glyph, fg, false, Modifier.size(24.dp)) else Text(symbol, style = CanoneType.title2, color = fg)
             }
