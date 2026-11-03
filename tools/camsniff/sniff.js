@@ -43,3 +43,6 @@ const u2 = dgram.createSocket('udp4');
 u2.on('message', (m, r) => { log('UDP', r.address + ':' + r.port, m.length, 'byte', m.slice(0, 96).toString('hex')); fs.appendFileSync(`${OUT}/udp.txt`, `${Date.now()} ${r.address}:${r.port} ${m.toString('hex')}\n`); });
 u2.bind(9998);
 log('pronto su', PUB);
+// alla chiusura si tolgono le regole aggiunte
+function clean() { for (const ip of hooked) { try { execSync(`iptables -t nat -D PREROUTING -s ${ip} -p tcp ! --dport 53 -j REDIRECT --to-ports 9999`); execSync(`iptables -t nat -D PREROUTING -s ${ip} -p udp ! --dport 53 -j REDIRECT --to-ports 9998`); } catch {} } process.exit(0); }
+process.on('SIGTERM', clean); process.on('SIGINT', clean);
