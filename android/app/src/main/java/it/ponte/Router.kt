@@ -233,6 +233,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "focus" -> headphones.onFocus(m)
             "audio.lock" -> headphones.onLock(m)
             "media.take" -> media.onTake(m)
+            "media.state" -> media.onState(m)
+            "media.pause" -> media.onPauseReq()
             "fin" -> finance.onRemote(m.optJSONObject("doc"))
             "plan" -> plan.onRemote(m.optJSONObject("doc"))
         }

@@ -365,7 +365,7 @@ export async function start({
         if (st && st.from === dev.id) streams.delete(m.sid);
       } else if (m.t === 'clip') {
         saveClip(m);
-      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'fin', 'plan'].includes(m.t)) {
+      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'media.state', 'media.pause', 'fin', 'plan'].includes(m.t)) {
         return;
       }
 

@@ -303,6 +303,12 @@ public sealed class Router
             case "media.take":
                 Media.OnTake(m);
                 break;
+            case "media.state":
+                Media.OnState(m);
+                break;
+            case "media.pause":
+                Media.OnPauseReq();
+                break;
             case "audio.route":
                 Audio.Route(m["sink"] is JsonValue v && v.TryGetValue<string>(out var sink) ? sink : null);
                 break;

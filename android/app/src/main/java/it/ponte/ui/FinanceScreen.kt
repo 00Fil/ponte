@@ -530,14 +530,14 @@ internal fun CountUp(cents: Long, style: androidx.compose.ui.text.TextStyle, col
 
 /** Occhio per nascondere o mostrare gli importi (vale per Home e Finanze). */
 @Composable
-internal fun EyeToggle(r: Router, size: androidx.compose.ui.unit.Dp = 36.dp) {
+internal fun EyeToggle(r: Router, size: androidx.compose.ui.unit.Dp = 36.dp, tint: Color = Color.Unspecified) {
     val c = Canone.colors
     val t = rememberDropTouch()
     Box(
         Modifier.size(size).dropGestures(t, { MoneyPrivacy.hidden = !MoneyPrivacy.hidden; r.prefs.hideMoney = MoneyPrivacy.hidden }).drawBehind { drawCircle(c.labelPrimary.copy(alpha = 0.10f * t.press.value)) },
         contentAlignment = Alignment.Center,
     ) {
-        Icon24(if (MoneyPrivacy.hidden) Ico.EYE_OFF else Ico.EYE, c.labelSecondary, Modifier.size(size * 0.62f))
+        Icon24(if (MoneyPrivacy.hidden) Ico.EYE_OFF else Ico.EYE, if (tint != Color.Unspecified) tint else c.labelSecondary, Modifier.size(size * 0.62f))
     }
 }
 

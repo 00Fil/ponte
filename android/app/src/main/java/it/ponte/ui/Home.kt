@@ -91,58 +91,41 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             Modifier.widthIn(max = 720.dp).fillMaxHeight(),
-            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + LocalBarInset.current),
-            verticalArrangement = Arrangement.spacedBy(Space.s3),
+            contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s3, bottom = 24.dp + LocalBarInset.current),
         ) {
             item {
-                Row(Modifier.fillMaxWidth().padding(top = Space.s5, bottom = Space.s4), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Action("", "Appunti", true, glyph = 2) { go("clips") }
-                    Action("", "Immagini", false, glyph = 7) { go("images") }
-                    Action("", "Spese", false, glyph = 6) { go("finance") }
-                    Action("", "Agenda", false, glyph = 11) { go("agenda") }
+                // griglia come su iOS: due colonne uguali, quadrati e rettangoli, stesso spazio ovunque
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val gap = Space.s3
+                    val cell = (maxWidth - gap) / 2
+                    val wide = Modifier.size(maxWidth, cell)
+                    val sq = Modifier.size(cell)
+                    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                        if (missing > 0) FixWidget(missing, Modifier.fillMaxWidth().height(72.dp)) { go("perm") }
+                        PlanWidgets(r, go, cell)
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, sq)
+                            BalanceCard(r, money.totalCents, sq) { go("finance") }
+                        }
+                        AudioTile(r, wide, 4)
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            StorageTile(r, sq, 5) { go("clips") }
+                            HeadphonesTile(r, sq, 6)
+                        }
+                    }
                 }
             }
-            if (missing > 0) item { FixWidget(missing) { go("perm") } }
-            item { HomeLabel("Oggi") }
-            item { PlanWidgets(r, go) }
-            item { HomeLabel("Recenti") }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    PairCube(r, files.firstOrNull { it.mime.startsWith("image/") }, clips.firstOrNull()?.text, go, Modifier.weight(1f).aspectRatio(1f))
-                    BalanceCard(r, money.totalCents, Modifier.weight(1f).aspectRatio(1f)) { go("finance") }
-                }
-            }
-            item { HomeLabel("Audio") }
-            item { HeadphonesCard(r) }
-            item { PcAudioCard(r) }
         }
     }
 }
 
 @Composable
-private fun HomeLabel(text: String) {
-    Text(text, style = CanoneType.footnote, color = Canone.colors.labelTertiary, modifier = Modifier.padding(start = Space.s3, top = Space.s2))
-}
-
-/** Contenitore dei widget: stesso bordo e raggio ovunque. */
-@Composable
-private fun Widget(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
-    val c = Canone.colors
-    val shape = RoundedCornerShape(Radius.xl)
-    Box(
-        modifier.clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
-            .then(if (onClick != null) Modifier.dropClickable(onClick) else Modifier),
-    ) { content() }
-}
-
-@Composable
-private fun FixWidget(n: Int, onClick: () -> Unit) {
-    val c = Canone.colors
-    Widget(Modifier.fillMaxWidth(), onClick) {
-        Row(Modifier.padding(Space.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            Box(Modifier.size(40.dp).drop(isDark(), tint = c.caution.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) { Text("!", style = CanoneType.title3, color = c.labelPrimary) }
-            Text(if (n == 1) "Un permesso da concedere" else "$n permessi da concedere", style = CanoneType.body, color = c.labelPrimary, modifier = Modifier.weight(1f))
-            Text("›", style = CanoneType.title3, color = c.labelTertiary)
+private fun FixWidget(n: Int, modifier: Modifier, onClick: () -> Unit) {
+    GlassTile(modifier, Tint.amber, 0, onClick) {
+        Row(Modifier.fillMaxSize().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Text("!", style = CanoneType.title2, color = OnGlass)
+            Text(if (n == 1) "Un permesso da concedere" else "$n permessi da concedere", style = CanoneType.bodyMedium, color = OnGlass, modifier = Modifier.weight(1f))
+            Text("›", style = CanoneType.title3, color = OnGlass2)
         }
     }
 }
@@ -150,15 +133,14 @@ private fun FixWidget(n: Int, onClick: () -> Unit) {
 /** Il saldo come un riquadro qualsiasi. */
 @Composable
 private fun BalanceCard(r: Router, total: Long, modifier: Modifier, onClick: () -> Unit) {
-    val c = Canone.colors
-    Widget(modifier) {
-        Box(Modifier.matchParentSize().dropClickable(onClick))
+    GlassTile(modifier, Tint.money, 3) {
+        Box(Modifier.matchParentSize().dropClickable(onClick, corner = Radius.xl))
         Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Saldo", style = CanoneType.footnote, color = c.labelTertiary)
-                EyeToggle(r)
+                Text("Saldo", style = CanoneType.footnote, color = OnGlass2)
+                EyeToggle(r, tint = OnGlass)
             }
-            CountUp(total, CanoneType.title2.copy(fontWeight = FontWeight.SemiBold), c.labelPrimary)
+            CountUp(total, CanoneType.title2.copy(fontWeight = FontWeight.SemiBold), OnGlass)
         }
     }
 }
@@ -199,7 +181,7 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
             Box(
                 Modifier.offset(y = lerp(baseY, 0.dp, f)).size(w, lerp(tileH, hh, f)).zIndex(if (mine) 2f else 1f)
                     .graphicsLayer { val o = if (!mine && which != 0) p.value else 0f; alpha = 1f - 0.7f * o; scaleX = 1f - 0.05f * o; scaleY = 1f - 0.05f * o }
-                    .clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape)
+                    .clip(shape).background(if (id == 2) Brush.linearGradient(Tint.mint) else Brush.linearGradient(listOf(c.bgSunken, c.bgSunken))).border(BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)), shape)
                     .dropTaps({ if (mine && p.value > 0.5f) close() else onTap() }, onDouble, corner = Radius.lg),
             ) {
                 content()
@@ -229,8 +211,8 @@ private fun PairCube(r: Router, shot: it.ponte.FileEntry?, clip: String?, go: (S
             if (clip != null) { r.clipboard.copyLocal(clip); expand(2) }
         }, { go("clips") }) {
             Box(Modifier.fillMaxSize().padding(Space.s3), contentAlignment = Alignment.CenterStart) {
-                if (clip == null) TabGlyph(2, c.labelTertiary, false, Modifier.size(22.dp))
-                else Text(clip, style = CanoneType.body, color = c.labelPrimary, maxLines = if (which == 2 && p.value > 0.4f) 7 else 2, overflow = TextOverflow.Ellipsis)
+                if (clip == null) TabGlyph(2, OnGlass, false, Modifier.size(22.dp))
+                else Text(clip, style = CanoneType.body, color = OnGlass, maxLines = if (which == 2 && p.value > 0.4f) 7 else 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }

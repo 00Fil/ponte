@@ -42,7 +42,7 @@ private class Next(val title: String, val start: Long, val allDay: Boolean, val 
 
 /** Due riquadri della Home: il prossimo impegno e il pomodoro (o lo studio di oggi). */
 @Composable
-fun PlanWidgets(r: Router, go: (String) -> Unit) {
+fun PlanWidgets(r: Router, go: (String) -> Unit, cell: androidx.compose.ui.unit.Dp) {
     val c = Canone.colors
     val ctx = LocalContext.current
     val p by r.plan.state.collectAsState()
@@ -67,18 +67,17 @@ fun PlanWidgets(r: Router, go: (String) -> Unit) {
     }
     val shape = RoundedCornerShape(Radius.xl)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-        Column(
-            Modifier.weight(1f).height(124.dp).clip(shape).background(c.bgSurface).border(BorderStroke(1.dp, c.lineSeparator), shape).dropClickable({ go("agenda") }).padding(Space.s4),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Prossimo impegno", style = CanoneType.footnote, color = c.labelTertiary, maxLines = 1)
-            if (next == null) Text("Niente in programma", style = CanoneType.body, color = c.labelSecondary, maxLines = 2)
-            else Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(next.color))
-                    Text(if (next.allDay) dayLabel(next.start) else dayLabel(next.start) + " " + fmt(next.start, "HH:mm"), style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+        GlassTile(Modifier.size(cell), Tint.sky, 0, { go("agenda") }) {
+            Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
+                Text("Prossimo impegno", style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+                if (next == null) Text("Niente in programma", style = CanoneType.bodyMedium, color = OnGlass, maxLines = 3)
+                else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(next.title, style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+                        Text(if (next.allDay) dayLabel(next.start) else dayLabel(next.start) + " " + fmt(next.start, "HH:mm"), style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+                    }
                 }
-                Text(next.title, style = CanoneType.bodyMedium, color = c.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         val t = p.timer
@@ -86,17 +85,12 @@ fun PlanWidgets(r: Router, go: (String) -> Unit) {
         val left = if (t.running) (t.endAt - tick).coerceIn(0L, total) else total
         val secs = ((left + 999) / 1000).toInt()
         val today = p.sessions.filter { it.start >= dayStart(now) }.sumOf { it.minutes }
-        val np = LocalNowPlaying.current
-        val mood = remember(np?.art) { moodColors(np?.art) }
-        Column(
-            Modifier.weight(1f).height(124.dp).clip(shape).background(c.bgSurface)
-                .then(if (mood.isEmpty()) Modifier else Modifier.background(Brush.linearGradient(listOf(mood[0].copy(alpha = 0.6f), mood.getOrElse(1) { mood[0] }.copy(alpha = 0.32f), mood.getOrElse(2) { mood[0] }.copy(alpha = 0.5f)))))
-                .border(BorderStroke(1.dp, c.lineSeparator), shape).dropClickable({ go("studio") }).padding(Space.s4),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote, color = if (t.running) (if (t.phase == "focus") c.accent else c.positive) else c.labelTertiary, maxLines = 1)
-            RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title2.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), if (t.running) c.labelPrimary else c.labelTertiary)
-            Text(if (today > 0) "$today min oggi" else "", style = CanoneType.footnote.copy(fontSize = 12.sp), color = c.labelSecondary, maxLines = 1)
+        GlassTile(Modifier.size(cell), Tint.sun, 1, { go("studio") }) {
+            Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(if (t.running) (if (t.phase == "focus") "Concentrazione" else "Pausa") else "Studio", style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+                RollingText("%02d:%02d".format(secs / 60, secs % 60), CanoneType.title1.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), OnGlass)
+                Text(if (today > 0) "$today min oggi" else "", style = CanoneType.footnote, color = OnGlass2, maxLines = 1)
+            }
         }
     }
 }

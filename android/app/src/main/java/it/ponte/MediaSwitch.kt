@@ -25,7 +25,43 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     /** Dopo una pausa chiesta da un altro dispositivo non annunciamo nulla per qualche secondo: evita rimbalzi. */
     @Volatile private var quietUntil = 0L
 
+    /** Chi sta suonando adesso tra i dispositivi (id -> titolo, anche vuoto). Include questo telefono. */
+    val playingNow = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+    private val remote = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+
+    private fun title(): String = try {
+        val mgr = ctx.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        mgr.getActiveSessions(ComponentName(ctx, NotifListener::class.java))
+            .firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE).orEmpty()
+    } catch (_: Exception) { "" }
+
+    private fun publish() {
+        val now = System.currentTimeMillis()
+        remote.entries.removeIf { now - it.value.second > 40_000 }
+        val m = remote.mapValues { it.value.first }.toMutableMap()
+        if (playing) m[r.deviceId] = title()
+        playingNow.value = m
+    }
+
+    private fun announce() {
+        r.send(newMsg("media.state", "playing" to playing, "title" to (if (playing) title() else "")))
+        publish()
+    }
+
+    fun onState(m: JSONObject) {
+        val from = m.optString("from").ifEmpty { return }
+        if (m.optBoolean("playing")) remote[from] = m.optString("title") to System.currentTimeMillis() else remote.remove(from)
+        publish()
+    }
+
+    /** Qualcuno (dalla Home di un altro dispositivo) chiede di fermare l'audio qui. */
+    fun onPauseReq() { quietUntil = System.currentTimeMillis() + 5_000; r.scope.launch { pause() } }
+
+    /** Ferma l'audio su un dispositivo (anche questo). */
+    fun stopOn(id: String) { if (id == r.deviceId) onPauseReq() else r.send(newMsg("media.pause", "to" to id)) }
+
     fun start() {
+        r.scope.launch { while (true) { delay(15_000); announce() } }
         am.registerAudioPlaybackCallback(object : AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
                 onChange(am.isMusicActive)
@@ -36,6 +72,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     private fun onChange(active: Boolean) {
         if (active == playing) return
         playing = active
+        announce()
         if (!active) return
         val now = System.currentTimeMillis()
         startedAt = now

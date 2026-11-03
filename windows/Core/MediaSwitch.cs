@@ -19,13 +19,67 @@ public sealed class MediaSwitch
 
     public MediaSwitch(Router r) => _r = r;
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Title, DateTime At)> _remote = new();
+    private int _beat;
+
+    /// <summary>Chi sta suonando adesso (id dispositivo -> titolo). Include questo PC.</summary>
+    public Dictionary<string, string> PlayingNow()
+    {
+        var now = DateTime.UtcNow;
+        var d = _remote.Where(x => now - x.Value.At < TimeSpan.FromSeconds(40)).ToDictionary(x => x.Key, x => x.Value.Title);
+        if (_playing) d[_r.DeviceId] = "";
+        return d;
+    }
+
+    private async Task AnnounceAsync()
+    {
+        var title = "";
+        if (_playing)
+        {
+            try
+            {
+                var mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+                var s = mgr.GetSessions().FirstOrDefault(x => x.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing);
+                if (s != null) title = (await s.TryGetMediaPropertiesAsync()).Title ?? "";
+            }
+            catch (Exception) { }
+        }
+        _r.Send(Proto.NewMsg("media.state", ("playing", _playing), ("title", title)));
+    }
+
+    public void OnState(JsonObject m)
+    {
+        var from = m.S("from");
+        if (from.Length == 0) return;
+        var playing = m["playing"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+        if (playing) _remote[from] = (m.S("title"), DateTime.UtcNow); else _remote.TryRemove(from, out _);
+    }
+
+    public void OnPauseReq()
+    {
+        _quietUntil = DateTime.UtcNow.AddSeconds(5);
+        _ = PauseAsync();
+    }
+
+    public void StopOn(string id)
+    {
+        if (id == _r.DeviceId) OnPauseReq();
+        else _r.Send(Proto.NewMsg("media.pause", ("to", id)));
+    }
+
     public void Start()
     {
         _ = Task.Run(async () =>
         {
             while (true)
             {
-                try { Poll(); } catch (Exception) { }
+                try
+                {
+                    var was = _playing;
+                    Poll();
+                    if (was != _playing || ++_beat % 15 == 0) await AnnounceAsync();
+                }
+                catch (Exception) { }
                 await Task.Delay(1_000);
             }
         });
