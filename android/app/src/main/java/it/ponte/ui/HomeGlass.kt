@@ -247,6 +247,19 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
                     Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    buildList { add(me); devices.forEach { add(it.id) } }.take(5).forEach { id ->
+                        val on = if (id == me) localOn else known[id]?.playing == true
+                        val pic = DevicePics.rememberPic(id)
+                        RoundGlass(26.dp, false, {
+                            if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
+                            else r.media.cmd(id, if (on) "pause" else "play")
+                        }, ring = if (on) c.accent else null) {
+                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(12.dp))
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     RoundGlass(36.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(14.dp)) }
                     RoundGlass(44.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(17.dp)) }
