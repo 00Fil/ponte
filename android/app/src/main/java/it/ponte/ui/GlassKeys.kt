@@ -78,7 +78,10 @@ private fun DrawScope.playPause(t: Float, tint: Color) {
     fun P(ax: Float, ay: Float, bx: Float, by: Float) = Offset(lerpF(ax, bx, t), lerpF(ay, by, t))
     // da play le metà si sovrappongono un poco, così l'unione non lascia fessure
     val over = (1f - t) * w * 0.03f
-    val left = listOf(P(x0, y0, p0, b0), P(xm + over, y0 + q, p1, b0), P(xm + over, y1 - q, p1, b1), P(x0, y1, p0, b1))
+    // il prolungamento resta sulla stessa retta dei lati del triangolo: nessun gradino tra le due metà
+    val lx = xm + over
+    val f = (lx - x0) / (x1 - x0)
+    val left = listOf(P(x0, y0, p0, b0), P(lx, y0 + (ym - y0) * f, p1, b0), P(lx, y1 - (y1 - ym) * f, p1, b1), P(x0, y1, p0, b1))
     val right = listOf(P(xm, y0 + q, p2, b0), P(x1, ym, p3, b0), P(x1, ym, p3, b1), P(xm, y1 - q, p2, b1))
     val path = polyPath(left)
     path.op(polyPath(right), android.graphics.Path.Op.UNION)
