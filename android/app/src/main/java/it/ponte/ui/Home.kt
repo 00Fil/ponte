@@ -105,6 +105,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val gap = Space.s3
                     val cell = (maxWidth - gap) / 2
+                    val full = maxWidth
                     val wide = Modifier.size(maxWidth, cell)
                     val sq = Modifier.size(cell)
                     Column(verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -124,7 +125,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                                 AudioTile(r, Modifier.size(cell), 5, { go("settings") }, { panel = "audio" }, square = true)
                             }
                             if (grow < 0.98f) Box(Modifier.size(gap * (1f - grow), cell))
-                            CamsTile(r, Modifier.size(cell + (maxWidth - cell) * grow, cell + (cell * 0.45f) * grow), 6, camBig) { camBig = it }
+                            CamsTile(r, Modifier.size(cell + (full - cell) * grow, cell + (cell * 0.45f) * grow), 6, camBig) { camBig = it }
                         }
                     }
                 }
