@@ -53,7 +53,7 @@ class Backdrop(val layer: GraphicsLayer, val pos: () -> Offset)
 
 private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
 
-private fun poly(vararg p: Offset) = android.graphics.Path().apply { moveTo(p[0].x, p[0].y); p.drop(1).forEach { lineTo(it.x, it.y) }; close() }
+private fun poly(p: List<Offset>) = android.graphics.Path().apply { moveTo(p[0].x, p[0].y); p.drop(1).forEach { lineTo(it.x, it.y) }; close() }
 
 /** Arrotonda gli angoli di una forma piena. */
 private fun rounded(src: android.graphics.Path, corner: Float): android.graphics.Path {
@@ -81,16 +81,16 @@ private fun playPausePath(w: Float, h: Float, t: Float): android.graphics.Path {
     fun bot(x: Float) = y1 - (y1 - ym) * (x - x0) / (x1 - x0)
     // le due metà si sovrappongono restando sulle rette dei lati: unite danno il triangolo esatto
     val lx = xm + (1f - t) * w * 0.05f
-    val left = poly(P(x0, y0, p0, b0), P(lx, top(lx), p1, b0), P(lx, bot(lx), p1, b1), P(x0, y1, p0, b1))
-    val right = poly(P(xm, top(xm), p2, b0), P(x1, ym, p3, b0), P(x1, ym, p3, b1), P(xm, bot(xm), p2, b1))
+    val left = poly(listOf(P(x0, y0, p0, b0), P(lx, top(lx), p1, b0), P(lx, bot(lx), p1, b1), P(x0, y1, p0, b1)))
+    val right = poly(listOf(P(xm, top(xm), p2, b0), P(x1, ym, p3, b0), P(x1, ym, p3, b1), P(xm, bot(xm), p2, b1)))
     left.op(right, android.graphics.Path.Op.UNION)
     return rounded(left, w * 0.09f)
 }
 
 private fun glyphPath(g: GK, w: Float, h: Float): android.graphics.Path = when (g) {
     GK.NEXT, GK.PREV -> {
-        val p = poly(Offset(w * 0.04f, h * 0.18f), Offset(w * 0.50f, h * 0.5f), Offset(w * 0.04f, h * 0.82f))
-        p.op(poly(Offset(w * 0.48f, h * 0.18f), Offset(w * 0.94f, h * 0.5f), Offset(w * 0.48f, h * 0.82f)), android.graphics.Path.Op.UNION)
+        val p = poly(listOf(Offset(w * 0.04f, h * 0.18f), Offset(w * 0.50f, h * 0.5f), Offset(w * 0.04f, h * 0.82f)))
+        p.op(poly(listOf(Offset(w * 0.48f, h * 0.18f), Offset(w * 0.94f, h * 0.5f), Offset(w * 0.48f, h * 0.82f))), android.graphics.Path.Op.UNION)
         val r = rounded(p, w * 0.09f)
         if (g == GK.PREV) mirror(r, w) else r
     }
@@ -99,7 +99,7 @@ private fun glyphPath(g: GK, w: Float, h: Float): android.graphics.Path = when (
         val r = w * 0.40f; val cx = w / 2; val cy = h / 2
         val arc = android.graphics.Path().apply { addArc(cx - r, cy - r, cx + r, cy + r, -30f, 290f) }
         val p = stroked(arc, w * 0.10f)
-        p.op(rounded(poly(Offset(cx + w * 0.13f, cy - r), Offset(cx - w * 0.07f, cy - r - w * 0.15f), Offset(cx - w * 0.07f, cy - r + w * 0.15f)), w * 0.035f), android.graphics.Path.Op.UNION)
+        p.op(rounded(poly(listOf(Offset(cx + w * 0.13f, cy - r), Offset(cx - w * 0.07f, cy - r - w * 0.15f), Offset(cx - w * 0.07f, cy - r + w * 0.15f))), w * 0.035f), android.graphics.Path.Op.UNION)
         if (g == GK.BACK15) mirror(p, w) else p
     }
     GK.DOWN -> stroked(android.graphics.Path().apply { moveTo(w * 0.16f, h * 0.36f); lineTo(w * 0.5f, h * 0.66f); lineTo(w * 0.84f, h * 0.36f) }, w * 0.14f)
