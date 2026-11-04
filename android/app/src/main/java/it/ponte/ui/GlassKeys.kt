@@ -170,7 +170,7 @@ private fun GlassShape(path: () -> android.graphics.Path, size: Dp, tint: Color,
             // spigolo vivo: una linea sottile e netta lungo il bordo alto, che sfuma verso il basso
             c.drawPath(path0, paint {
                 style = android.graphics.Paint.Style.STROKE; strokeWidth = m * 0.035f
-                shader = android.graphics.LinearGradient(0f, 0f, w * 0.6f, h, tint.copy(alpha = 1f).toArgb(), android.graphics.Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
+                this.shader = android.graphics.LinearGradient(0f, 0f, w * 0.6f, h, tint.copy(alpha = 1f).toArgb(), android.graphics.Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
                 xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP)
             })
             c.restore()
