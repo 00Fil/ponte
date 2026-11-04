@@ -1,7 +1,15 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package it.ponte.ui
 
 import android.media.session.PlaybackState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -91,75 +99,6 @@ private fun edgeColor(b: android.graphics.Bitmap?): Color? = try {
         Color((r / n).toInt(), (g / n).toInt(), (bl / n).toInt())
     }
 } catch (_: Exception) { null }
-
-// ---------------------------------------------------------------- simboli di vetro
-
-/** Simboli dei comandi: forme piene e smussate, fatte del materiale delle gocce (bianco lattiginoso con riflesso in alto). */
-private enum class G { PLAY, PAUSE, PREV, NEXT, DOWN, DEVICES, BACK15, FWD15, ONE }
-
-private fun DrawScope.glassFill(path: Path, round: Float) {
-    val fx = PathEffect.cornerPathEffect(round)
-    // ombra morbida
-    translate(0f, size.height * 0.04f) { drawPath(path, Color.Black.copy(alpha = 0.16f), style = Stroke(round * 0.9f, join = StrokeJoin.Round, pathEffect = fx)) }
-    drawPath(path, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.98f), Color.White.copy(alpha = 0.80f))), style = Fill)
-    drawPath(path, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.98f), Color.White.copy(alpha = 0.80f))), style = Stroke(round, join = StrokeJoin.Round, pathEffect = fx))
-    // riflesso della goccia in alto
-    drawPath(path, Brush.verticalGradient(0f to Color.White.copy(alpha = 0.55f), 0.35f to Color.Transparent), style = Stroke(round * 0.35f, join = StrokeJoin.Round, pathEffect = fx))
-}
-
-@Composable
-private fun GlassGlyph(g: G, size: Dp, modifier: Modifier = Modifier, on: Boolean = false) {
-    Canvas(modifier.size(size)) {
-        val w = this.size.width; val h = this.size.height; val k = w * 0.09f
-        fun tri(x0: Float, x1: Float, y0: Float, y1: Float, left: Boolean) = Path().apply {
-            if (left) { moveTo(x1, y0); lineTo(x0, (y0 + y1) / 2); lineTo(x1, y1) } else { moveTo(x0, y0); lineTo(x1, (y0 + y1) / 2); lineTo(x0, y1) }
-            close()
-        }
-        when (g) {
-            G.PLAY -> glassFill(tri(w * 0.24f, w * 0.84f, h * 0.14f, h * 0.86f, false), k)
-            G.PAUSE -> {
-                glassFill(Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.20f, h * 0.14f, w * 0.40f, h * 0.86f, androidx.compose.ui.geometry.CornerRadius(k))) }, k * 0.3f)
-                glassFill(Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.60f, h * 0.14f, w * 0.80f, h * 0.86f, androidx.compose.ui.geometry.CornerRadius(k))) }, k * 0.3f)
-            }
-            G.NEXT -> { glassFill(tri(w * 0.06f, w * 0.52f, h * 0.20f, h * 0.80f, false), k); glassFill(tri(w * 0.48f, w * 0.94f, h * 0.20f, h * 0.80f, false), k) }
-            G.PREV -> { glassFill(tri(w * 0.06f, w * 0.52f, h * 0.20f, h * 0.80f, true), k); glassFill(tri(w * 0.48f, w * 0.94f, h * 0.20f, h * 0.80f, true), k) }
-            G.DOWN -> {
-                val p = Path().apply { moveTo(w * 0.18f, h * 0.38f); lineTo(w * 0.5f, h * 0.64f); lineTo(w * 0.82f, h * 0.38f) }
-                drawPath(p, Color.Black.copy(alpha = 0.18f), style = Stroke(w * 0.13f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                drawPath(p, Color.White.copy(alpha = 0.95f), style = Stroke(w * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
-            G.DEVICES -> {
-                // cassa: corpo smussato con due coni
-                val body = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.24f, h * 0.08f, w * 0.76f, h * 0.92f, androidx.compose.ui.geometry.CornerRadius(w * 0.12f))) }
-                drawPath(body, Color.White.copy(alpha = if (on) 0.95f else 0.85f), style = Stroke(w * 0.08f))
-                drawCircle(Color.White.copy(alpha = 0.9f), w * 0.13f, Offset(w * 0.5f, h * 0.62f), style = Stroke(w * 0.07f))
-                drawCircle(Color.White.copy(alpha = 0.9f), w * 0.05f, Offset(w * 0.5f, h * 0.27f))
-            }
-            G.BACK15, G.FWD15 -> {
-                val back = g == G.BACK15
-                drawArc(Color.White.copy(alpha = 0.9f), if (back) 200f else -20f, if (back) 260f else -260f, false, Offset(w * 0.12f, h * 0.12f), Size(w * 0.76f, h * 0.76f), style = Stroke(w * 0.08f, cap = StrokeCap.Round))
-                val ax = if (back) w * 0.16f else w * 0.84f
-                val head = Path().apply { moveTo(ax - (if (back) -w * 0.0f else 0f), h * 0.18f); lineTo(ax + (if (back) w * 0.16f else -w * 0.16f), h * 0.22f); lineTo(ax + (if (back) w * 0.04f else -w * 0.04f), h * 0.36f); close() }
-                drawPath(head, Color.White.copy(alpha = 0.9f))
-            }
-            G.ONE -> {}
-        }
-    }
-}
-
-/** Tasto senza contorno: il simbolo di vetro si gonfia con una molla al tocco. */
-@Composable
-private fun GlassKey(g: G, size: Dp, onClick: () -> Unit, label: String? = null, on: Boolean = false) {
-    val t = rememberDropTouch()
-    Box(
-        Modifier.size(size + 20.dp).graphicsLayer { val p = t.press.value; scaleX = 1f + 0.14f * p; scaleY = 1f + 0.14f * p }
-            .clip(CircleShape).dropGestures(t, onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        GlassGlyph(g, size, on = on)
-        if (label != null) Text(label, style = CanoneType.footnote.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), color = Color.White.copy(alpha = 0.92f))
-    }
-}
 
 /** Barra di avanzamento e volume bianca: si ingrossa mentre la trascini. */
 @Composable
@@ -253,48 +192,44 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
             .pointerInput(Unit) { detectVerticalDragGestures(onDragEnd = { if (dy > 160f) onClose(); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> if (!panel) dy += d } }
             .graphicsLayer { translationY = (dy * 0.4f).coerceAtLeast(0f) },
     ) {
-        val coverH = minOf(maxWidth, maxHeight * 0.58f)
         // copertina sfocata dietro tutto: i colori arrivano fino in fondo
-        if (art != null) Image(
-            art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f }.blur(60.dp), contentScale = ContentScale.Crop,
-        )
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.5f to bottom.copy(alpha = 0.4f), 1f to bottom.copy(alpha = 0.85f))))
+        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f }.blur(60.dp), contentScale = ContentScale.Crop)
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to bottom.copy(alpha = 0.35f), 1f to bottom.copy(alpha = 0.85f))))
 
-        // copertina infinita: a tutta larghezza, si scioglie nel colore sotto
-        Box(Modifier.fillMaxWidth().height(coverH)) {
+        // copertina infinita: alta, ritagliata al centro, si scioglie nel colore sotto
+        Box(Modifier.fillMaxWidth().fillMaxHeight(0.70f)) {
             when {
                 art != null -> Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 pic != null -> Image(pic, null, Modifier.fillMaxSize().padding(72.dp), contentScale = ContentScale.Fit)
             }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.25f), 0.16f to Color.Transparent, 0.62f to Color.Transparent, 1f to top)))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.28f), 0.14f to Color.Transparent, 0.55f to Color.Transparent, 0.82f to top.copy(alpha = 0.75f), 1f to top)))
         }
 
-        // in alto: chiudi
-        Box(Modifier.statusBarsPadding().padding(start = 8.dp, top = 4.dp)) { GlassKey(G.DOWN, 26.dp, onClose) }
+        Box(Modifier.statusBarsPadding().padding(start = 6.dp, top = 2.dp)) { GlassKey(GK.DOWN, 24.dp, onClose) }
 
-        Column(Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 28.dp)) {
-            Spacer(Modifier.height(coverH - 36.dp))
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(start = 28.dp, end = 28.dp, bottom = 6.dp)) {
             Text(name(sel), style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp), color = Color.White.copy(alpha = 0.7f), maxLines = 1)
-            Text(s?.title?.ifEmpty { null } ?: "Silenzio", style = CanoneType.title2.copy(fontWeight = FontWeight.Bold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(s?.artist?.ifEmpty { null } ?: " ", style = CanoneType.title3.copy(fontWeight = FontWeight.Normal), color = Color.White.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.weight(1f))
+            Text(s?.title?.ifEmpty { null } ?: "Silenzio", style = CanoneType.title2.copy(fontWeight = FontWeight.Bold), color = Color.White, maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500))
+            Text(s?.artist?.ifEmpty { null } ?: " ", style = CanoneType.body, color = Color.White.copy(alpha = 0.72f), maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500))
+            Spacer(Modifier.height(14.dp))
 
             var seek by remember(sel) { mutableStateOf<Float?>(null) }
             val dur = s?.dur ?: 0L
             val frac = seek ?: if (dur > 0) (s!!.pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
             WhiteTrack(frac, { if (dur > 0) seek = it }, { f -> if (dur > 0) cmd(sel, "seek", (f * dur).toLong()); seek = null })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (dur > 0) clock((frac * dur).toLong()) else "0:00", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.65f))
-                Text(if (dur > 0) "−" + clock(dur - (frac * dur).toLong()) else "", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.65f))
+                val ts = CanoneType.footnote.copy(fontFeatureSettings = "tnum")
+                RollingText(if (dur > 0) clock((frac * dur).toLong()) else "0:00", ts, Color.White.copy(alpha = 0.65f))
+                if (dur > 0) RollingText("−" + clock(dur - (frac * dur).toLong()), ts, Color.White.copy(alpha = 0.65f))
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(8.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassKey(G.PREV, 44.dp, { cmd(sel, "prev") })
-                GlassKey(G.PLAY.takeIf { s?.playing != true } ?: G.PAUSE, 52.dp, { cmd(sel, if (s?.playing == true) "pause" else "play") })
-                GlassKey(G.NEXT, 44.dp, { cmd(sel, "next") })
+                GlassKey(GK.PREV, 40.dp, { cmd(sel, "prev") })
+                PlayPauseKey(s?.playing == true, 50.dp, { cmd(sel, if (s?.playing == true) "pause" else "play") })
+                GlassKey(GK.NEXT, 40.dp, { cmd(sel, "next") })
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(10.dp))
 
             var vol by remember(sel) { mutableStateOf<Float?>(null) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -302,59 +237,54 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
                 WhiteTrack(vol ?: s?.vol ?: 0f, { f -> vol = f; if (sel == me) cmd(sel, "vol", (f * 100).roundToInt().toLong()) }, { f -> cmd(sel, "vol", (f * 100).roundToInt().toLong()); vol = null }, Modifier.weight(1f))
                 SpeakerIcon(true, Color.White.copy(alpha = 0.7f), Modifier.size(16.dp))
             }
-            Spacer(Modifier.weight(0.8f))
+            Spacer(Modifier.height(6.dp))
 
-            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassKey(G.BACK15, 26.dp, { s?.let { cmd(sel, "seek", (it.pos - 15_000).coerceAtLeast(0)) } }, "15")
-                GlassKey(G.DEVICES, 26.dp, { panel = true }, on = panel)
-                GlassKey(G.FWD15, 26.dp, { s?.let { cmd(sel, "seek", if (it.dur > 0) (it.pos + 15_000).coerceAtMost(it.dur) else it.pos + 15_000) } }, "15")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                GlassKey(GK.BACK15, 28.dp, { s?.let { cmd(sel, "seek", (it.pos - 15_000).coerceAtLeast(0)) } }, label = "15")
+                GlassKey(GK.DEVICES, 22.dp, { panel = true })
+                GlassKey(GK.FWD15, 28.dp, { s?.let { cmd(sel, "seek", if (it.dur > 0) (it.pos + 15_000).coerceAtMost(it.dur) else it.pos + 15_000) } }, label = "15")
             }
         }
 
-        // sezione unica dei dispositivi
+        // dispositivi: scheda di vetro come i pannelli dell'app
+        val c = Canone.colors
         AnimatedVisibility(panel, Modifier.fillMaxSize(), enter = fadeIn(tween(180)), exit = fadeOut(tween(160))) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).pointerInput(Unit) { detectTapGestures { panel = false } })
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.30f)).pointerInput(Unit) { detectTapGestures { panel = false } })
         }
         AnimatedVisibility(
-            panel, Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(spring(0.85f, 380f)) { it } + fadeIn(tween(160)),
-            exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(160)),
+            panel, Modifier.align(Alignment.Center),
+            enter = scaleIn(spring(0.78f, 260f), initialScale = 0.82f) + fadeIn(tween(160)),
+            exit = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130)),
         ) {
-            val shape = RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl)
-            Column(
-                Modifier.fillMaxWidth().clip(shape).background(lerp(bottom, Color.Black, 0.35f).copy(alpha = 0.96f))
-                    .pointerInput(Unit) { detectTapGestures { } }.navigationBarsPadding().padding(top = 18.dp, bottom = 12.dp),
-            ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Dispositivi", style = CanoneType.title3.copy(fontWeight = FontWeight.Bold), color = Color.White, modifier = Modifier.weight(1f))
-                    val t = rememberDropTouch()
-                    Row(
-                        Modifier.height(34.dp).clip(CircleShape).background(if (single) Canone.colors.accent else Color.White.copy(alpha = 0.12f))
-                            .dropGestures(t, { single = !single; r.prefs.singlePlay = single }).padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) { Text("Una alla volta", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White) }
-                }
-                Spacer(Modifier.height(10.dp))
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    ids.forEach { id ->
-                        val d = state(id)
-                        val on = d?.playing == true
-                        val dpic = DevicePics.rememberPic(id)
-                        Row(
-                            Modifier.fillMaxWidth().background(if (id == sel) Color.White.copy(alpha = 0.08f) else Color.Transparent)
-                                .dropClickable({ sel = id; panel = false }, corner = 0.dp).padding(horizontal = 24.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).then(if (on) Modifier.border(2.dp, Canone.colors.accent, CircleShape) else Modifier), contentAlignment = Alignment.Center) {
-                                if (dpic != null) Image(dpic, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit) else TabGlyph(1, Color.White, false, Modifier.size(18.dp))
+            Box(Modifier.padding(Space.s4).widthIn(max = 420.dp).pointerInput(Unit) { detectTapGestures { } }) {
+                GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0, acrylic = true) {
+                    Column(Modifier.padding(Space.s5), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
+                        Text("Dispositivi", style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Una alla volta", style = CanoneType.body, color = c.labelPrimary)
+                            GlassSegmented(listOf("No", "Sì"), if (single) 1 else 0, { single = it == 1; r.prefs.singlePlay = single }, Modifier.widthIn(max = 120.dp))
+                        }
+                        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                            ids.forEach { id ->
+                                val d = state(id)
+                                val on = d?.playing == true
+                                val dpic = DevicePics.rememberPic(id)
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.lg)).background(if (id == sel) c.accent.copy(alpha = 0.12f) else Color.Transparent)
+                                        .dropClickable({ sel = id; panel = false }, corner = Radius.lg).padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    RoundGlass(42.dp, false, { sel = id; panel = false }, ring = if (on) c.accent else null) {
+                                        if (dpic != null) Image(dpic, null, Modifier.fillMaxSize().padding(7.dp), contentScale = ContentScale.Fit) else TabGlyph(1, c.labelSecondary, false, Modifier.size(17.dp))
+                                    }
+                                    Column(Modifier.weight(1f)) {
+                                        Text(name(id), style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary, maxLines = 1)
+                                        Text(d?.title?.ifEmpty { null }?.let { t -> listOf(t, d.artist).filter { it.isNotEmpty() }.joinToString(" · ") } ?: "Fermo",
+                                            style = CanoneType.footnote, color = if (on) c.accent else c.labelTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    if (d?.title?.isNotEmpty() == true) RoundGlass(38.dp, on, { cmd(id, if (on) "pause" else "play") }) { TransportGlyph(if (on) 2 else 1, if (on) Color.White else c.labelPrimary, Modifier.size(14.dp)) }
+                                }
                             }
-                            Column(Modifier.weight(1f)) {
-                                Text(name(id), style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1)
-                                Text(d?.title?.ifEmpty { null }?.let { t -> listOf(t, d.artist).filter { it.isNotEmpty() }.joinToString(" · ") } ?: "Fermo",
-                                    style = CanoneType.footnote, color = if (on) Canone.colors.accent else Color.White.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            if (on) EqBars(Color.White)
-                            if (d?.title?.isNotEmpty() == true) GlassKey(if (on) G.PAUSE else G.PLAY, 20.dp, { cmd(id, if (on) "pause" else "play") })
                         }
                     }
                 }

@@ -2,7 +2,7 @@ name: Android check
 
 on:
   push:
-    branches: [agenda-studio, studio-in-agenda, mood-sync, home-rework, polish-2, cuffie, fixes-3, fixes-4, win-restyle, glass-ring, ring-solid, dock-merge, busy-glow, busy-glow-2, busy-glow-3, home-3, home-glass, home-quiet, agenda-carousel, dock-merge-2, agenda-perf, glass-all, flat-cards, fixes-5, fixes-6, cams-1, cams-2, cams-3, cams-4, cams-5, cams-6, lock-1, auto-1, auto-2, auto-3, auto-4, auto-5, home-dots, audio-2, audio-3, audio-4, audio-5, audio-6]
+    branches: [agenda-studio, studio-in-agenda, mood-sync, home-rework, polish-2, cuffie, fixes-3, fixes-4, win-restyle, glass-ring, ring-solid, dock-merge, busy-glow, busy-glow-2, busy-glow-3, home-3, home-glass, home-quiet, agenda-carousel, dock-merge-2, agenda-perf, glass-all, flat-cards, fixes-5, fixes-6, cams-1, cams-2, cams-3, cams-4, cams-5, cams-6, lock-1, auto-1, auto-2, auto-3, auto-4, auto-5, home-dots, audio-2, audio-3, audio-4, audio-5, audio-6, audio-7]
 
 jobs:
   android:

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package it.ponte.ui
 
 import android.graphics.Bitmap
@@ -17,6 +19,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.scale
@@ -245,14 +248,21 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
                     }
                     Spacer(Modifier.weight(1f))
                     // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
-                    Row(horizontalArrangement = Arrangement.spacedBy((-6).dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         buildList { add(me); devices.forEach { add(it.id) } }.take(3).forEach { id ->
                             val on = if (id == me) localOn else known[id]?.playing == true
                             val pic = DevicePics.rememberPic(id)
-                            RoundGlass(28.dp, false, {
-                                if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
-                                else r.media.cmd(id, if (on) "pause" else "play")
-                            }, ring = if (on) c.accent else null) {
+                            val t = rememberDropTouch()
+                            Box(
+                                Modifier.size(26.dp).graphicsLayer { val p = t.press.value; scaleX = 1f + 0.12f * p; scaleY = 1f + 0.12f * p }
+                                    .clip(CircleShape).background(if (on) c.accent.copy(alpha = 0.16f) else c.labelPrimary.copy(alpha = 0.06f))
+                                    .then(if (on) Modifier.border(1.5.dp, c.accent, CircleShape) else Modifier)
+                                    .dropGestures(t, {
+                                        if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
+                                        else r.media.cmd(id, if (on) "pause" else "play")
+                                    }),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(12.dp))
                             }
                         }
@@ -263,13 +273,13 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
                         if (playing) EqBars(c.accent)
                         Text(where, style = CanoneType.footnote.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold), color = if (playing) c.accent else OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500))
+                    Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500))
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    RoundGlass(34.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(13.dp)) }
-                    RoundGlass(44.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(17.dp)) }
-                    RoundGlass(34.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(13.dp)) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    GlassKey(GK.PREV, 18.dp, { send("prev") }, tint = OnGlass)
+                    PlayPauseKey(playing, 26.dp, { send(if (playing) "pause" else "play") }, tint = c.accent)
+                    GlassKey(GK.NEXT, 18.dp, { send("next") }, tint = OnGlass)
                 }
             }
         }
