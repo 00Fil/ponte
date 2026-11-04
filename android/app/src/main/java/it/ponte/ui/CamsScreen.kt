@@ -73,6 +73,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
     val st by Cams.status.collectAsState()
     val err by Cams.error.collectAsState()
     val n by Cams.channels.collectAsState()
+    val diag by Cams.diag.collectAsState()
     LaunchedEffect(ready) { if (ready && Cams.status.value != 6 && Cams.status.value != 0) Cams.connect(r.prefs.camId, r.prefs.camUser, r.prefs.camPwd) }
     androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
@@ -82,6 +83,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text("Telecamere", style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
                         Text(if (err.isNotEmpty()) err else camState(st), style = CanoneType.footnote, color = if (st == 6) c.accent else c.labelTertiary, maxLines = 2)
+                        if (diag.isNotEmpty()) Text(diag, style = CanoneType.footnote, color = c.labelTertiary, maxLines = 2)
                     }
                     if (ready) RoundGlass(40.dp, false, { Cams.disconnect(); ready = false }) { Icon24(Ico.PENCIL, c.labelPrimary, Modifier.size(16.dp)) }
                 }

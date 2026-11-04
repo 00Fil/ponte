@@ -17,6 +17,11 @@ object Cams {
     val frames = ConcurrentHashMap<Int, MutableStateFlow<Bitmap?>>()
     val channels = MutableStateFlow(8)
     val lastJson = MutableStateFlow("")
+    /** Diagnostica: fotogrammi arrivati, misura e byte dell'ultimo. */
+    val diag = MutableStateFlow("")
+    @Volatile private var nFrames = 0
+    /** Collegato almeno una volta: gli stati 13-15 sono eventi dei canali, non perdita del collegamento. */
+    val online = MutableStateFlow(false)
     private var key = ""
     private var ok = false
     private val lastAt = ConcurrentHashMap<Int, Long>()
@@ -86,14 +91,20 @@ object Cams {
     )
 
     private object Sink : JAConnectorV2.Sink {
-        override fun status(key: String, st: Int, index: Int) { status.value = st; if (st == 10) error.value = "Password errata" }
+        override fun status(key: String, st: Int, index: Int) {
+            if (st < 12) { status.value = st; online.value = st == 6 }
+            if (st == 10) error.value = "Password errata"
+            diag.value = "stato $st canale $index · fotogrammi $nFrames"
+        }
         override fun frame(key: String, w: Int, h: Int, data: ByteArray?, len: Int, channel: Int) {
+            nFrames++
+            if (nFrames % 15 == 1) diag.value = "fotogrammi $nFrames · ${w}x$h · ${data?.size ?: -1} byte · len $len · can $channel"
             if (data == null || w <= 0 || h <= 0) return
             val now = System.currentTimeMillis()
             if (channel != focus && now - (lastAt[channel] ?: 0L) < 120) return
             lastAt[channel] = now
             val f = frame(channel)
-            f.value = i420(data, w, h, f.value)
+            try { f.value = i420(data, w, h, f.value) } catch (e: Throwable) { diag.value = "conversione: ${e.message}" }
         }
         override fun audio(key: String, data: ByteArray?) {}
         override fun vcon(key: String, json: String, index: Int) { lastJson.value = json }
