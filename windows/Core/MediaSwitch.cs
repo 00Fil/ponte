@@ -148,7 +148,6 @@ public sealed class MediaSwitch
 
     private void Poll()
     {
-        if (!_r.S.AutoPause) { _playing = false; return; }
         var now = DateTime.UtcNow;
         if (Loud())
         {
@@ -156,7 +155,7 @@ public sealed class MediaSwitch
             if (_playing) return;
             _playing = true;
             _startedAt = now;
-            if (now < _quietUntil) return;
+            if (now < _quietUntil || !_r.S.AutoPause) return;
             // Se questo PC sta mandando il suo audio a un altro dispositivo non è un nuovo contenuto.
             if (_r.Audio.SinkId != null) return;
             var lockedBy = _r.Hp.LockedBy;

@@ -78,11 +78,26 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         val from = m.optString("from").ifEmpty { return }
         val t = m.optString("title"); val p = m.optBoolean("playing")
         val was = remote[from]?.playing == true
+        if (p && !was) remoteSince[from] = System.currentTimeMillis()
+        if (!p) remoteSince.remove(from)
         if (p && !was && r.prefs.singlePlay) exclusive(from)
         route(from, p, was)
+        enforce()
         if (!p && t.isEmpty()) remote.remove(from)
         else remote[from] = RemoteMedia(from, t, m.optString("artist"), p, m.optLong("pos"), m.optLong("dur"), m.optInt("vol", -1), System.currentTimeMillis())
         publish()
+    }
+
+    /** Da quando ogni altro dispositivo sta suonando. */
+    private val remoteSince = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Una alla volta: se qui suona e un altro dispositivo ha iniziato dopo, qui ci si ferma (indipendente dalle cuffie bloccate). */
+    private fun enforce() {
+        if (!r.prefs.singlePlay || !am.isMusicActive || r.audio.activeSource.value != null) return
+        val now = System.currentTimeMillis()
+        if (now < quietUntil) return
+        val newer = remoteSince.entries.any { (id, t) -> id != r.deviceId && t > startedAt + 1_000 && remote[id]?.playing != false }
+        if (newer) { quietUntil = now + 5_000; r.scope.launch { pause() } }
     }
 
     private var routeOff: kotlinx.coroutines.Job? = null
@@ -104,9 +119,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     /** Una riproduzione alla volta: [from] ha appena iniziato, tutti gli altri (questo compreso) si fermano. */
     private fun exclusive(from: String) {
         val now = System.currentTimeMillis()
-        if (from != r.deviceId) {
-            if (am.isMusicActive && r.audio.activeSource.value == null && now - startedAt > 1_500) { quietUntil = now + 5_000; r.scope.launch { pause() } }
-        }
+        if (from != r.deviceId) { remoteSince[from] = now; enforce() }
         remote.values.filter { it.playing && it.id != from }.forEach { cmd(it.id, "pause") }
     }
 
@@ -146,6 +159,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
 
     fun start() {
         r.scope.launch { while (true) { delay(8_000); announce() } }
+        r.scope.launch { while (true) { delay(2_000); if (am.isMusicActive != playing) onChange(am.isMusicActive); enforce() } }
         am.registerAudioPlaybackCallback(object : AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
                 onChange(am.isMusicActive)
@@ -173,6 +187,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     fun onTake(m: JSONObject) {
         if (!r.prefs.autoPause && !r.prefs.singlePlay) return
         val from = m.optString("from").ifEmpty { return }
+        if (r.prefs.singlePlay) { remoteSince[from] = System.currentTimeMillis(); enforce(); return }
         if (r.headphones.lockedBy.value == r.deviceId) return
         if (r.audio.activeSource.value != null) return
         if (!am.isMusicActive) return
