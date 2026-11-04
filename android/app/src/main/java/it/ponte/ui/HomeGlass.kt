@@ -209,7 +209,7 @@ fun AudioRows(r: Router, max: Int) {
 
 /** Audio: cosa suona e dove, con i comandi; sotto i dispositivi, toccane uno per fermarlo o farlo ripartire. */
 @Composable
-fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onLong: () -> Unit) {
+fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onLong: () -> Unit, square: Boolean = false) {
     val c = Canone.colors
     val dark = isDark()
     val np = rememberNowPlaying()
@@ -227,6 +227,34 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
         val f = focusRemote
         if (f != null) r.media.cmd(f.id, a)
         else np?.controller?.transportControls?.let { t -> when (a) { "play" -> t.play(); "pause" -> t.pause(); "next" -> t.skipToNext(); "prev" -> t.skipToPrevious() } }
+    }
+    if (square) {
+        // quadrato: copertina e titolo in alto, comandi in basso
+        GlassTile(modifier, Tint.blue, index, onClick, onLong) {
+            Column(Modifier.fillMaxSize().padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+                        val art = if (focusRemote == null) np?.art else null
+                        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        else Box(Modifier.size(32.dp).drop(dark, tint = c.accent), contentAlignment = Alignment.Center) { TabGlyph(4, Color.White, false, Modifier.size(17.dp)) }
+                        if (playing) Box(Modifier.align(Alignment.BottomEnd).padding(4.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(3.dp)) { EqBars(Color.White) }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(where, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = if (playing) c.accent else OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Column {
+                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    RoundGlass(36.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(14.dp)) }
+                    RoundGlass(44.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(17.dp)) }
+                    RoundGlass(36.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(14.dp)) }
+                }
+            }
+        }
+        return
     }
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
         Row(Modifier.fillMaxSize().padding(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {

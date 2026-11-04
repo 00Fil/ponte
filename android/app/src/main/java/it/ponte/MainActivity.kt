@@ -120,7 +120,13 @@ class MainActivity : ComponentActivity() {
             it.ponte.ui.MoneyPrivacy.hidden = rt.prefs.hideMoney
             runOnUiThread { ready.value = rt }
         }.start() else it.ponte.ui.MoneyPrivacy.hidden = ready.value!!.prefs.hideMoney
+        if (intent?.getStringExtra("tab") == "cams") Cams.ui.value = true
         setContent { PonteTheme { ready.value?.let { PonteApp(it) } } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getStringExtra("tab") == "cams") Cams.ui.value = true
     }
 }
 
@@ -403,6 +409,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                 }
             }
         }
+        val camsOpen by Cams.ui.collectAsState()
+        if (camsOpen) it.ponte.ui.CamsScreen(r) { Cams.ui.value = false }
         val openRemote = if (remoteOpen) remoteId?.let { allMedia[it] } else null
         androidx.compose.animation.AnimatedVisibility(
             openRemote != null, Modifier.fillMaxSize().zIndex(5f),

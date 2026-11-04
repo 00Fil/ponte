@@ -24,6 +24,7 @@ object Notify {
     const val UPDATES = "updates"
     const val AUDIO = "audio"
     const val SERVICE = "relay_service"
+    const val CAMS = "cams"
 
     /** Quando l'app è in primo piano gli avvisi si mostrano dentro di lei, non come notifica. */
     @Volatile var foreground = false
@@ -40,6 +41,7 @@ object Notify {
         ch(UPDATES, "Aggiornamenti", NotificationManager.IMPORTANCE_DEFAULT, true)
         ch(AUDIO, "Audio e cuffie", NotificationManager.IMPORTANCE_DEFAULT, true)
         ch(SERVICE, "Relay in esecuzione", NotificationManager.IMPORTANCE_MIN, true)
+        ch(CAMS, "Telecamere", NotificationManager.IMPORTANCE_HIGH)
         // canali dei rilasci precedenti
         listOf("piano", "ponte", "aggiornamenti").forEach { nm.deleteNotificationChannel(it) }
     }

@@ -1,35 +1,55 @@
 package it.ponte
 
+import android.content.Context
 import android.graphics.Bitmap
 import com.app.jagles.connect.JAConnectorV2
 import com.juan.base.encryption.EncryptionUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Telecamere Eseecloud dal cloud del produttore, col loro stesso motore nativo: nessun PC né VPN.
  * Stato: 0 in corso, 6 collegato, 10 password errata, 2/3/11/12 non raggiungibile, 9 scollegato.
+ * Eventi dei canali: 13 aperto, 14 chiuso, 15 primo fotogramma.
  */
 object Cams {
     val status = MutableStateFlow(-1)
     val error = MutableStateFlow("")
-    /** Ultimo fotogramma per canale. */
     val frames = ConcurrentHashMap<Int, MutableStateFlow<Bitmap?>>()
     val channels = MutableStateFlow(8)
-    val lastJson = MutableStateFlow("")
-    /** Diagnostica: fotogrammi arrivati, misura e byte dell'ultimo. */
-    val diag = MutableStateFlow("")
-    @Volatile private var nFrames = 0
-    /** Collegato almeno una volta: gli stati 13-15 sono eventi dei canali, non perdita del collegamento. */
-    val online = MutableStateFlow(false)
-    /** Canali collegati. */
+    /** Canali collegati e canali che hanno mandato almeno un'immagine (le cam che esistono davvero). */
     val live = MutableStateFlow(setOf<Int>())
+    val seen = MutableStateFlow(setOf<Int>())
+    /** Pagina Telecamere aperta (dalla Home o da una notifica). */
+    val ui = MutableStateFlow(false)
+    /** Canale in riproduzione di una registrazione, o -1. */
+    val playing = MutableStateFlow(-1)
+    val records = MutableStateFlow<List<Seg>>(emptyList())
+    val searching = MutableStateFlow(false)
+    /** Avvisi ricevuti dal cloud (persone, movimento). */
+    val alerts = MutableStateFlow<List<Alert>>(emptyList())
+
+    data class Seg(val start: Int, val end: Int, val type: Int)
+    data class Alert(val time: Long, val channel: Int, val type: String, val img: String)
+
     private var key = ""
+    private var user = ""
+    private var pwd = ""
     private var ok = false
+    @Volatile private var handle = 0L
     private val lastAt = ConcurrentHashMap<Int, Long>()
-    private val open = ConcurrentHashMap<Int, Int>()   // canale -> flusso (0 principale, 1 secondario)
-    /** Fotogrammi al secondo massimi per canale in griglia; a tutto schermo nessun limite. */
+    private val bigAt = ConcurrentHashMap<Int, Long>()
+    private val open = ConcurrentHashMap.newKeySet<Pair<Int, Int>>()   // (canale, flusso: 0 principale, 1 leggero)
+    @Volatile private var paused = false
+    /** Canale a tutto schermo: niente limite di immagini al secondo e si tiene il flusso principale. */
     @Volatile var focus = -1
+    private val bufs = ConcurrentHashMap<Int, java.nio.ByteBuffer>()
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun frame(ch: Int) = frames.getOrPut(ch) { MutableStateFlow(null) }
 
@@ -37,54 +57,55 @@ object Cams {
         val c = JAConnectorV2.get()
         if (!ok) { ok = true; JAConnectorV2.sink = Sink }
         c
-    } catch (e: Throwable) { error.value = "Motore non caricato: ${e.message}"; null }
+    } catch (e: Throwable) { error.value = "Motore non caricato"; null }
 
-    fun connect(id: String, user: String, pwd: String, count: Int = channels.value) {
-        val c = engine() ?: return
-        if (key.isNotEmpty() && key != id) disconnect()
-        key = id
-        status.value = 0
-        val verify = try { EncryptionUtil.encryptVerify("${System.currentTimeMillis() / 1000}&$user&$pwd&") } catch (e: Throwable) { error.value = "Cifratura: ${e.message}"; return }
-        try {
-            val h = c.nativeCreateConnector(id, false)
-            handle = h
-            // come l'app ufficiale: un collegamento per ogni canale del registratore
-            for (ch in 0 until count) {
-                val r = c.nativeConnect(h, id, "", verify, count, ch, ch, 40, false)
-                if (r != 0 && ch == 0) error.value = "Collegamento rifiutato ($r)"
-            }
-        } catch (e: Throwable) { error.value = "Collegamento: ${e.message}" }
+    fun ensure(r: Router) {
+        val p = r.prefs
+        if (p.camId.isEmpty() || p.camPwd.isEmpty()) return
+        if (key == p.camId && (status.value == 6 || status.value == 0)) return
+        connect(p.camId, p.camUser, p.camPwd)
     }
 
-    @Volatile private var handle = 0L
+    fun connect(id: String, u: String, pw: String, count: Int = channels.value) {
+        val c = engine() ?: return
+        if (key.isNotEmpty() && key != id) disconnect()
+        key = id; user = u; pwd = pw
+        status.value = 0; error.value = ""
+        val verify = try { EncryptionUtil.encryptVerify("${System.currentTimeMillis() / 1000}&$u&$pw&") } catch (e: Throwable) { error.value = "Cifratura non disponibile"; return }
+        try {
+            if (handle == 0L) handle = c.nativeCreateConnector(id, false)
+            for (ch in 0 until count) c.nativeConnect(handle, id, "", verify, count, ch, ch, 40, false)
+        } catch (e: Throwable) { error.value = "Collegamento non riuscito" }
+    }
 
     fun disconnect() {
         val c = engine() ?: return
-        open.keys.toList().forEach { close(it) }
+        open.toList().forEach { (ch, b) -> close(ch, b) }
         if (handle != 0L) for (ch in 0 until channels.value) try { c.nativeDisconnect(handle, ch) } catch (_: Throwable) {}
         live.value = emptySet()
         status.value = -1
     }
 
-    /** Apre la diretta di un canale: [hd] = flusso principale. */
-    fun open(ch: Int, hd: Boolean) {
+    private fun openRaw(ch: Int, b: Int) {
         val c = engine() ?: return
-        if (handle == 0L) return
-        val want = if (hd) 0 else 1
-        val cur = open[ch]
-        if (cur == want) return
-        if (cur != null) close(ch)
-        open[ch] = want
-        try { c.nativeOpenStream(handle, want, ch, ch, ch, false) } catch (e: Throwable) { error.value = "Diretta: ${e.message}" }
+        if (handle == 0L || paused || !open.add(ch to b)) return
+        try { c.nativeOpenStream(handle, b, ch, ch, ch, false) } catch (_: Throwable) { open.remove(ch to b) }
     }
 
-    fun close(ch: Int) {
+    private fun close(ch: Int, b: Int) {
         val c = engine() ?: return
-        val b = open.remove(ch) ?: return
+        if (!open.remove(ch to b)) return
         try { c.nativeCloseStream(handle, b, ch, ch) } catch (_: Throwable) {}
     }
 
-    /** Comando JSON come quelli dell'app (es. luce: IRCutFilterMode). */
+    /** Tutto schermo: si apre l'alta qualità senza chiudere quella leggera, che resta a vista finché la prima non arriva. */
+    fun enter(ch: Int) { focus = ch; openRaw(ch, 1); openRaw(ch, 0) }
+    fun leave(ch: Int) { if (focus == ch) focus = -1; close(ch, 0) }
+
+    /** App in secondo piano: si chiudono i flussi; al ritorno si riaprono subito quelli leggeri di tutte le cam. */
+    fun pause() { paused = true; open.toList().forEach { (ch, b) -> close(ch, b) } }
+    fun resume() { paused = false; live.value.forEach { openRaw(it, 1) }; if (focus >= 0) openRaw(focus, 0) }
+
     fun send(json: String, ch: Int = 0) {
         val c = engine() ?: return
         if (handle == 0L) return
@@ -92,95 +113,135 @@ object Cams {
         try { c.nativeSendData(handle, b, b.size, ch, 10, 0) } catch (_: Throwable) {}
     }
 
-    fun light(ch: Int, mode: String, user: String, pwd: String) = send(
+    fun light(ch: Int, mode: String) = send(
         """{"IPCam":{"ModeSetting":{"IRCutFilterMode":"$mode"},"ChannelManager":{"ChannelList":"$ch","Operation":"SetChannel"}},"Version":"2.0.0","Method":"set","Authorization":{"Verify":"","username":"$user","password":"$pwd"}}""", ch,
     )
 
-    @Volatile private var rgbaInfo = ""
-    private val bufs = ConcurrentHashMap<Int, java.nio.ByteBuffer>()
+    // ---------------------------------------------------------------- registrazioni
+    private val found = ArrayList<Seg>()
 
-    /** Lettura della memoria del motore senza codice nativo nostro: Unsafe di sistema. */
-    private object Native {
-        private val unsafe: Any? = try { Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }.get(null) } catch (e: Throwable) { rgbaInfo = "unsafe: ${e.javaClass.simpleName}"; null }
-        private val bulk = try { unsafe?.javaClass?.getMethod("copyMemoryToPrimitiveArray", Long::class.javaPrimitiveType, Any::class.java, Long::class.javaPrimitiveType, Long::class.javaPrimitiveType) } catch (_: Throwable) { null }
-        private val getByte = try { unsafe?.javaClass?.getMethod("getByte", Long::class.javaPrimitiveType) } catch (_: Throwable) { null }
-        private val base: Long = try { (unsafe?.javaClass?.getMethod("arrayBaseOffset", Class::class.java)?.invoke(unsafe, ByteArray::class.java) as Int).toLong() } catch (_: Throwable) { 0L }
-        fun copy(addr: Long, n: Int): ByteArray? {
-            val u = unsafe ?: return null
-            val out = ByteArray(n)
-            try {
-                val b = bulk
-                if (b != null) { b.invoke(u, addr, out, base, n.toLong()); rgbaInfo = "copia ok"; return out }
-            } catch (e: Throwable) { rgbaInfo = "bulk: ${(e.cause ?: e).javaClass.simpleName}" }
-            val g = getByte ?: return null
-            return try { for (i in 0 until n) out[i] = g.invoke(u, addr + i) as Byte; rgbaInfo = "copia lenta"; out } catch (e: Throwable) { rgbaInfo = "getByte: ${(e.cause ?: e).javaClass.simpleName}"; null }
-        }
+    /** Registrazioni di un canale tra due istanti (secondi). */
+    fun search(ch: Int, from: Int, to: Int) {
+        val c = engine() ?: return
+        if (handle == 0L) return
+        synchronized(found) { found.clear() }
+        records.value = emptyList(); searching.value = true
+        try { c.nativeSearchRecord(handle, from, to, 15, ch, ch, 0) } catch (_: Throwable) { searching.value = false }
+        io.launch { delay(12_000); searching.value = false }
+    }
+
+    fun play(ch: Int, at: Int) {
+        val c = engine() ?: return
+        if (handle == 0L) return
+        if (playing.value >= 0) stopPlay()
+        close(ch, 0); close(ch, 1)
+        focus = ch; playing.value = ch
+        try { c.nativeStartPlayback(handle, at, 15, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
+    }
+
+    fun stopPlay() {
+        val c = engine() ?: return
+        val ch = playing.value
+        if (ch < 0) return
+        try { c.nativeStopPlayback(handle, ch, ch) } catch (_: Throwable) {}
+        playing.value = -1
+        openRaw(ch, 1); if (focus == ch) openRaw(ch, 0)
     }
 
     private object Sink : JAConnectorV2.Sink {
         override fun status(key: String, st: Int, index: Int) {
-            if (st == 6) live.value = live.value + index
+            if (st == 6) { live.value = live.value + index; openRaw(index, 1) }
             else if (st in listOf(2, 3, 9, 10, 11, 12)) live.value = live.value - index
-            if (st < 12 && (st == 6 || live.value.isEmpty())) { status.value = st; online.value = st == 6 }
+            if (st < 12 && (st == 6 || live.value.isEmpty())) status.value = st
             if (st == 10) error.value = "Password errata"
-            diag.value = "stato $st canale $index · fotogrammi $nFrames"
         }
         override fun frame(key: String, w: Int, h: Int, data: ByteArray?, len: Int, channel: Int, ptr: Long) {
-            nFrames++
-            if (nFrames % 15 == 1) diag.value = "fotogrammi $nFrames · ${w}x$h · ${data?.size ?: -1} byte · len $len · can $channel · ptr ${if (ptr != 0L) "sì" else "no"} $rgbaInfo"
-            if (w <= 0 || h <= 0) return
-            if (data == null) {
-                // il fotogramma è già decodificato in RGBA nella memoria del motore: si copia subito, prima che venga riusata
-                if (ptr == 0L || len < w * h * 4 || channel != focus && System.currentTimeMillis() - (lastAt[channel] ?: 0L) < 120) return
-                lastAt[channel] = System.currentTimeMillis()
-                val n = w * h * 4
-                val buf = bufs.getOrPut(channel) { java.nio.ByteBuffer.allocateDirect(n) }.let { if (it.capacity() < n) java.nio.ByteBuffer.allocateDirect(n).also { b -> bufs[channel] = b } else it }
-                if (!CamMem.ok) { rgbaInfo = "copia non disponibile"; return }
-                CamMem.copy(ptr, buf, n)
-                buf.rewind()
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                bmp.copyPixelsFromBuffer(buf)
-                buf.rewind()
-                rgbaInfo = "copia ok"
-                frame(channel).value = bmp
-                return
-            }
+            if (w <= 0 || h <= 0 || ptr == 0L || data != null || len < w * h * 4 || !CamMem.ok) return
             val now = System.currentTimeMillis()
-            if (channel != focus && now - (lastAt[channel] ?: 0L) < 120) return
+            if (channel == focus) {
+                // a tutto schermo: appena arriva l'alta qualità, quella leggera non sostituisce più l'immagine
+                if (w >= 1000) bigAt[channel] = now
+                else if (now - (bigAt[channel] ?: 0L) < 1500) return
+            } else if (now - (lastAt[channel] ?: 0L) < 110) return
             lastAt[channel] = now
-            val f = frame(channel)
-            try { f.value = i420(data, w, h, f.value) } catch (e: Throwable) { diag.value = "conversione: ${e.message}" }
+            if (channel !in seen.value) seen.value = seen.value + channel
+            val n = w * h * 4
+            var buf = bufs[channel]
+            if (buf == null || buf.capacity() < n) { buf = java.nio.ByteBuffer.allocateDirect(n); bufs[channel] = buf }
+            CamMem.copy(ptr, buf!!, n)
+            buf.rewind()
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            bmp.copyPixelsFromBuffer(buf)
+            buf.rewind()
+            frame(channel).value = bmp
         }
         override fun audio(key: String, data: ByteArray?) {}
-        override fun vcon(key: String, json: String, index: Int) { lastJson.value = json }
+        override fun vcon(key: String, json: String, index: Int) {}
         override fun command(code: Int, key: String, st: Int, index: Int) {}
         override fun stream(key: String, st: Int, channel: Int) {}
-        override fun record(key: String, a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {}
+        override fun record(key: String, a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
+            synchronized(found) {
+                if (a > 0 && b > a) found.add(Seg(a, b, c))
+                records.value = found.sortedByDescending { it.start }
+            }
+            if (d == 1) searching.value = false
+        }
     }
 
-    /** YUV 4:2:0 planare -> bitmap; riusa la bitmap se ha la stessa misura. */
-    private fun i420(d: ByteArray, w: Int, h: Int, reuse: Bitmap?): Bitmap? {
-        val ys = w * h
-        if (d.size < ys * 3 / 2) return reuse
-        val px = IntArray(ys)
-        val us = ys; val vs = ys + ys / 4; val cw = w / 2
-        var i = 0
-        for (y in 0 until h) {
-            val cr = (y shr 1) * cw
-            for (x in 0 until w) {
-                val Y = (d[i].toInt() and 0xFF) - 16
-                val U = (d[us + cr + (x shr 1)].toInt() and 0xFF) - 128
-                val V = (d[vs + cr + (x shr 1)].toInt() and 0xFF) - 128
-                val yy = 1192 * (if (Y < 0) 0 else Y)
-                var r = (yy + 1634 * V) shr 10; var g = (yy - 833 * V - 400 * U) shr 10; var b = (yy + 2066 * U) shr 10
-                if (r < 0) r = 0 else if (r > 255) r = 255
-                if (g < 0) g = 0 else if (g > 255) g = 255
-                if (b < 0) b = 0 else if (b > 255) b = 255
-                px[i++] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    // ---------------------------------------------------------------- avvisi dal cloud (persone rilevate)
+    private val http by lazy { okhttp3.OkHttpClient.Builder().callTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build() }
+    private const val PM = "https://pm.dvr163.com"
+
+    /** Ultimi avvisi del registratore dal server push di Eseecloud, come fa l'app ufficiale. */
+    fun fetchAlerts(id: String): List<Alert>? = try {
+        val n = http.newCall(okhttp3.Request.Builder().url("$PM/message/nonce?method=get").build()).execute().use { org.json.JSONObject(it.body?.string().orEmpty()) }
+        val nonce = n.getString("nonce"); val rid = n.getString("request_id")
+        val s = (nonce.uppercase() + rid.uppercase())
+        val verify = EncryptionUtil.nativeSignViaIndex(arrayOf(s), s.length, 4)
+        val cal = java.util.Calendar.getInstance()
+        val time = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time) + " " + (cal.timeZone.getOffset(cal.timeInMillis) / 3_600_000)
+        val url = "$PM/message/message?method=newlist_v5&start=0&count=30&time=" + java.net.URLEncoder.encode(time, "utf-8")
+        val form = okhttp3.FormBody.Builder().add("mac_token", "02:00:00:00:00:00").add("eseeid", "[\"$id\"]").add("request_id", rid).add("verify", verify).build()
+        val body = http.newCall(okhttp3.Request.Builder().url(url).header("Cookie", "PHPSESSID=$rid").post(form).build()).execute().use { it.body?.string().orEmpty() }
+        val arr = org.json.JSONObject(body).optJSONArray("list") ?: org.json.JSONArray()
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            val img = o.optString("img_url").let { u -> if (u.startsWith("http")) u else try { String(android.util.Base64.decode(u, 0)) } catch (_: Exception) { "" } }
+            Alert(o.optLong("time"), o.optInt("channel"), o.optString("type"), img)
+        }
+    } catch (_: Exception) { null }
+
+    /** Controllo periodico: una notifica per ogni persona (o movimento) nuova. */
+    fun watch(ctx: Context, r: Router) {
+        io.launch {
+            while (true) {
+                val id = r.prefs.camId
+                if (id.isNotEmpty()) fetchAlerts(id)?.let { list ->
+                    alerts.value = list
+                    val sp = ctx.getSharedPreferences("cams", Context.MODE_PRIVATE)
+                    val last = sp.getLong("lastAlert", 0L)
+                    val fresh = list.filter { it.time > last }.sortedBy { it.time }
+                    if (last == 0L) sp.edit().putLong("lastAlert", list.maxOfOrNull { it.time } ?: 1L).apply()
+                    else if (fresh.isNotEmpty()) {
+                        sp.edit().putLong("lastAlert", fresh.last().time).apply()
+                        fresh.takeLast(3).forEach { a -> notifyAlert(ctx, a) }
+                    }
+                }
+                delay(if (Notify.foreground) 30_000L else 60_000L)
             }
         }
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        bmp.setPixels(px, 0, w, 0, 0, w, h)
-        return bmp
+    }
+
+    fun kind(t: String) = when (t) { "hd" -> "Persona rilevata"; "md", "motion" -> "Movimento"; else -> "Avviso" }
+
+    private fun notifyAlert(ctx: Context, a: Alert) {
+        val pic = if (a.img.isNotEmpty()) try { http.newCall(okhttp3.Request.Builder().url(a.img).build()).execute().use { if (it.isSuccessful) android.graphics.BitmapFactory.decodeStream(it.body?.byteStream()) else null } } catch (_: Exception) { null } else null
+        Notify.channels(ctx)
+        val title = kind(a.type)
+        val text = "Telecamera ${a.channel + 1} · " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(java.util.Date(a.time * 1000))
+        val b = android.app.Notification.Builder(ctx, Notify.CAMS).setSmallIcon(R.drawable.ic_n_event).setContentTitle(title).setContentText(text)
+            .setAutoCancel(true).setContentIntent(Notify.open(ctx, 7100, "cams")).setColor(0xFF2F5FFF.toInt()).setCategory(android.app.Notification.CATEGORY_EVENT)
+        if (pic != null) b.setLargeIcon(pic).setStyle(android.app.Notification.BigPictureStyle().bigPicture(pic))
+        ctx.getSystemService(android.app.NotificationManager::class.java).notify(7100 + (a.time % 1000).toInt(), b.build())
     }
 }

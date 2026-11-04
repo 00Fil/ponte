@@ -86,6 +86,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         updater.start()
         finance.start()
         plan.start()
+        Cams.watch(ctx, this)
         p2p.start()
         screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
         multicast = (ctx.getSystemService(Context.WIFI_SERVICE) as WifiManager)

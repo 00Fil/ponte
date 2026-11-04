@@ -90,7 +90,6 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     val money by r.finance.state.collectAsState()
     val missing = missingPerms(ctx)
     var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
-    var cams by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         val blur by androidx.compose.animation.core.animateFloatAsState(if (panel != null) 26f else 0f, tween(260), label = "sfoca")
@@ -117,14 +116,15 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                             BalanceCard(r, money, sq, { go("finance") }) { panel = "finance" }
                             TodoTile(r, sq, 4, { go("todo") }) { panel = "agenda" }
                         }
-                        AudioTile(r, wide, 5, { go("settings") }) { panel = "audio" }
-                        CamsTile(r, wide, 6) { cams = true }
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            AudioTile(r, sq, 5, { go("settings") }, { panel = "audio" }, square = true)
+                            CamsTile(r, sq, 6)
+                        }
                     }
                 }
             }
         }
         QuickPanel(panel, r, go) { panel = null }
-        if (cams) CamsScreen(r) { cams = false }
     }
 }
 
