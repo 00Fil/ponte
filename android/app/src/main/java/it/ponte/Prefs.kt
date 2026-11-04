@@ -71,6 +71,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("autoPause", true)
         set(v) = sp.edit().putBoolean("autoPause", v).apply()
 
+    /** Una sola riproduzione alla volta tra tutti i dispositivi: quando un audio parte, gli altri si fermano. */
+    var singlePlay: Boolean
+        get() = sp.getBoolean("singlePlay", true)
+        set(v) = sp.edit().putBoolean("singlePlay", v).apply()
+
     /** Se le cuffie preferite non ci sono: true = muto, false = casse. */
     var fallbackMute: Boolean
         get() = sp.getBoolean("fallbackMute", false)

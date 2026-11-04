@@ -116,83 +116,8 @@ private fun clockText(ms: Long): String { val s = (ms / 1000).coerceAtLeast(0); 
 /** Il player a schermo intero, come su iOS: copertina grande, luce dai suoi colori, avanzamento, comandi di vetro e volume. */
 @Composable
 fun FullPlayer(np: NowPlaying, onClose: () -> Unit) {
-    val c = Canone.colors
-    val ctx = LocalContext.current
-    androidx.activity.compose.BackHandler(onBack = onClose)
-    val moods = remember(np.art) { moodColors(np.art) }
-    val am = remember { ctx.getSystemService(android.media.AudioManager::class.java) }
-    val maxVol = remember { am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var vol by remember { mutableIntStateOf(am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)) }
-    LaunchedEffect(Unit) { while (true) { delay(1200); vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) } }
-    val dur = np.controller.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-    var pos by remember { mutableLongStateOf(0L) }
-    var seeking by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(np.controller, np.title, np.playing) {
-        while (true) {
-            val st = np.controller.playbackState
-            if (!seeking) pos = when {
-                st == null -> 0L
-                st.state == PlaybackState.STATE_PLAYING -> st.position + ((android.os.SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
-                else -> st.position
-            }.coerceIn(0L, if (dur > 0) dur else Long.MAX_VALUE)
-            delay(500)
-        }
-    }
-    val tc = np.controller.transportControls
-    var dy by remember { mutableFloatStateOf(0f) }
-    Box(
-        Modifier.fillMaxSize().background(c.bgCanvas)
-            .pointerInput(Unit) { detectVerticalDragGestures(onDragEnd = { if (dy > 140f) onClose(); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> dy += d } }
-            .drawBehind {
-                val w = size.width; val hh = size.height
-                val spots = listOf(Offset(w * 0.15f, hh * 0.10f), Offset(w * 0.9f, hh * 0.45f), Offset(w * 0.3f, hh * 0.95f))
-                moods.forEachIndexed { i, col -> drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.42f), Color.Transparent), spots[i % 3], w * 0.95f), w * 0.95f, spots[i % 3]) }
-            },
-    ) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.size(width = 42.dp, height = 5.dp).clip(CircleShape).background(c.lineStrong))
-            Spacer(Modifier.weight(0.6f))
-            Box(
-                Modifier.fillMaxWidth().widthIn(max = 420.dp).aspectRatio(1f).shadow(28.dp, RoundedCornerShape(Radius.xl), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.35f))
-                    .clip(RoundedCornerShape(Radius.xl)).background(c.labelPrimary.copy(alpha = 0.07f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                np.art?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: TabGlyph(4, c.labelTertiary, false, Modifier.size(64.dp))
-            }
-            Spacer(Modifier.weight(0.6f))
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(np.title.ifEmpty { "Senza titolo" }, style = CanoneType.title2, color = c.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(np.artist, style = CanoneType.body, color = c.labelSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Spacer(Modifier.height(18.dp))
-            if (dur > 0) Column(Modifier.fillMaxWidth()) {
-                DropSlider(pos.toFloat() / dur, { f -> seeking = true; pos = (f * dur).toLong() }, onFinish = { f ->
-                    pos = (f * dur).toLong(); tc.seekTo(pos)
-                    scope.launch { delay(900); seeking = false }
-                })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(clockText(pos), style = CanoneType.footnote, color = c.labelTertiary)
-                    Text("−" + clockText(dur - pos), style = CanoneType.footnote, color = c.labelTertiary)
-                }
-            }
-            Spacer(Modifier.height(18.dp))
-            GlassTransport(listOf(0, if (np.playing) 2 else 1, 3), { i -> when (i) { 0 -> tc.skipToPrevious(); 1 -> if (np.playing) tc.pause() else tc.play(); else -> tc.skipToNext() } })
-            Spacer(Modifier.height(22.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
-                DropSlider(vol.toFloat() / maxVol, { f ->
-                    val v = (f * maxVol).roundToInt().coerceIn(0, maxVol)
-                    if (v != vol) { vol = v; am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0) }
-                }, Modifier.weight(1f))
-                SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
-            }
-            Spacer(Modifier.height(14.dp))
-            Ponte.router?.let { OtherDevicesMedia(it, it.deviceId) }
-            Spacer(Modifier.height(20.dp))
-        }
-    }
+    val r = Ponte.router ?: return
+    UniversalPlayer(r, r.deviceId, onClose)
 }
 
 
@@ -351,39 +276,4 @@ fun RemoteDrop(r: it.ponte.Router, m: it.ponte.RemoteMedia, onOpen: () -> Unit, 
 
 /** Il player universale a schermo intero per un dispositivo remoto. */
 @Composable
-fun RemoteFullPlayer(r: it.ponte.Router, m: it.ponte.RemoteMedia, onClose: () -> Unit) {
-    val c = Canone.colors
-    androidx.activity.compose.BackHandler(onBack = onClose)
-    val pos = livePos(m)
-    var seek by remember(m.id) { mutableStateOf<Float?>(null) }
-    var vol by remember(m.id, m.vol) { mutableStateOf(m.vol / 100f) }
-    Box(Modifier.fillMaxSize().background(c.bgCanvas).pointerInput(Unit) { detectTapGestures { } }) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp), verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.align(Alignment.CenterHorizontally).size(width = 42.dp, height = 5.dp).clip(CircleShape).background(c.lineStrong).clickable(onClick = onClose))
-            Spacer(Modifier.height(Space.s5))
-            Text(mediaName(r, m.id), style = CanoneType.footnote.copy(letterSpacing = 1.2.sp), color = c.accent)
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(m.title.ifEmpty { "Niente in riproduzione" }, style = CanoneType.title1, color = c.labelPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(m.artist, style = CanoneType.body, color = c.labelSecondary, maxLines = 1)
-            }
-            if (m.dur > 0) Column {
-                val shown = seek ?: (pos.toFloat() / m.dur)
-                DropSlider(shown, { seek = it }, onFinish = { f -> r.media.cmd(m.id, "seek", (f * m.dur).toLong()); seek = null })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(clockText((shown * m.dur).toLong()), style = CanoneType.footnote, color = c.labelTertiary)
-                    Text("−" + clockText(m.dur - (shown * m.dur).toLong()), style = CanoneType.footnote, color = c.labelTertiary)
-                }
-            }
-            GlassTransport(listOf(0, if (m.playing) 2 else 1, 3), { i -> r.media.cmd(m.id, when (i) { 0 -> "prev"; 1 -> if (m.playing) "pause" else "play"; else -> "next" }) })
-            if (m.vol >= 0) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                SpeakerIcon(false, c.labelTertiary, Modifier.size(18.dp))
-                DropSlider(vol, { vol = it }, Modifier.weight(1f), onFinish = { f -> r.media.cmd(m.id, "vol", (f * 100).toLong()) })
-                SpeakerIcon(true, c.labelTertiary, Modifier.size(18.dp))
-            }
-            Spacer(Modifier.height(Space.s3))
-            OtherDevicesMedia(r, m.id)
-            Spacer(Modifier.height(Space.s5))
-        }
-    }
-}
+fun RemoteFullPlayer(r: it.ponte.Router, m: it.ponte.RemoteMedia, onClose: () -> Unit) = UniversalPlayer(r, m.id, onClose)

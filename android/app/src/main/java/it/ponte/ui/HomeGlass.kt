@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.scale
@@ -229,41 +230,46 @@ fun AudioTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, on
         else np?.controller?.transportControls?.let { t -> when (a) { "play" -> t.play(); "pause" -> t.pause(); "next" -> t.skipToNext(); "prev" -> t.skipToPrevious() } }
     }
     if (square) {
-        // quadrato: copertina e titolo in alto, comandi in basso
+        // quadrato: in alto copertina e dispositivi, al centro il brano, in basso i comandi
         GlassTile(modifier, Tint.blue, index, onClick, onLong) {
-            Column(Modifier.fillMaxSize().padding(Space.s3), verticalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(c.bgSunken), contentAlignment = Alignment.Center) {
                         val art = if (focusRemote == null) np?.art else null
-                        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        else Box(Modifier.size(32.dp).drop(dark, tint = c.accent), contentAlignment = Alignment.Center) { TabGlyph(4, Color.White, false, Modifier.size(17.dp)) }
-                        if (playing) Box(Modifier.align(Alignment.BottomEnd).padding(4.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(3.dp)) { EqBars(Color.White) }
+                        val pic = DevicePics.rememberPic(focusRemote?.id ?: me)
+                        when {
+                            art != null -> Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            pic != null && title.isNotEmpty() -> Image(pic, null, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                            else -> TabGlyph(4, OnGlass2, false, Modifier.size(18.dp))
+                        }
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(where, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = if (playing) c.accent else OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                Column {
-                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    buildList { add(me); devices.forEach { add(it.id) } }.take(5).forEach { id ->
-                        val on = if (id == me) localOn else known[id]?.playing == true
-                        val pic = DevicePics.rememberPic(id)
-                        RoundGlass(26.dp, false, {
-                            if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
-                            else r.media.cmd(id, if (on) "pause" else "play")
-                        }, ring = if (on) c.accent else null) {
-                            if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(12.dp))
+                    Spacer(Modifier.weight(1f))
+                    // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
+                    Row(horizontalArrangement = Arrangement.spacedBy((-6).dp), verticalAlignment = Alignment.CenterVertically) {
+                        buildList { add(me); devices.forEach { add(it.id) } }.take(3).forEach { id ->
+                            val on = if (id == me) localOn else known[id]?.playing == true
+                            val pic = DevicePics.rememberPic(id)
+                            RoundGlass(28.dp, false, {
+                                if (id == me) np?.controller?.transportControls?.let { if (on) it.pause() else it.play() }
+                                else r.media.cmd(id, if (on) "pause" else "play")
+                            }, ring = if (on) c.accent else null) {
+                                if (pic != null) Image(pic, null, Modifier.fillMaxSize().padding(5.dp), contentScale = ContentScale.Fit) else TabGlyph(1, OnGlass2, false, Modifier.size(12.dp))
+                            }
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    RoundGlass(36.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(14.dp)) }
+                Column(Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (playing) EqBars(c.accent)
+                        Text(where, style = CanoneType.footnote.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold), color = if (playing) c.accent else OnGlass3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(title.ifEmpty { "Silenzio" }, style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(artist.ifEmpty { " " }, style = CanoneType.footnote, color = OnGlass2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    RoundGlass(34.dp, false, { send("prev") }) { TransportGlyph(0, OnGlass, Modifier.size(13.dp)) }
                     RoundGlass(44.dp, true, { send(if (playing) "pause" else "play") }) { TransportGlyph(if (playing) 2 else 1, Color.White, Modifier.size(17.dp)) }
-                    RoundGlass(36.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(14.dp)) }
+                    RoundGlass(34.dp, false, { send("next") }) { TransportGlyph(3, OnGlass, Modifier.size(13.dp)) }
                 }
             }
         }

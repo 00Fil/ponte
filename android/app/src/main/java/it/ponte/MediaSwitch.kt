@@ -77,9 +77,20 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     fun onState(m: JSONObject) {
         val from = m.optString("from").ifEmpty { return }
         val t = m.optString("title"); val p = m.optBoolean("playing")
+        val was = remote[from]?.playing == true
+        if (p && !was && r.prefs.singlePlay) exclusive(from)
         if (!p && t.isEmpty()) remote.remove(from)
         else remote[from] = RemoteMedia(from, t, m.optString("artist"), p, m.optLong("pos"), m.optLong("dur"), m.optInt("vol", -1), System.currentTimeMillis())
         publish()
+    }
+
+    /** Una riproduzione alla volta: [from] ha appena iniziato, tutti gli altri (questo compreso) si fermano. */
+    private fun exclusive(from: String) {
+        val now = System.currentTimeMillis()
+        if (from != r.deviceId) {
+            if (am.isMusicActive && r.audio.activeSource.value == null && now - startedAt > 1_500) { quietUntil = now + 5_000; r.scope.launch { pause() } }
+        }
+        remote.values.filter { it.playing && it.id != from }.forEach { cmd(it.id, "pause") }
     }
 
     /** Qualcuno (dalla Home di un altro dispositivo) chiede di fermare l'audio qui. */
@@ -132,7 +143,9 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         if (!active) return
         val now = System.currentTimeMillis()
         startedAt = now
-        if (!r.prefs.autoPause || now < quietUntil) return
+        if (now < quietUntil) return
+        if (r.prefs.singlePlay && r.audio.activeSource.value == null) { exclusive(r.deviceId); r.send(newMsg("media.take")); return }
+        if (!r.prefs.autoPause) return
         // L'audio che arriva da Ponte stesso (PC -> telefono) non è un "nuovo contenuto".
         if (r.audio.activeSource.value != null) return
         val lock = r.headphones.lockedBy.value
@@ -141,7 +154,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     }
 
     fun onTake(m: JSONObject) {
-        if (!r.prefs.autoPause) return
+        if (!r.prefs.autoPause && !r.prefs.singlePlay) return
         val from = m.optString("from").ifEmpty { return }
         if (r.headphones.lockedBy.value == r.deviceId) return
         if (r.audio.activeSource.value != null) return
