@@ -31,6 +31,10 @@ object Cams {
     val playing = MutableStateFlow(-1)
     val records = MutableStateFlow<List<Seg>>(emptyList())
     val searching = MutableStateFlow(false)
+    /** Istante (secondi) della registrazione in riproduzione, dall'orologio impresso nel video. */
+    val playTime = MutableStateFlow(0)
+    /** Alta qualità attiva sul canale a tutto schermo. */
+    val hd = MutableStateFlow(false)
     /** Avvisi ricevuti dal cloud (persone, movimento). */
     val alerts = MutableStateFlow<List<Alert>>(emptyList())
 
@@ -99,8 +103,10 @@ object Cams {
     }
 
     /** Tutto schermo: si apre l'alta qualità senza chiudere quella leggera, che resta a vista finché la prima non arriva. */
-    fun enter(ch: Int) { focus = ch; openRaw(ch, 1); openRaw(ch, 0) }
+    /** Tutto schermo: resta il flusso già aperto (immagine subito in tempo reale); l'alta qualità solo se richiesta. */
+    fun enter(ch: Int) { focus = ch; openRaw(ch, 1); if (hd.value) openRaw(ch, 0) }
     fun leave(ch: Int) { if (focus == ch) focus = -1; close(ch, 0) }
+    fun setHd(ch: Int, on: Boolean) { hd.value = on; if (on) openRaw(ch, 0) else { close(ch, 0); bigAt.remove(ch) } }
 
     /** App in secondo piano: si chiudono i flussi; al ritorno si riaprono subito quelli leggeri di tutte le cam. */
     fun pause() { paused = true; open.toList().forEach { (ch, b) -> close(ch, b) } }
@@ -135,7 +141,7 @@ object Cams {
         if (handle == 0L) return
         if (playing.value >= 0) stopPlay()
         close(ch, 0); close(ch, 1)
-        focus = ch; playing.value = ch
+        focus = ch; playing.value = ch; playTime.value = at
         try { c.nativeStartPlayback(handle, at, 15, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
     }
 
@@ -179,6 +185,7 @@ object Cams {
         override fun vcon(key: String, json: String, index: Int) {}
         override fun command(code: Int, key: String, st: Int, index: Int) {}
         override fun stream(key: String, st: Int, channel: Int) {}
+        override fun osd(key: String, a: Int, b: Int) { if (a > 1_000_000_000) playTime.value = a else if (b > 1_000_000_000) playTime.value = b }
         override fun record(key: String, a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) {
             synchronized(found) {
                 if (a > 0 && b > a) found.add(Seg(a, b, c))

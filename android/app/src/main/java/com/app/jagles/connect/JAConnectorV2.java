@@ -12,6 +12,7 @@ public final class JAConnectorV2 {
         void command(int code, String key, int status, int index);
         void stream(String key, int status, int channel);
         void record(String key, int a, int b, int c, int d, int e, int f);
+        void osd(String key, int a, int b);
     }
     public static volatile Sink sink;
     private static JAConnectorV2 sInstance;
@@ -114,7 +115,7 @@ public final class JAConnectorV2 {
     public void onAudioFrameAvailable(String str, byte[] bArr) { Sink s = sink; if (s != null) s.audio(str, bArr); }
     public void onTextureAvailable(String str, int i, int i2, float f, byte[] bArr, long j, int i3, int i4, int i5, int i6, int i7, long j2) { Sink s = sink; if (s != null) s.frame(str, i, i2, bArr, i3, i7, j); }
     public void onOSDTextureAvailable(String str, int i, int i2, long j, int i3, int i4, long j2) {  }
-    public void onPlaybackOSDAvailable(String str, int i, int i2) {  }
+    public void onPlaybackOSDAvailable(String str, int i, int i2) { Sink s = sink; if (s != null) s.osd(str, i, i2); }
     public void onRecordVideoDurationAvailable(String str, long j, int i) {  }
     public void OnPTZControlCallback(String str, int i, int i2) {  }
     public void onRecordAvailable(String str, int i, int i2, int i3, int i4, int i5, int i6) { Sink s = sink; if (s != null) s.record(str, i, i2, i3, i4, i5, i6); }

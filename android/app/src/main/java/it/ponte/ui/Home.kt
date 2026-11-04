@@ -90,6 +90,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
     val money by r.finance.state.collectAsState()
     val missing = missingPerms(ctx)
     var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var camBig by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
         val blur by androidx.compose.animation.core.animateFloatAsState(if (panel != null) 26f else 0f, tween(260), label = "sfoca")
@@ -116,9 +117,14 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                             BalanceCard(r, money, sq, { go("finance") }) { panel = "finance" }
                             TodoTile(r, sq, 4, { go("todo") }) { panel = "agenda" }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            AudioTile(r, sq, 5, { go("settings") }, { panel = "audio" }, square = true)
-                            CamsTile(r, sq, 6)
+                        // cam: tenendo premuto la card si allarga a tutta riga e cresce in altezza, l'audio si fa da parte
+                        val grow by androidx.compose.animation.core.animateFloatAsState(if (camBig) 1f else 0f, androidx.compose.animation.core.spring(0.78f, 260f), label = "cam")
+                        Row {
+                            if (grow < 0.98f) Box(Modifier.size(cell * (1f - grow), cell).graphicsLayer { alpha = 1f - grow; scaleX = 1f - 0.2f * grow; scaleY = 1f - 0.2f * grow }) {
+                                AudioTile(r, Modifier.size(cell), 5, { go("settings") }, { panel = "audio" }, square = true)
+                            }
+                            if (grow < 0.98f) Box(Modifier.size(gap * (1f - grow), cell))
+                            CamsTile(r, Modifier.size(cell + (maxWidth - cell) * grow, cell + (cell * 0.45f) * grow), 6, camBig) { camBig = it }
                         }
                     }
                 }

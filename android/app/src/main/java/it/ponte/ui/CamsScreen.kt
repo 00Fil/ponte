@@ -59,6 +59,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.draw.drawWithContent
 import it.ponte.Cams
 import it.ponte.Router
 import java.text.SimpleDateFormat
@@ -226,28 +233,13 @@ private fun AlertPic(url: String, modifier: Modifier) {
     drawArc(col, 130f, 100f, false, Offset(w * 0.18f, w * 0.18f), Size(w * 0.64f, w * 0.64f), style = Stroke(w * 0.08f, cap = StrokeCap.Round))
 }
 
-/** Una voce della barra: icona sopra, nome sotto; la voce attiva ha la sua goccia blu. */
-@Composable
-private fun BarItem(label: String, on: Boolean, onClick: () -> Unit, icon: @Composable (Color) -> Unit) {
-    val t = rememberDropTouch()
-    Column(
-        Modifier.width(64.dp).fillMaxHeight().clip(RoundedCornerShape(26.dp))
-            .then(if (on) Modifier.drop(true, corner = 26.dp, tint = Canone.colors.accent.copy(alpha = 0.85f), press = { t.press.value }, touch = t) else Modifier)
-            .dropGestures(t, onClick),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-    ) {
-        icon(Color.White)
-        Spacer(Modifier.height(3.dp))
-        Text(label, style = CanoneType.footnote.copy(fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp), fontWeight = FontWeight.SemiBold), color = Color.White.copy(alpha = if (on) 1f else 0.8f), maxLines = 1)
-    }
-}
-
-/** Schermo intero: video al centro, barra di comandi di vetro come quella di navigazione, sopra la barra di Android. */
+/** Schermo intero: video al centro, sotto la stessa barra di navigazione dell'app con le voci delle cam, e la timeline delle registrazioni. */
 @Composable
 private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
     var light by remember { mutableStateOf("smart") }
-    var recs by remember { mutableStateOf(false) }
+    var recs by remember { mutableStateOf(startAt > 0) }
     val playing by Cams.playing.collectAsState()
+    val hd by Cams.hd.collectAsState()
     val dens = LocalDensity.current
     val navB = with(dens) { WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(16.dp)
     val topB = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
@@ -256,78 +248,119 @@ private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
         if (startAt > 0) Cams.play(ch, startAt)
         onDispose { Cams.stopPlay(); Cams.leave(ch) }
     }
-    androidx.activity.compose.BackHandler { if (recs) recs = false else onBack() }
+    androidx.activity.compose.BackHandler { if (recs) { recs = false; Cams.stopPlay() } else onBack() }
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        CamView(ch, Modifier.fillMaxSize(), fill = false)
+        // il video registrato nel livello: la barra di vetro lo rifrange come fa con le pagine
+        Box(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }) {
+            CamView(ch, Modifier.fillMaxSize(), fill = false)
+        }
         Row(Modifier.fillMaxWidth().padding(top = topB + Space.s2, start = Space.s4, end = Space.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
             RoundGlass(42.dp, false, onBack) { Text("‹", style = CanoneType.title2, color = Color.White) }
             Text("Telecamera ${ch + 1}", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, modifier = Modifier.weight(1f))
-            Chip(if (playing == ch) "Registrazione" else "Dal vivo", dot = if (playing == ch) Tint.third else Color(0xFFFF453A))
+            Chip(if (playing == ch) "Registrazione" else if (hd) "Dal vivo · HD" else "Dal vivo", dot = if (playing == ch) Tint.third else Color(0xFFFF453A))
         }
-        Column(Modifier.align(Alignment.BottomCenter).padding(bottom = navB + 36.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            AnimatedVisibility(recs, enter = fadeIn() + slideInVertically { it / 4 }, exit = fadeOut() + slideOutVertically { it / 4 }) { Records(ch) }
-            // barra comandi: stessa goccia della barra di navigazione
-            Row(
-                Modifier.height(68.dp).clip(RoundedCornerShape(34.dp)).drop(true, corner = 34.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.72f)).padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                BarItem("Auto", light == "smart", { light = "smart"; Cams.light(ch, "smart") }) { AutoGlyph(it, Modifier.size(20.dp)) }
-                BarItem("Luce", light == "light", { light = "light"; Cams.light(ch, "light") }) { SunGlyph(it, Modifier.size(20.dp)) }
-                BarItem("Notte", light == "ir", { light = "ir"; Cams.light(ch, "ir") }) { MoonGlyph(it, Modifier.size(20.dp)) }
-                Box(Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.15f)))
-                if (playing == ch) BarItem("Dal vivo", false, { Cams.stopPlay(); recs = false }) { LiveGlyph(it, Modifier.size(20.dp)) }
-                else BarItem("Video", recs, { recs = !recs }) { ClockGlyph(it, Modifier.size(20.dp)) }
-            }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = navB + 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            AnimatedVisibility(recs, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) { Timeline(ch) }
+            val labels = listOf("Auto", "Luce", "Notte", if (playing == ch) "Dal vivo" else "Video", "HD")
+            val glyphs = listOf(15, 13, 14, if (playing == ch) 17 else 16, 18)
+            val cur = if (recs) 3 else when (light) { "light" -> 1; "ir" -> 2; else -> 0 }
+            GlassTabBar(
+                layer, labels, glyphs, { cur.toFloat() }, cur,
+                { i ->
+                    when (i) {
+                        0 -> { light = "smart"; Cams.light(ch, "smart") }
+                        1 -> { light = "light"; Cams.light(ch, "light") }
+                        2 -> { light = "ir"; Cams.light(ch, "ir") }
+                        3 -> if (playing == ch) { Cams.stopPlay(); recs = false } else recs = !recs
+                        4 -> Cams.setHd(ch, !hd)
+                    }
+                },
+                Modifier.padding(horizontal = 20.dp),
+            )
         }
     }
 }
 
-/** Registrazioni del giorno scelto: tocca un pezzo per rivederlo. */
+/**
+ * Timeline delle registrazioni: 24 ore che scorrono sotto una lancetta fissa al centro, i pezzi registrati in blu.
+ * Trascina per scegliere l'istante, lascia per rivederlo.
+ */
 @Composable
-private fun Records(ch: Int) {
+private fun Timeline(ch: Int) {
+    val c = Canone.colors
     var day by remember { mutableIntStateOf(0) }
     val segs by Cams.records.collectAsState()
     val busy by Cams.searching.collectAsState()
-    LaunchedEffect(ch, day) {
-        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -day); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0) }
-        val from = (cal.timeInMillis / 1000).toInt()
-        Cams.search(ch, from, from + 86_399)
-    }
+    val playing by Cams.playing.collectAsState()
+    val pt by Cams.playTime.collectAsState()
+    val dayStart = remember(day) { (Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -day); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis / 1000).toInt() }
+    LaunchedEffect(ch, dayStart) { Cams.search(ch, dayStart, dayStart + 86_399) }
+    // istante sotto la lancetta (secondi)
+    var at by remember(dayStart) { mutableStateOf(if (day == 0) (System.currentTimeMillis() / 1000).toInt() - 60 else dayStart + 12 * 3600) }
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(segs) { if (!dragging && playing != ch) segs.maxByOrNull { it.end }?.let { at = (it.end - 30).coerceAtLeast(it.start) } }
+    // durante la riproduzione la lancetta segue il video (orologio del video, o un secondo alla volta)
+    LaunchedEffect(playing, ch) { while (playing == ch) { kotlinx.coroutines.delay(1000); if (!dragging) Cams.playTime.value = Cams.playTime.value + 1 } }
+    LaunchedEffect(pt, playing) { if (playing == ch && !dragging && pt > 0) at = pt }
+    val pxPerSec = with(LocalDensity.current) { 90.dp.toPx() } / 3600f   // un'ora = 90dp
     Column(
-        Modifier.padding(horizontal = Space.s4).fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(28.dp))
-            .drop(true, corner = 28.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.86f)).padding(Space.s3),
+        Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(RoundedCornerShape(28.dp))
+            .drop(true, corner = 28.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.80f)).padding(vertical = Space.s3),
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.padding(horizontal = Space.s3).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             (0..6).forEach { d ->
                 val label = when (d) { 0 -> "Oggi"; 1 -> "Ieri"; else -> SimpleDateFormat("EEE d", Locale.ITALY).format(Date(System.currentTimeMillis() - d * 86_400_000L)) }
-                Box(
-                    Modifier.clip(CircleShape).background(if (d == day) Canone.colors.accent else Color.White.copy(alpha = 0.10f)).dropClickable({ day = d }, corner = 16.dp).padding(horizontal = 12.dp, vertical = 6.dp),
-                ) { Text(label, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White) }
-            }
-        }
-        if (segs.isEmpty()) Text(if (busy) "…" else "Niente", style = CanoneType.body, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(Space.s2))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(segs) { s ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).dropClickable({ Cams.play(ch, s.start) }, corner = 14.dp).padding(horizontal = Space.s3, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
-                ) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(if (s.type and 2 != 0) Tint.third else Canone.colors.accent))
-                    Text(hm(s.start) + " – " + hm(s.end), style = CanoneType.body, color = Color.White, modifier = Modifier.weight(1f))
-                    Text("${(s.end - s.start + 59) / 60} min", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.6f))
+                Box(Modifier.clip(CircleShape).background(if (d == day) c.accent else Color.White.copy(alpha = 0.10f)).dropClickable({ day = d }, corner = 16.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text(label, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
                 }
             }
+        }
+        Text(
+            SimpleDateFormat("HH:mm:ss", Locale.ITALY).format(Date(at * 1000L)) + if (busy && segs.isEmpty()) "  …" else if (segs.isEmpty()) "  · niente registrato" else "",
+            style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Color.White,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Canvas(
+            Modifier.fillMaxWidth().height(64.dp).pointerInput(ch, dayStart) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true },
+                    onDragEnd = { dragging = false; Cams.play(ch, at) },
+                    onDragCancel = { dragging = false },
+                ) { ch2, dx -> ch2.consume(); at = (at - dx / pxPerSec).toInt().coerceIn(dayStart, dayStart + 86_399) }
+            }.pointerInput(ch, dayStart, segs) {
+                detectTapGestures { o -> at = (at + (o.x - size.width / 2f) / pxPerSec).toInt().coerceIn(dayStart, dayStart + 86_399); Cams.play(ch, at) }
+            },
+        ) {
+            val mid = size.width / 2f
+            fun x(t: Int) = mid + (t - at) * pxPerSec
+            val trackY = size.height * 0.42f; val th = size.height * 0.30f
+            drawRoundRect(Color.White.copy(alpha = 0.08f), Offset(x(dayStart), trackY - th / 2), Size(86_400 * pxPerSec, th), androidx.compose.ui.geometry.CornerRadius(th / 2))
+            segs.forEach { s ->
+                val a = x(s.start); val b = x(s.end)
+                if (b > 0 && a < size.width) drawRoundRect(if (s.type and 2 != 0) Tint.third else c.accent, Offset(a, trackY - th / 2), Size((b - a).coerceAtLeast(3f), th), androidx.compose.ui.geometry.CornerRadius(4f))
+            }
+            for (hh in 0..24) {
+                val xx = x(dayStart + hh * 3600)
+                if (xx < -40 || xx > size.width + 40) continue
+                drawLine(Color.White.copy(alpha = 0.35f), Offset(xx, trackY + th / 2 + 4f), Offset(xx, trackY + th / 2 + 12f), 2f)
+                drawContext.canvas.nativeCanvas.drawText("%02d".format(hh % 24), xx, size.height - 2f, android.graphics.Paint().apply { color = 0x99FFFFFF.toInt(); textSize = 26f; textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true })
+            }
+            // lancetta
+            drawLine(Color.White, Offset(mid, 2f), Offset(mid, trackY + th / 2 + 6f), 4f, StrokeCap.Round)
         }
     }
 }
 
-/** Riquadro della Home: carosello delle cam dal vivo; un tocco apre la pagina. */
+/**
+ * Riquadro della Home: carosello delle cam dal vivo che si scorre col dito. Tocco = pagina completa;
+ * pressione lunga = la card si allarga lì in Home, con i comandi in una bolla che si apre in barra.
+ */
 @Composable
-fun CamsTile(r: Router, modifier: Modifier, index: Int) {
+fun CamsTile(r: Router, modifier: Modifier, index: Int, big: Boolean = false, onBig: (Boolean) -> Unit = {}) {
     val list = camList()
     LaunchedEffect(Unit) { Cams.ensure(r) }
-    // in secondo piano niente flussi, al ritorno sono già pronti
     val life = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(life) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
@@ -336,19 +369,44 @@ fun CamsTile(r: Router, modifier: Modifier, index: Int) {
         life.addObserver(obs); onDispose { life.removeObserver(obs) }
     }
     val pages = androidx.compose.foundation.pager.rememberPagerState { list.size.coerceAtLeast(1) }
-    LaunchedEffect(list.size) { while (list.size > 1) { kotlinx.coroutines.delay(4000); pages.animateScrollToPage((pages.currentPage + 1) % list.size) } }
-    GlassTile(modifier, Tint.blue, index, { Cams.ui.value = true }) {
+    val dragged by pages.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(list.size, dragged, big) { while (list.size > 1 && !dragged && !big) { kotlinx.coroutines.delay(4000); pages.animateScrollToPage((pages.currentPage + 1) % list.size) } }
+    var menu by remember { mutableStateOf(false) }
+    LaunchedEffect(big) { if (!big) menu = false }
+    androidx.activity.compose.BackHandler(enabled = big) { onBig(false) }
+    GlassTile(modifier, Tint.blue, index, { if (big) Cams.ui.value = true else Cams.ui.value = true }, { onBig(!big) }) {
         if (r.prefs.camId.isEmpty()) Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.SpaceBetween) {
             IconBubble(1)
             Text("Telecamere", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = OnGlass)
         } else {
-            androidx.compose.foundation.pager.HorizontalPager(pages, Modifier.fillMaxSize(), userScrollEnabled = false) { p ->
+            androidx.compose.foundation.pager.HorizontalPager(pages, Modifier.fillMaxSize(), pageSpacing = 0.dp) { p ->
                 val ch = list.getOrNull(p)
                 if (ch != null) CamView(ch, Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0D)))
             }
             Chip(list.getOrNull(pages.currentPage)?.let { "${it + 1}" } ?: "…", Modifier.align(Alignment.TopStart).padding(Space.s3), dot = Color(0xFFFF453A))
             if (list.size > 1) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 repeat(list.size) { i -> Box(Modifier.size(if (i == pages.currentPage) 12.dp else 5.dp, 5.dp).clip(CircleShape).background(Color.White.copy(alpha = if (i == pages.currentPage) 1f else 0.45f))) }
+            }
+            // comandi: una bolla nell'angolo che si allarga in barra
+            if (big) {
+                val ch = list.getOrNull(pages.currentPage) ?: 0
+                val w by androidx.compose.animation.core.animateDpAsState(if (menu) 248.dp else 46.dp, androidx.compose.animation.core.spring(0.72f, 380f), label = "bolla")
+                Row(
+                    Modifier.align(Alignment.BottomEnd).padding(Space.s3).width(w).height(46.dp).clip(CircleShape)
+                        .drop(true, tint = Color(0xFF1C1C1E).copy(alpha = 0.7f)),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End,
+                ) {
+                    if (w > 120.dp) {
+                        listOf(15 to "smart", 13 to "light", 14 to "ir").forEach { (g, m) ->
+                            Box(Modifier.size(40.dp).clip(CircleShape).dropClickable({ Cams.light(ch, m) }, corner = 20.dp), contentAlignment = Alignment.Center) { TabGlyph(g, Color.White, false, Modifier.size(20.dp)) }
+                        }
+                        Box(Modifier.size(40.dp).clip(CircleShape).dropClickable({ Cams.ui.value = true }, corner = 20.dp), contentAlignment = Alignment.Center) { TabGlyph(19, Color.White, false, Modifier.size(18.dp)) }
+                        Box(Modifier.size(40.dp).clip(CircleShape).dropClickable({ onBig(false) }, corner = 20.dp), contentAlignment = Alignment.Center) { TabGlyph(20, Color.White, false, Modifier.size(18.dp)) }
+                    }
+                    Box(Modifier.size(46.dp).clip(CircleShape).dropClickable({ menu = !menu }, corner = 23.dp), contentAlignment = Alignment.Center) {
+                        Text(if (menu) "×" else "•••", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                    }
+                }
             }
         }
     }
