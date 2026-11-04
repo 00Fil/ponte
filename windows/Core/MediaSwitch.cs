@@ -77,7 +77,7 @@ public sealed class MediaSwitch
                 }
                 else
                 {
-                    if (a == "pause") _quietUntil = DateTime.UtcNow.AddSeconds(5);
+                    if (a == "pause") { _quietUntil = DateTime.UtcNow.AddMilliseconds(1200); _playing = false; }
                     var s = await CurrentAsync();
                     if (s != null)
                     {
@@ -108,7 +108,7 @@ public sealed class MediaSwitch
 
     public void OnPauseReq()
     {
-        _quietUntil = DateTime.UtcNow.AddSeconds(5);
+        _quietUntil = DateTime.UtcNow.AddMilliseconds(1200); _playing = false;
         _ = PauseAsync();
     }
 
@@ -128,10 +128,10 @@ public sealed class MediaSwitch
                 {
                     var was = _playing;
                     Poll();
-                    if (was != _playing || ++_beat % 8 == 0) await AnnounceAsync();
+                    if (was != _playing || ++_beat % 32 == 0) await AnnounceAsync();
                 }
                 catch (Exception) { }
-                await Task.Delay(1_000);
+                await Task.Delay(250);
             }
         });
     }
@@ -151,11 +151,12 @@ public sealed class MediaSwitch
         var now = DateTime.UtcNow;
         if (Loud())
         {
+            if (now < _quietUntil) return;
             _lastLoud = now;
             if (_playing) return;
             _playing = true;
             _startedAt = now;
-            if (now < _quietUntil || !_r.S.AutoPause) return;
+            if (!_r.S.AutoPause) return;
             // Se questo PC sta mandando il suo audio a un altro dispositivo non è un nuovo contenuto.
             if (_r.Audio.SinkId != null) return;
             var lockedBy = _r.Hp.LockedBy;
@@ -174,7 +175,7 @@ public sealed class MediaSwitch
         if (_r.Hp.LockedBy == _r.DeviceId) return;
         if (_r.Audio.SinkId != null) return;
         if (DateTime.UtcNow - _startedAt < TimeSpan.FromSeconds(2) && string.CompareOrdinal(_r.DeviceId, from) < 0) return;
-        _quietUntil = DateTime.UtcNow.AddSeconds(5);
+        _quietUntil = DateTime.UtcNow.AddMilliseconds(1200); _playing = false;
         _ = PauseAsync();
     }
 
@@ -183,7 +184,7 @@ public sealed class MediaSwitch
     {
         if (!_r.S.AutoPause || !_playing) return;
         if (_r.Hp.LockedBy == _r.DeviceId || _r.Audio.SinkId != null) return;
-        _quietUntil = DateTime.UtcNow.AddSeconds(5);
+        _quietUntil = DateTime.UtcNow.AddMilliseconds(1200); _playing = false;
         _ = PauseAsync();
         _r.Notify.Show("Relay", "Ora usi " + _r.DeviceName(from), "Audio fermato su questo dispositivo");
     }

@@ -97,7 +97,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         val now = System.currentTimeMillis()
         if (now < quietUntil) return
         val newer = remoteSince.entries.any { (id, t) -> id != r.deviceId && t > startedAt + 1_000 && remote[id]?.playing != false }
-        if (newer) { quietUntil = now + 5_000; r.scope.launch { pause() } }
+        if (newer) { quietUntil = now + 1_200; r.scope.launch { pause() } }
     }
 
     private var routeOff: kotlinx.coroutines.Job? = null
@@ -124,7 +124,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     }
 
     /** Qualcuno (dalla Home di un altro dispositivo) chiede di fermare l'audio qui. */
-    fun onPauseReq() { quietUntil = System.currentTimeMillis() + 5_000; r.scope.launch { pause() } }
+    fun onPauseReq() { quietUntil = System.currentTimeMillis() + 1_200; r.scope.launch { pause() } }
 
     /** Ferma l'audio su un dispositivo (anche questo). */
     fun stopOn(id: String) = cmd(id, "pause")
@@ -142,7 +142,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     fun onCmd(m: JSONObject) = runLocal(m.optString("a"), m.optLong("v"))
 
     private fun runLocal(a: String, v: Long) {
-        if (a == "pause") quietUntil = System.currentTimeMillis() + 5_000
+        if (a == "pause") quietUntil = System.currentTimeMillis() + 1_200
         if (a == "vol") {
             val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             am.setStreamVolume(AudioManager.STREAM_MUSIC, (v * max / 100).toInt().coerceIn(0, max), 0)
@@ -159,7 +159,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
 
     fun start() {
         r.scope.launch { while (true) { delay(8_000); announce() } }
-        r.scope.launch { while (true) { delay(2_000); if (am.isMusicActive != playing) onChange(am.isMusicActive); enforce() } }
+        r.scope.launch { while (true) { delay(500); if (am.isMusicActive != playing) onChange(am.isMusicActive); enforce() } }
         am.registerAudioPlaybackCallback(object : AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
                 onChange(am.isMusicActive)
@@ -193,7 +193,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         if (!am.isMusicActive) return
         // Partiti insieme: resta acceso quello con l'id minore.
         if (System.currentTimeMillis() - startedAt < 2_000 && r.deviceId < from) return
-        quietUntil = System.currentTimeMillis() + 5_000
+        quietUntil = System.currentTimeMillis() + 1_200
         r.scope.launch { pause() }
     }
 
@@ -201,7 +201,7 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
     fun yieldTo(from: String) {
         if (!r.prefs.autoPause || !am.isMusicActive) return
         if (r.headphones.lockedBy.value == r.deviceId || r.audio.activeSource.value != null) return
-        quietUntil = System.currentTimeMillis() + 5_000
+        quietUntil = System.currentTimeMillis() + 1_200
         r.scope.launch { pause() }
         Notify.say(ctx, "Ora usi " + r.deviceName(from), "Audio fermato su questo dispositivo", "Riprendi", onAction = { play() })
     }
