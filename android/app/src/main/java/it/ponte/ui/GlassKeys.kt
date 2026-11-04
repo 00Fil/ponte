@@ -127,19 +127,11 @@ private fun GlassShape(path: () -> android.graphics.Path, size: Dp, tint: Color,
     val effect = remember(size, d.density, shader) {
         if (shader == null) null else with(d) {
             val m = margin.toPx(); val s = size.toPx()
-            lensEffect(LensParams(s + 2 * m, s + 2 * m, s, s, s / 2f, s * 0.55f, s * 0.22f, 0.35f, 1.5f, 0.22f, 3.dp.toPx()), shader)
+            lensEffect(LensParams(s + 2 * m, s + 2 * m, s, s, s / 2f, s * 0.6f, s * 0.30f, 0.5f, 1.6f, 0.32f, 1.5f.dp.toPx()), shader)
         }
     }
     val shape = remember(path, version) { GenericShape { _, _ -> addPath(path().asComposePath()) } }
     Box(modifier.size(size).onGloballyPositioned { origin = it.positionInRoot() }) {
-        // alone esterno appena accennato
-        Canvas(Modifier.size(size)) {
-            val c = drawContext.canvas.nativeCanvas
-            c.drawPath(path(), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                style = android.graphics.Paint.Style.FILL; color = tint.copy(alpha = tint.alpha * 0.30f).toArgb()
-                maskFilter = android.graphics.BlurMaskFilter(this@Canvas.size.minDimension * 0.10f + 1f, android.graphics.BlurMaskFilter.Blur.OUTER)
-            })
-        }
         if (backdrop != null && effect != null) {
             // corpo di vetro: il fondo rifratto, ritagliato alla forma del simbolo
             Box(Modifier.size(size).graphicsLayer { clip = true; this.shape = shape }) {
@@ -153,17 +145,35 @@ private fun GlassShape(path: () -> android.graphics.Path, size: Dp, tint: Color,
             }
         }
         Canvas(Modifier.size(size)) {
-            val p = path().asComposePath()
-            val w = this.size.width; val h = this.size.height
-            clipPath(p) {
-                if (backdrop == null || effect == null) drawPath(p, Brush.verticalGradient(listOf(tint.copy(alpha = tint.alpha * 0.96f), tint.copy(alpha = tint.alpha * 0.82f))))
-                else drawPath(p, Brush.verticalGradient(listOf(tint.copy(alpha = 0.34f), tint.copy(alpha = 0.18f))))
-                // bordo che prende luce (alto a sinistra) e ombra leggera (basso a destra)
-                drawPath(p, Brush.linearGradient(0f to tint.copy(alpha = 0.95f), 0.45f to Color.Transparent, start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(w * 0.12f))
-                drawPath(p, Brush.linearGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.22f), start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(w * 0.10f))
-                // riflesso
-                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), Offset(w * 0.32f, h * 0.24f), w * 0.30f), w * 0.30f, Offset(w * 0.32f, h * 0.24f))
-            }
+            val path0 = path()
+            val w = this.size.width; val h = this.size.height; val m = minOf(w, h)
+            val c = drawContext.canvas.nativeCanvas
+            val glassy = backdrop != null && effect != null
+            fun paint(block: android.graphics.Paint.() -> Unit) = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply(block)
+            fun shifted(dx: Float, dy: Float) = android.graphics.Path(path0).apply { offset(dx, dy) }
+            // tutto in un livello a parte: niente ombre fuori dalla forma, solo volume dentro
+            c.saveLayer(null, null)
+            // neve: bianco pieno; col fondo rifratto resta un velo che lo lascia vedere
+            c.drawPath(path0, paint { style = android.graphics.Paint.Style.FILL; color = tint.copy(alpha = tint.alpha * (if (glassy) 0.62f else 0.94f)).toArgb() })
+            // il bordo in basso a destra diventa più trasparente: lì il vetro è sottile e la luce passa (si vede la rifrazione)
+            c.drawPath(shifted(-m * 0.05f, -m * 0.06f), paint {
+                style = android.graphics.Paint.Style.FILL; color = android.graphics.Color.argb(if (glassy) 150 else 70, 0, 0, 0)
+                maskFilter = android.graphics.BlurMaskFilter(m * 0.07f + 1f, android.graphics.BlurMaskFilter.Blur.OUTER)
+                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT)
+            })
+            // spessore: il bordo in alto a sinistra è più denso e bianco, come vetro curvo visto di taglio
+            c.drawPath(shifted(m * 0.04f, m * 0.05f), paint {
+                style = android.graphics.Paint.Style.FILL; color = tint.copy(alpha = 1f).toArgb()
+                maskFilter = android.graphics.BlurMaskFilter(m * 0.06f + 1f, android.graphics.BlurMaskFilter.Blur.OUTER)
+                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP)
+            })
+            // spigolo vivo: una linea sottile e netta lungo il bordo alto, che sfuma verso il basso
+            c.drawPath(path0, paint {
+                style = android.graphics.Paint.Style.STROKE; strokeWidth = m * 0.035f
+                shader = android.graphics.LinearGradient(0f, 0f, w * 0.6f, h, tint.copy(alpha = 1f).toArgb(), android.graphics.Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
+                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_ATOP)
+            })
+            c.restore()
         }
     }
 }
