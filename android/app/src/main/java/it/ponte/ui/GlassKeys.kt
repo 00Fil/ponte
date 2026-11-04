@@ -2,165 +2,225 @@ package it.ponte.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.translate
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/** Simboli dei comandi senza bolla: forme piene, angoli smussati, materiale delle gocce (lattiginoso con riflesso in alto). */
+/** Simboli dei comandi senza bolla: forme piene e smussate fatte di vetro che rifrange quello che c'è sotto. */
 enum class GK { PREV, NEXT, BACK15, FWD15, DOWN, DEVICES }
+
+/** Ciò che sta dietro ai tasti: il [layer] registrato e la sua posizione sullo schermo. */
+class Backdrop(val layer: GraphicsLayer, val pos: () -> Offset)
 
 private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
 
-/** Riempie i poligoni con angoli arrotondati, ombra morbida e luce dall'alto. */
-private fun polyPath(p: List<Offset>) = android.graphics.Path().apply { if (p.isNotEmpty()) { moveTo(p[0].x, p[0].y); p.drop(1).forEach { lineTo(it.x, it.y) }; close() } }
+private fun poly(vararg p: Offset) = android.graphics.Path().apply { moveTo(p[0].x, p[0].y); p.drop(1).forEach { lineTo(it.x, it.y) }; close() }
 
-private fun DrawScope.glassPolys(polys: List<List<Offset>>, corner: Float, tint: Color) {
-    val path = android.graphics.Path()
-    polys.forEach { path.addPath(polyPath(it)) }
-    glassPath(path, corner, tint)
+/** Arrotonda gli angoli di una forma piena. */
+private fun rounded(src: android.graphics.Path, corner: Float): android.graphics.Path {
+    val out = android.graphics.Path()
+    android.graphics.Paint().apply { style = android.graphics.Paint.Style.FILL; pathEffect = android.graphics.CornerPathEffect(corner) }.getFillPath(src, out)
+    return out
 }
 
-private fun DrawScope.glassPath(path: android.graphics.Path, corner: Float, tint: Color) {
-    val c = drawContext.canvas.nativeCanvas
-    val fx = android.graphics.CornerPathEffect(corner)
-    // bagliore esterno dello stesso colore: vetro opaco che diffonde luce intorno
-    val halo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL_AND_STROKE; strokeWidth = size.minDimension * 0.06f; pathEffect = fx
-        color = tint.copy(alpha = tint.alpha * 0.45f).toArgb()
-        maskFilter = android.graphics.BlurMaskFilter(size.minDimension * 0.16f + 2f, android.graphics.BlurMaskFilter.Blur.OUTER)
-    }
-    c.drawPath(path, halo)
-    val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL; pathEffect = fx
-        shader = android.graphics.LinearGradient(0f, 0f, 0f, size.height, tint.copy(alpha = tint.alpha * 0.96f).toArgb(), tint.copy(alpha = tint.alpha * 0.84f).toArgb(), android.graphics.Shader.TileMode.CLAMP)
-    }
-    c.drawPath(path, fill)
-    val gloss = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE; strokeWidth = size.minDimension * 0.035f; pathEffect = fx
-        shader = android.graphics.LinearGradient(0f, 0f, 0f, size.height * 0.5f, Color.White.copy(alpha = 0.55f).toArgb(), Color.Transparent.toArgb(), android.graphics.Shader.TileMode.CLAMP)
-    }
-    c.drawPath(path, gloss)
+/** Contorno di un tratto (linea spessa) come forma piena. */
+private fun stroked(src: android.graphics.Path, width: Float): android.graphics.Path {
+    val out = android.graphics.Path()
+    android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = width; strokeCap = android.graphics.Paint.Cap.ROUND; strokeJoin = android.graphics.Paint.Join.ROUND }.getFillPath(src, out)
+    return out
 }
 
-/** Play che diventa pausa (e viceversa) trasformando la forma: [t] 0 = play, 1 = pausa. Le due metà del triangolo si fondono in una sola forma. */
-private fun DrawScope.playPause(t: Float, tint: Color) {
-    val w = size.width; val h = size.height
+private fun mirror(p: android.graphics.Path, w: Float) = p.apply { transform(android.graphics.Matrix().apply { setScale(-1f, 1f, w / 2, 0f) }) }
+
+/** Forma del play/pausa: [t] 0 = play (un solo triangolo), 1 = pausa (due barre). */
+private fun playPausePath(w: Float, h: Float, t: Float): android.graphics.Path {
     val x0 = w * 0.24f; val x1 = w * 0.88f; val y0 = h * 0.12f; val y1 = h * 0.88f; val ym = h * 0.5f
-    val xm = (x0 + x1) / 2; val q = (ym - y0) / 2
+    val xm = (x0 + x1) / 2
     val p0 = w * 0.18f; val p1 = w * 0.41f; val p2 = w * 0.59f; val p3 = w * 0.82f; val b0 = h * 0.13f; val b1 = h * 0.87f
     fun P(ax: Float, ay: Float, bx: Float, by: Float) = Offset(lerpF(ax, bx, t), lerpF(ay, by, t))
-    // da play le metà si sovrappongono un poco, così l'unione non lascia fessure
-    val over = (1f - t) * w * 0.03f
-    // il prolungamento resta sulla stessa retta dei lati del triangolo: nessun gradino tra le due metà
-    val lx = xm + over
-    val f = (lx - x0) / (x1 - x0)
-    val left = listOf(P(x0, y0, p0, b0), P(lx, y0 + (ym - y0) * f, p1, b0), P(lx, y1 - (y1 - ym) * f, p1, b1), P(x0, y1, p0, b1))
-    val right = listOf(P(xm, y0 + q, p2, b0), P(x1, ym, p3, b0), P(x1, ym, p3, b1), P(xm, y1 - q, p2, b1))
-    val path = polyPath(left)
-    path.op(polyPath(right), android.graphics.Path.Op.UNION)
-    glassPath(path, w * 0.09f, tint)
+    fun top(x: Float) = y0 + (ym - y0) * (x - x0) / (x1 - x0)
+    fun bot(x: Float) = y1 - (y1 - ym) * (x - x0) / (x1 - x0)
+    // le due metà si sovrappongono restando sulle rette dei lati: unite danno il triangolo esatto
+    val lx = xm + (1f - t) * w * 0.05f
+    val left = poly(P(x0, y0, p0, b0), P(lx, top(lx), p1, b0), P(lx, bot(lx), p1, b1), P(x0, y1, p0, b1))
+    val right = poly(P(xm, top(xm), p2, b0), P(x1, ym, p3, b0), P(x1, ym, p3, b1), P(xm, bot(xm), p2, b1))
+    left.op(right, android.graphics.Path.Op.UNION)
+    return rounded(left, w * 0.09f)
 }
 
-private fun DrawScope.glyph(g: GK, tint: Color) {
-    val w = size.width; val h = size.height
-    when (g) {
-        GK.NEXT, GK.PREV -> scale(if (g == GK.PREV) -1f else 1f, 1f) {
-            val a = listOf(Offset(w * 0.04f, h * 0.18f), Offset(w * 0.50f, h * 0.5f), Offset(w * 0.04f, h * 0.82f))
-            val b = listOf(Offset(w * 0.48f, h * 0.18f), Offset(w * 0.94f, h * 0.5f), Offset(w * 0.48f, h * 0.82f))
-            glassPolys(listOf(a, b), w * 0.09f, tint)
+private fun glyphPath(g: GK, w: Float, h: Float): android.graphics.Path = when (g) {
+    GK.NEXT, GK.PREV -> {
+        val p = poly(Offset(w * 0.04f, h * 0.18f), Offset(w * 0.50f, h * 0.5f), Offset(w * 0.04f, h * 0.82f))
+        p.op(poly(Offset(w * 0.48f, h * 0.18f), Offset(w * 0.94f, h * 0.5f), Offset(w * 0.48f, h * 0.82f)), android.graphics.Path.Op.UNION)
+        val r = rounded(p, w * 0.09f)
+        if (g == GK.PREV) mirror(r, w) else r
+    }
+    GK.BACK15, GK.FWD15 -> {
+        // freccia circolare in senso orario con la punta in alto
+        val r = w * 0.40f; val cx = w / 2; val cy = h / 2
+        val arc = android.graphics.Path().apply { addArc(cx - r, cy - r, cx + r, cy + r, -30f, 290f) }
+        val p = stroked(arc, w * 0.10f)
+        p.op(rounded(poly(Offset(cx + w * 0.13f, cy - r), Offset(cx - w * 0.07f, cy - r - w * 0.15f), Offset(cx - w * 0.07f, cy - r + w * 0.15f)), w * 0.035f), android.graphics.Path.Op.UNION)
+        if (g == GK.BACK15) mirror(p, w) else p
+    }
+    GK.DOWN -> stroked(android.graphics.Path().apply { moveTo(w * 0.16f, h * 0.36f); lineTo(w * 0.5f, h * 0.66f); lineTo(w * 0.84f, h * 0.36f) }, w * 0.14f)
+    GK.DEVICES -> {
+        val body = android.graphics.Path().apply { addRoundRect(w * 0.22f, h * 0.04f, w * 0.78f, h * 0.96f, w * 0.16f, w * 0.16f, android.graphics.Path.Direction.CW) }
+        val holes = android.graphics.Path().apply {
+            addCircle(w * 0.5f, h * 0.63f, w * 0.15f, android.graphics.Path.Direction.CW)
+            addCircle(w * 0.5f, h * 0.26f, w * 0.06f, android.graphics.Path.Direction.CW)
         }
-        GK.BACK15, GK.FWD15 -> scale(if (g == GK.BACK15) -1f else 1f, 1f) {
-            // freccia circolare in senso orario con la punta in alto
-            val r = w * 0.40f; val cx = w / 2; val cy = h / 2; val sw = w * 0.085f
+        body.op(holes, android.graphics.Path.Op.DIFFERENCE); body
+    }
+}
+
+/**
+ * Il simbolo di vetro: dentro la forma si vede quello che c'è dietro, piegato e ingrandito come da una lente spessa, un po' sfocato e
+ * lattiginoso; i bordi prendono luce in alto a sinistra e un'ombra leggera in basso; intorno un alone appena accennato.
+ * Senza [backdrop] (o prima di Android 13) resta il vetro opaco bianco.
+ */
+@Composable
+private fun GlassShape(path: () -> android.graphics.Path, size: Dp, tint: Color, backdrop: Backdrop?, modifier: Modifier = Modifier, version: Float = 0f) {
+    val d = LocalDensity.current
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    val margin = 18.dp
+    val shader = remember { if (android.os.Build.VERSION.SDK_INT >= 33 && backdrop != null) android.graphics.RuntimeShader(GLASS_AGSL) else null }
+    val effect = remember(size, d.density, shader) {
+        if (shader == null) null else with(d) {
+            val m = margin.toPx(); val s = size.toPx()
+            lensEffect(LensParams(s + 2 * m, s + 2 * m, s, s, s / 2f, s * 0.55f, s * 0.22f, 0.35f, 1.5f, 0.22f, 3.dp.toPx()), shader)
+        }
+    }
+    val shape = remember(path, version) { GenericShape { _, _ -> addPath(path().asComposePath()) } }
+    Box(modifier.size(size).onGloballyPositioned { origin = it.positionInRoot() }) {
+        // alone esterno appena accennato
+        Canvas(Modifier.size(size)) {
             val c = drawContext.canvas.nativeCanvas
-            val arc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                style = android.graphics.Paint.Style.STROKE; strokeWidth = sw; strokeCap = android.graphics.Paint.Cap.ROUND
-                color = tint.copy(alpha = tint.alpha * 0.92f).toArgb()
+            c.drawPath(path(), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                style = android.graphics.Paint.Style.FILL; color = tint.copy(alpha = tint.alpha * 0.30f).toArgb()
+                maskFilter = android.graphics.BlurMaskFilter(this@Canvas.size.minDimension * 0.10f + 1f, android.graphics.BlurMaskFilter.Blur.OUTER)
+            })
+        }
+        if (backdrop != null && effect != null) {
+            // corpo di vetro: il fondo rifratto, ritagliato alla forma del simbolo
+            Box(Modifier.size(size).graphicsLayer { clip = true; this.shape = shape }) {
+                Box(
+                    Modifier.requiredSize(size + margin * 2).graphicsLayer { renderEffect = effect }
+                        .drawBehind {
+                            val m = margin.toPx(); val o = origin - backdrop.pos()
+                            translate(-(o.x - m), -(o.y - m)) { drawLayer(backdrop.layer) }
+                        },
+                )
             }
-            c.drawArc(cx - r, cy - r, cx + r, cy + r, -30f, 290f, false, arc)
-            val tip = Offset(cx + w * 0.12f, cy - r)
-            glassPolys(listOf(listOf(tip, Offset(cx - w * 0.06f, cy - r - w * 0.13f), Offset(cx - w * 0.06f, cy - r + w * 0.13f))), w * 0.035f, tint)
         }
-        GK.DOWN -> {
-            val p = androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.16f, h * 0.36f); lineTo(w * 0.5f, h * 0.66f); lineTo(w * 0.84f, h * 0.36f) }
-            drawPath(p, Color.Black.copy(alpha = 0.18f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.15f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-            drawPath(p, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.12f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-        }
-        GK.DEVICES -> {
-            val body = listOf(Offset(w * 0.22f, h * 0.06f), Offset(w * 0.78f, h * 0.06f), Offset(w * 0.78f, h * 0.94f), Offset(w * 0.22f, h * 0.94f))
-            glassPolys(listOf(body), w * 0.16f, tint)
-            drawCircle(Color.Black.copy(alpha = 0.35f), w * 0.15f, Offset(w * 0.5f, h * 0.63f))
-            drawCircle(Color.Black.copy(alpha = 0.35f), w * 0.06f, Offset(w * 0.5f, h * 0.26f))
+        Canvas(Modifier.size(size)) {
+            val p = path().asComposePath()
+            val w = this.size.width; val h = this.size.height
+            clipPath(p) {
+                if (backdrop == null || effect == null) drawPath(p, Brush.verticalGradient(listOf(tint.copy(alpha = tint.alpha * 0.96f), tint.copy(alpha = tint.alpha * 0.82f))))
+                else drawPath(p, Brush.verticalGradient(listOf(tint.copy(alpha = 0.34f), tint.copy(alpha = 0.18f))))
+                // bordo che prende luce (alto a sinistra) e ombra leggera (basso a destra)
+                drawPath(p, Brush.linearGradient(0f to tint.copy(alpha = 0.95f), 0.45f to Color.Transparent, start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(w * 0.12f))
+                drawPath(p, Brush.linearGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.22f), start = Offset(0f, 0f), end = Offset(w, h)), style = Stroke(w * 0.10f))
+                // riflesso
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), Offset(w * 0.32f, h * 0.24f), w * 0.30f), w * 0.30f, Offset(w * 0.32f, h * 0.24f))
+            }
         }
     }
 }
 
 /** Tasto senza contorno: il simbolo si gonfia con una molla al tocco e si muove nel senso del comando. */
 @Composable
-fun GlassKey(g: GK, size: Dp, onClick: () -> Unit, tint: Color = Color.White, label: String? = null) {
+fun GlassKey(g: GK, size: Dp, onClick: () -> Unit, tint: Color = Color.White, label: String? = null, backdrop: Backdrop? = null) {
     val t = rememberDropTouch()
     val kick = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val d = LocalDensity.current
+    val px = with(d) { size.toPx() }
+    val path = remember(g, px) { glyphPath(g, px, px) }
+    val get = remember(path) { { path } }
     Box(
         Modifier.size(size + 18.dp).graphicsLayer { val p = t.press.value; scaleX = 1f + 0.14f * p; scaleY = 1f + 0.14f * p }.clip(CircleShape)
             .dropGestures(t, { scope.launch { kick.snapTo(1f); kick.animateTo(0f, spring(0.45f, 260f)) }; onClick() }),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(size)) {
+        GlassShape(get, size, tint, backdrop, Modifier.graphicsLayer {
             val k = kick.value + 0.35f * t.press.value
             when (g) {
-                GK.BACK15 -> rotate(-70f * k) { glyph(g, tint) }
-                GK.FWD15 -> rotate(70f * k) { glyph(g, tint) }
-                GK.NEXT -> translate(this.size.width * 0.22f * k, 0f) { glyph(g, tint) }
-                GK.PREV -> translate(-this.size.width * 0.22f * k, 0f) { glyph(g, tint) }
-                GK.DOWN -> translate(0f, this.size.height * 0.2f * k) { glyph(g, tint) }
-                else -> glyph(g, tint)
+                GK.BACK15 -> rotationZ = -70f * k
+                GK.FWD15 -> rotationZ = 70f * k
+                GK.NEXT -> translationX = px * 0.22f * k
+                GK.PREV -> translationX = -px * 0.22f * k
+                GK.DOWN -> translationY = px * 0.2f * k
+                else -> {}
             }
-        }
+        })
         if (label != null) Text(label, style = CanoneType.footnote.copy(fontSize = (size.value * 0.30f).sp, fontWeight = FontWeight.Bold), color = tint)
     }
 }
 
-/** Play/pausa che si trasforma subito al tocco (senza aspettare il dispositivo), poi si allinea allo stato vero. */
+/** Play/pausa di vetro che si trasforma subito al tocco (senza aspettare il dispositivo), poi si allinea allo stato vero. */
 @Composable
-fun PlayPauseKey(playing: Boolean, size: Dp, onClick: () -> Unit, tint: Color = Color.White) {
+fun PlayPauseKey(playing: Boolean, size: Dp, onClick: () -> Unit, tint: Color = Color.White, backdrop: Backdrop? = null) {
     var shown by remember { mutableStateOf(playing) }
     var holdUntil by remember { mutableLongStateOf(0L) }
     LaunchedEffect(playing, holdUntil) { delay((holdUntil - System.currentTimeMillis()).coerceAtLeast(0)); shown = playing }
     val m by animateFloatAsState(if (shown) 1f else 0f, spring(0.72f, 900f), label = "playpausa")
     val t = rememberDropTouch()
+    val px = with(LocalDensity.current) { size.toPx() }
+    // la forma cambia a ogni passo dell'animazione: la si ricalcola solo quando serve
+    val cache = remember { arrayOf<Any?>(null, null) }
+    val get = remember(px) {
+        {
+            val k = m.coerceIn(0f, 1f)
+            if (cache[0] != k) { cache[0] = k; cache[1] = playPausePath(px, px, k) }
+            cache[1] as android.graphics.Path
+        }
+    }
     Box(
         Modifier.size(size + 18.dp).graphicsLayer { val p = t.press.value; scaleX = 1f + 0.12f * p; scaleY = 1f + 0.12f * p }.clip(CircleShape)
             .dropGestures(t, { shown = !shown; holdUntil = System.currentTimeMillis() + 2_500; onClick() }),
         contentAlignment = Alignment.Center,
-    ) { Canvas(Modifier.size(size)) { playPause(m.coerceIn(0f, 1f), tint) } }
+    ) {
+        GlassShape(get, size, tint, backdrop, version = m)
+    }
 }

@@ -80,7 +80,7 @@ val LocalBarInset = compositionLocalOf { 0.dp }
  * spostate di quantità diverse (aberrazione cromatica) e una saturazione più viva. La mappa di spostamento qui non è un'immagine:
  * si ricava dalla distanza dal bordo di un rettangolo arrotondato (capsula), quindi costa solo una passata di shader.
  */
-private const val GLASS_AGSL = """
+internal const val GLASS_AGSL = """
 uniform shader content;
 uniform float2 size;      // dimensione del nodo (vetro + margine)
 uniform float2 rectSize;  // dimensione del vetro visibile
@@ -116,12 +116,12 @@ half4 main(float2 fc) {
 }
 """
 
-private class LensParams(
+internal class LensParams(
     val w: Float, val h: Float, val rectW: Float, val rectH: Float, val radius: Float,
     val edge: Float, val amount: Float, val aberr: Float, val sat: Float, val magnify: Float, val blur: Float,
 )
 
-private fun lensEffect(p: LensParams, sh: Any? = null): RenderEffect? {
+internal fun lensEffect(p: LensParams, sh: Any? = null): RenderEffect? {
     if (Build.VERSION.SDK_INT >= 33) return lensEffect33(p, sh as? android.graphics.RuntimeShader)
     if (Build.VERSION.SDK_INT >= 31) {
         val sat = android.graphics.ColorMatrix().apply { setSaturation(p.sat) }

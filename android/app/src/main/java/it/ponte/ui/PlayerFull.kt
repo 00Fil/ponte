@@ -57,6 +57,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -193,24 +196,34 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
             .pointerInput(Unit) { detectVerticalDragGestures(onDragEnd = { if (dy > 160f) onClose(); dy = 0f }, onDragCancel = { dy = 0f }) { _, d -> if (!panel) dy += d } }
             .graphicsLayer { translationY = (dy * 0.4f).coerceAtLeast(0f) },
     ) {
-        // copertina sfocata dietro tutto: i colori arrivano fino in fondo
-        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.6f }.blur(60.dp), contentScale = ContentScale.Crop)
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to bottom.copy(alpha = 0.35f), 1f to bottom.copy(alpha = 0.85f))))
-
-        // copertina infinita: alta, ritagliata al centro; la parte bassa diventa trasparente e si fonde con i suoi stessi colori sotto
-        if (art != null) Box(
-            Modifier.fillMaxWidth().fillMaxHeight(0.72f)
-                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 0.75f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-                },
+        // tutto lo sfondo finisce in un livello: i tasti di vetro lo rifrangono
+        val bgLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+        var bgPos by remember { mutableStateOf(Offset.Zero) }
+        val glass = remember(bgLayer) { Backdrop(bgLayer) { bgPos } }
+        Box(
+            Modifier.fillMaxSize().onGloballyPositioned { bgPos = it.positionInRoot() }
+                .drawWithContent { bgLayer.record { this@drawWithContent.drawContent() }; drawLayer(bgLayer) },
         ) {
-            Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.16f).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))))
-        } else ParticlesField(Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(top, bottom))))
+            // copertina sfocata dietro tutto: i colori arrivano fino in fondo
+            if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.6f }.blur(60.dp), contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to bottom.copy(alpha = 0.35f), 1f to bottom.copy(alpha = 0.85f))))
 
-        Box(Modifier.statusBarsPadding().padding(start = 6.dp, top = 2.dp)) { GlassKey(GK.DOWN, 24.dp, onClose) }
+            // copertina infinita: alta, ritagliata al centro; la parte bassa diventa trasparente e si fonde con i suoi stessi colori sotto
+            if (art != null) Box(
+                Modifier.fillMaxWidth().fillMaxHeight(0.72f)
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 0.75f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                    },
+            ) {
+                Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxWidth().fillMaxHeight(0.16f).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))))
+            } else ParticlesField(Modifier.fillMaxSize())
+        }
+
+        Box(Modifier.statusBarsPadding().padding(start = 6.dp, top = 2.dp)) { GlassKey(GK.DOWN, 24.dp, onClose, backdrop = glass) }
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(start = 28.dp, end = 28.dp, bottom = 6.dp)) {
             Text(name(sel), style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp), color = Color.White.copy(alpha = 0.7f), maxLines = 1)
@@ -230,9 +243,9 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassKey(GK.PREV, 40.dp, { cmd(sel, "prev") })
-                PlayPauseKey(s?.playing == true, 50.dp, { cmd(sel, if (s?.playing == true) "pause" else "play") })
-                GlassKey(GK.NEXT, 40.dp, { cmd(sel, "next") })
+                GlassKey(GK.PREV, 40.dp, { cmd(sel, "prev") }, backdrop = glass)
+                PlayPauseKey(s?.playing == true, 50.dp, { cmd(sel, if (s?.playing == true) "pause" else "play") }, backdrop = glass)
+                GlassKey(GK.NEXT, 40.dp, { cmd(sel, "next") }, backdrop = glass)
             }
             Spacer(Modifier.height(10.dp))
 
@@ -245,9 +258,9 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
             Spacer(Modifier.height(6.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                GlassKey(GK.BACK15, 28.dp, { s?.let { cmd(sel, "seek", (it.pos - 15_000).coerceAtLeast(0)) } }, label = "15")
-                GlassKey(GK.DEVICES, 22.dp, { panel = true })
-                GlassKey(GK.FWD15, 28.dp, { s?.let { cmd(sel, "seek", if (it.dur > 0) (it.pos + 15_000).coerceAtMost(it.dur) else it.pos + 15_000) } }, label = "15")
+                GlassKey(GK.BACK15, 28.dp, { s?.let { cmd(sel, "seek", (it.pos - 15_000).coerceAtLeast(0)) } }, label = "15", backdrop = glass)
+                GlassKey(GK.DEVICES, 22.dp, { panel = true }, backdrop = glass)
+                GlassKey(GK.FWD15, 28.dp, { s?.let { cmd(sel, "seek", if (it.dur > 0) (it.pos + 15_000).coerceAtMost(it.dur) else it.pos + 15_000) } }, label = "15", backdrop = glass)
             }
         }
 
