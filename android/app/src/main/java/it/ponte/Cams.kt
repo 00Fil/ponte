@@ -22,6 +22,8 @@ object Cams {
     @Volatile private var nFrames = 0
     /** Collegato almeno una volta: gli stati 13-15 sono eventi dei canali, non perdita del collegamento. */
     val online = MutableStateFlow(false)
+    /** Canali collegati. */
+    val live = MutableStateFlow(setOf<Int>())
     private var key = ""
     private var ok = false
     private val lastAt = ConcurrentHashMap<Int, Long>()
@@ -46,8 +48,11 @@ object Cams {
         try {
             val h = c.nativeCreateConnector(id, false)
             handle = h
-            val r = c.nativeConnect(h, id, "", verify, count, 0, 0, 0, false)
-            if (r != 0) error.value = "Collegamento rifiutato ($r)"
+            // come l'app ufficiale: un collegamento per ogni canale del registratore
+            for (ch in 0 until count) {
+                val r = c.nativeConnect(h, id, "", verify, count, ch, ch, 40, false)
+                if (r != 0 && ch == 0) error.value = "Collegamento rifiutato ($r)"
+            }
         } catch (e: Throwable) { error.value = "Collegamento: ${e.message}" }
     }
 
@@ -56,7 +61,8 @@ object Cams {
     fun disconnect() {
         val c = engine() ?: return
         open.keys.toList().forEach { close(it) }
-        if (handle != 0L) try { c.nativeDisconnect(handle, 0) } catch (_: Throwable) {}
+        if (handle != 0L) for (ch in 0 until channels.value) try { c.nativeDisconnect(handle, ch) } catch (_: Throwable) {}
+        live.value = emptySet()
         status.value = -1
     }
 
@@ -91,6 +97,7 @@ object Cams {
     )
 
     @Volatile private var rgbaInfo = ""
+    private val bufs = ConcurrentHashMap<Int, java.nio.ByteBuffer>()
 
     /** Lettura della memoria del motore senza codice nativo nostro: Unsafe di sistema. */
     private object Native {
@@ -112,7 +119,9 @@ object Cams {
 
     private object Sink : JAConnectorV2.Sink {
         override fun status(key: String, st: Int, index: Int) {
-            if (st < 12) { status.value = st; online.value = st == 6 }
+            if (st == 6) live.value = live.value + index
+            else if (st in listOf(2, 3, 9, 10, 11, 12)) live.value = live.value - index
+            if (st < 12 && (st == 6 || live.value.isEmpty())) { status.value = st; online.value = st == 6 }
             if (st == 10) error.value = "Password errata"
             diag.value = "stato $st canale $index · fotogrammi $nFrames"
         }
@@ -124,9 +133,15 @@ object Cams {
                 // il fotogramma è già decodificato in RGBA nella memoria del motore: si copia subito, prima che venga riusata
                 if (ptr == 0L || len < w * h * 4 || channel != focus && System.currentTimeMillis() - (lastAt[channel] ?: 0L) < 120) return
                 lastAt[channel] = System.currentTimeMillis()
-                val bytes = Native.copy(ptr, w * h * 4) ?: return
+                val n = w * h * 4
+                val buf = bufs.getOrPut(channel) { java.nio.ByteBuffer.allocateDirect(n) }.let { if (it.capacity() < n) java.nio.ByteBuffer.allocateDirect(n).also { b -> bufs[channel] = b } else it }
+                if (!CamMem.ok) { rgbaInfo = "copia non disponibile"; return }
+                CamMem.copy(ptr, buf, n)
+                buf.rewind()
                 val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(bytes))
+                bmp.copyPixelsFromBuffer(buf)
+                buf.rewind()
+                rgbaInfo = "copia ok"
                 frame(channel).value = bmp
                 return
             }

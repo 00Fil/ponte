@@ -16,7 +16,9 @@ android {
         val build = (project.findProperty("ponteBuild") as String?)?.toIntOrNull() ?: 1
         versionCode = build
         versionName = "1.0.$build"
+        ndk { abiFilters += "arm64-v8a" }
     }
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
 
     // Firma fissa: ogni build firmata con la stessa chiave, così l'app può aggiornarsi da sola.
     // La chiave non sta nel repo: GitHub Actions la ricava dai segreti ANDROID_KEYSTORE_B64 e ANDROID_KEYSTORE_PASSWORD.

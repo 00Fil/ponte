@@ -74,6 +74,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
     val err by Cams.error.collectAsState()
     val n by Cams.channels.collectAsState()
     val diag by Cams.diag.collectAsState()
+    val live by Cams.live.collectAsState()
     LaunchedEffect(ready) { if (ready && Cams.status.value != 6 && Cams.status.value != 0) Cams.connect(r.prefs.camId, r.prefs.camUser, r.prefs.camPwd) }
     androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
@@ -90,7 +91,8 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                 if (!ready) CamSetup(r) { ready = true }
                 else LazyVerticalGrid(GridCells.Fixed(2), contentPadding = PaddingValues(Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                     items((0 until n).toList()) { ch ->
-                        DisposableEffect(ch, st) { if (st == 6) Cams.open(ch, false); onDispose { } }
+                        val on = ch in live
+                        DisposableEffect(ch, on) { if (on) Cams.open(ch, false); onDispose { } }
                         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(Radius.md)).dropClickable({ full = ch }, corner = Radius.md)) {
                             CamView(ch, Modifier.fillMaxSize())
                             Text("${ch + 1}", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).padding(horizontal = 7.dp, vertical = 2.dp))
@@ -130,7 +132,9 @@ private fun CamFull(r: Router, ch: Int, onBack: () -> Unit) {
 fun CamsTile(r: Router, modifier: Modifier, index: Int, onOpen: () -> Unit) {
     val st by Cams.status.collectAsState()
     LaunchedEffect(Unit) { if (r.prefs.camId.isNotEmpty() && r.prefs.camPwd.isNotEmpty() && Cams.status.value != 6 && Cams.status.value != 0) Cams.connect(r.prefs.camId, r.prefs.camUser, r.prefs.camPwd) }
-    DisposableEffect(st) { if (st == 6) Cams.open(0, false); onDispose { } }
+    val live by Cams.live.collectAsState()
+    val on0 = 0 in live
+    DisposableEffect(on0) { if (on0) Cams.open(0, false); onDispose { } }
     GlassTile(modifier, Tint.blue, index, onOpen) {
         CamView(0, Modifier.fillMaxSize())
         Row(Modifier.align(Alignment.TopStart).padding(Space.s3).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
