@@ -109,7 +109,11 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         if (!src) return
         if (p) {
             routeOff?.cancel(); routeOff = null
-            if (!was && r.headphones.holder.value == r.deviceId && r.audio.activeSource.value != from) r.audio.listenTo(from)
+            if (!was && r.headphones.holder.value == r.deviceId && r.audio.activeSource.value != from) {
+                r.audio.listenTo(from)
+                // se entro 3 secondi l'audio non arriva davvero, si annulla: il PC torna a suonare da sé
+                r.scope.launch { delay(3_000); if (r.audio.activeSource.value != from) r.audio.stopListening(from) }
+            }
         } else if (was && r.audio.activeSource.value == from) {
             routeOff?.cancel()
             routeOff = r.scope.launch { delay(30_000); if (remote[from]?.playing != true && r.audio.activeSource.value == from) r.audio.stopListening(from) }
@@ -159,6 +163,8 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
 
     fun start() {
         r.scope.launch { while (true) { delay(8_000); announce() } }
+        // all'avvio qui non arriva nessun audio: se un PC era rimasto a mandarlo a questo telefono, torna a suonare da sé
+        r.scope.launch { delay(6_000); if (r.audio.activeSource.value == null) r.devices.value.filter { "audio-src" in it.caps }.forEach { r.send(newMsg("audio.route", "to" to it.id, "sink" to null)) } }
         r.scope.launch { while (true) { delay(500); if (am.isMusicActive != playing) onChange(am.isMusicActive); enforce() } }
         am.registerAudioPlaybackCallback(object : AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
