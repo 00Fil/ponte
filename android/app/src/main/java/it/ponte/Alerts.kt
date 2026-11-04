@@ -25,6 +25,7 @@ object Notify {
     const val AUDIO = "audio"
     const val SERVICE = "relay_service"
     const val CAMS = "cams"
+    const val LIVE = "live"
 
     /** Quando l'app è in primo piano gli avvisi si mostrano dentro di lei, non come notifica. */
     @Volatile var foreground = false
@@ -35,6 +36,7 @@ object Notify {
         fun ch(id: String, name: String, imp: Int, quiet: Boolean = false) = nm.createNotificationChannel(NotificationChannel(id, name, imp).apply {
             if (quiet) { setSound(null, null); enableVibration(false) } else if (imp >= NotificationManager.IMPORTANCE_HIGH) enableVibration(true)
             setShowBadge(false)
+            if (id == LIVE || id == CAMS || id == TIMER) lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         })
         ch(REMINDERS, "Promemoria", NotificationManager.IMPORTANCE_HIGH)
         ch(TIMER, "Pomodoro", NotificationManager.IMPORTANCE_HIGH)
@@ -42,6 +44,7 @@ object Notify {
         ch(AUDIO, "Audio e cuffie", NotificationManager.IMPORTANCE_DEFAULT, true)
         ch(SERVICE, "Relay in esecuzione", NotificationManager.IMPORTANCE_MIN, true)
         ch(CAMS, "Telecamere", NotificationManager.IMPORTANCE_HIGH)
+        ch(LIVE, "Lock screen", NotificationManager.IMPORTANCE_LOW, true)
         // canali dei rilasci precedenti
         listOf("piano", "ponte", "aggiornamenti").forEach { nm.deleteNotificationChannel(it) }
     }

@@ -317,7 +317,7 @@ object Cams {
         val title = kind(a.type)
         val text = "Telecamera ${a.channel + 1} · " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(java.util.Date(a.time * 1000))
         val b = android.app.Notification.Builder(ctx, Notify.CAMS).setSmallIcon(R.drawable.ic_n_event).setContentTitle(title).setContentText(text)
-            .setAutoCancel(true).setContentIntent(Notify.open(ctx, 7100, "cams")).setColor(0xFF2F5FFF.toInt()).setCategory(android.app.Notification.CATEGORY_EVENT)
+            .setAutoCancel(true).setContentIntent(Notify.open(ctx, 7100, "cams")).setColor(0xFF2F5FFF.toInt()).setCategory(android.app.Notification.CATEGORY_EVENT).setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
         if (pic != null) b.setLargeIcon(pic).setStyle(android.app.Notification.BigPictureStyle().bigPicture(pic))
         ctx.getSystemService(android.app.NotificationManager::class.java).notify(7100 + (a.time % 1000).toInt(), b.build())
     }
