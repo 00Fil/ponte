@@ -84,6 +84,10 @@ private val ICONS: List<List<String>> = listOf(
     listOf("m15 3 6 0 0 6", "m9 21-6 0 0-6", "M21 3l-7 7", "M3 21l7-7"),
     // 20 shrink (riduci)
     listOf("m14 10 7-7", "M20 10h-6V4", "m3 21 7-7", "M4 14h6v6"),
+    // 21 activity (eventi)
+    listOf("M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"),
+    // 22 camera (foto)
+    listOf("M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z", circ(12f, 13f, 3f)),
 )
 
 @Composable

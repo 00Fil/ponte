@@ -139,7 +139,7 @@ object Cams {
         if (handle == 0L) return
         synchronized(found) { found.clear() }
         records.value = emptyList(); searching.value = true
-        try { c.nativeSearchRecord(handle, from, to, 15, ch, ch, 0) } catch (_: Throwable) { searching.value = false }
+        try { c.nativeSearchRecord(handle, from, to, 65535, ch, ch, 0) } catch (_: Throwable) { searching.value = false }
         io.launch { delay(12_000); searching.value = false }
     }
 
@@ -149,7 +149,7 @@ object Cams {
         if (playing.value >= 0) stopPlay()
         close(ch, 0); close(ch, 1)
         focus = ch; playing.value = ch; playTime.value = at; playStarted.value = false
-        try { c.nativeStartPlayback(handle, at, 15, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
+        try { c.nativeStartPlayback(handle, at, 65535, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
     }
 
     fun stopPlay() {
@@ -177,7 +177,8 @@ object Cams {
                 else if (now - (bigAt[channel] ?: 0L) < 1500) return
             } else if (now - (lastAt[channel] ?: 0L) < 110) return
             lastAt[channel] = now
-            if (channel == playing.value && !playStarted.value) playStarted.value = true
+            // la riproduzione parte dal fotogramma chiave prima dell'istante chiesto: circa 2 secondi indietro
+            if (channel == playing.value && !playStarted.value) { playTime.value = playTime.value - 2; playStarted.value = true }
             if (channel !in seen.value) seen.value = seen.value + channel
             val n = w * h * 4
             var buf = bufs[channel]
@@ -245,6 +246,29 @@ object Cams {
                 delay(if (Notify.foreground) 30_000L else 60_000L)
             }
         }
+    }
+
+    /** Il registratore conta il tempo come ora locale scritta in UTC: differenza da aggiungere all'orario vero. */
+    fun tzOff(): Int = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
+
+    /** Tipi di registrazione del registratore (bit). */
+    const val T_MOTION = 2; const val T_ALARM = 4; const val T_HUMAN = 16
+    fun isEvent(t: Int) = t and (T_MOTION or T_ALARM or T_HUMAN or 32 or 64 or 128) != 0
+    fun eventName(t: Int) = when { t and T_HUMAN != 0 -> "Persona"; t and T_MOTION != 0 -> "Movimento"; t and T_ALARM != 0 -> "Allarme"; else -> "Evento" }
+
+    /** Salva l'immagine attuale della cam nella galleria. */
+    fun snapshot(ctx: Context, ch: Int): Boolean {
+        val bmp = frame(ch).value ?: return false
+        return try {
+            val v = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "Cam${ch + 1}_${System.currentTimeMillis()}.jpg")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Relay")
+            }
+            val uri = ctx.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v) ?: return false
+            ctx.contentResolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            true
+        } catch (_: Exception) { false }
     }
 
     fun kind(t: String) = when (t) { "hd" -> "Persona rilevata"; "md", "motion" -> "Movimento"; else -> "Avviso" }
