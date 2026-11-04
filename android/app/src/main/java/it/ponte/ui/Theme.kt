@@ -95,7 +95,7 @@ val DarkColors = CanoneColors(
     bgCanvas = Color(0xFF000000), bgSurface = Color(0xFF1C1C1E), bgSunken = Color(0xFF2C2C2E), bgInverse = Neutral1000, bgScrim = Color(0x99000000),
     labelPrimary = Neutral1000, labelSecondary = Neutral400, labelTertiary = Neutral500, labelDisabled = Neutral600, labelInverse = Neutral925,
     lineSeparator = Color(0xFF2C2C2E), lineStrong = Neutral750, fillControl = Neutral750, fillSelected = Neutral1000,
-    accent = Blue400, accentPressed = Blue300, accentSubtle = Blue900, accentOnSubtle = Blue300, accentOnAccent = Neutral0,
+    accent = Blue500, accentPressed = Blue600, accentSubtle = Blue900, accentOnSubtle = Blue300, accentOnAccent = Neutral0,
     positive = Green300, positiveSubtle = Green900, positiveOnSubtle = Green300,
     caution = Amber300, cautionSubtle = Amber900, cautionOnSubtle = Amber300,
     critical = Red300, criticalSubtle = Red900, criticalOnSubtle = Red300, criticalOnCritical = Neutral950,

@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -181,7 +182,7 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
     val pic = DevicePics.rememberPic(sel)
 
     // colori: la fascia bassa della copertina continua nello schermo e scurisce verso il fondo
-    val edge = remember(art) { edgeColor(art) } ?: Color(0xFF1B2440)
+    val edge = remember(art) { edgeColor(art) } ?: Color(0xFF070912)
     val top by animateColorAsState(lerp(edge, Color.Black, 0.10f), tween(600), label = "alto")
     val bottom by animateColorAsState(lerp(edge, Color.Black, 0.55f), tween(600), label = "basso")
 
@@ -193,17 +194,21 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
             .graphicsLayer { translationY = (dy * 0.4f).coerceAtLeast(0f) },
     ) {
         // copertina sfocata dietro tutto: i colori arrivano fino in fondo
-        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f }.blur(60.dp), contentScale = ContentScale.Crop)
+        if (art != null) Image(art.asImageBitmap(), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.6f }.blur(60.dp), contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to bottom.copy(alpha = 0.35f), 1f to bottom.copy(alpha = 0.85f))))
 
-        // copertina infinita: alta, ritagliata al centro, si scioglie nel colore sotto
-        Box(Modifier.fillMaxWidth().fillMaxHeight(0.70f)) {
-            when {
-                art != null -> Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                pic != null -> Image(pic, null, Modifier.fillMaxSize().padding(72.dp), contentScale = ContentScale.Fit)
-            }
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.28f), 0.14f to Color.Transparent, 0.55f to Color.Transparent, 0.82f to top.copy(alpha = 0.75f), 1f to top)))
-        }
+        // copertina infinita: alta, ritagliata al centro; la parte bassa diventa trasparente e si fonde con i suoi stessi colori sotto
+        if (art != null) Box(
+            Modifier.fillMaxWidth().fillMaxHeight(0.72f)
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(Brush.verticalGradient(0f to Color.Black, 0.45f to Color.Black, 0.75f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                },
+        ) {
+            Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.16f).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent))))
+        } else ParticlesField(Modifier.fillMaxSize())
 
         Box(Modifier.statusBarsPadding().padding(start = 6.dp, top = 2.dp)) { GlassKey(GK.DOWN, 24.dp, onClose) }
 

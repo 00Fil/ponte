@@ -67,7 +67,7 @@
             <SolidColorBrush x:Key="LineStrong" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillControl" Color="#3A3A3C" />
             <SolidColorBrush x:Key="FillSelected" Color="#F2F2F0" />
-            <SolidColorBrush x:Key="AccentDefault" Color="#5C9DFF" />
+            <SolidColorBrush x:Key="AccentDefault" Color="#2F5FFF" />
             <SolidColorBrush x:Key="AccentOnAccent" Color="#FFFFFF" />
             <SolidColorBrush x:Key="AccentSubtle" Color="#11244F" />
             <SolidColorBrush x:Key="AccentOnSubtle" Color="#B4D2FF" />

@@ -314,7 +314,7 @@ fun Modifier.pressGlow(t: DropTouch, dark: Boolean, corner: Dp): Modifier = this
         drawRoundRect(Goccia.ink(dark).copy(alpha = 0.05f * p), cornerRadius = CornerRadius(corner.toPx()))
         val at = t.pos.takeIf { it.isSpecified } ?: Offset(size.width / 2, size.height / 2)
         drawRoundRect(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = (if (dark) 0.24f else 0.60f) * p.coerceAtMost(1f)), Color(0xFF5C9DFF).copy(alpha = 0.10f * p.coerceAtMost(1f)), Color.Transparent), center = at, radius = maxOf(size.width, size.height) * (0.5f + 0.4f * p.coerceAtMost(1f))),
+            Brush.radialGradient(listOf(Color.White.copy(alpha = (if (dark) 0.24f else 0.60f) * p.coerceAtMost(1f)), Color(0xFF2F5FFF).copy(alpha = 0.10f * p.coerceAtMost(1f)), Color.Transparent), center = at, radius = maxOf(size.width, size.height) * (0.5f + 0.4f * p.coerceAtMost(1f))),
             cornerRadius = CornerRadius(corner.toPx()),
         )
     }
