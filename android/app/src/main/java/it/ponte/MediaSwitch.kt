@@ -79,9 +79,26 @@ class MediaSwitch(private val ctx: Context, private val r: Router) {
         val t = m.optString("title"); val p = m.optBoolean("playing")
         val was = remote[from]?.playing == true
         if (p && !was && r.prefs.singlePlay) exclusive(from)
+        route(from, p, was)
         if (!p && t.isEmpty()) remote.remove(from)
         else remote[from] = RemoteMedia(from, t, m.optString("artist"), p, m.optLong("pos"), m.optLong("dur"), m.optInt("vol", -1), System.currentTimeMillis())
         publish()
+    }
+
+    private var routeOff: kotlinx.coroutines.Job? = null
+
+    /** Le cuffie sono qui e un PC inizia a suonare: il suo audio arriva da solo nelle cuffie; se si ferma a lungo, si chiude. */
+    private fun route(from: String, p: Boolean, was: Boolean) {
+        if (!r.prefs.autoRoute || from == r.deviceId) return
+        val src = r.devices.value.firstOrNull { it.id == from }?.let { "audio-src" in it.caps } == true
+        if (!src) return
+        if (p) {
+            routeOff?.cancel(); routeOff = null
+            if (!was && r.headphones.holder.value == r.deviceId && r.audio.activeSource.value != from) r.audio.listenTo(from)
+        } else if (was && r.audio.activeSource.value == from) {
+            routeOff?.cancel()
+            routeOff = r.scope.launch { delay(30_000); if (remote[from]?.playing != true && r.audio.activeSource.value == from) r.audio.stopListening(from) }
+        }
     }
 
     /** Una riproduzione alla volta: [from] ha appena iniziato, tutti gli altri (questo compreso) si fermano. */

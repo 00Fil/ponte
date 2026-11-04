@@ -858,6 +858,10 @@ fun SettingsScreen(r: Router, sub: String?, onSub: (String?) -> Unit, replayOnbo
                                 CSwitchRow("Una riproduzione alla volta", "Se un audio parte su un dispositivo, gli altri si fermano", single) { on ->
                                     single = on; r.prefs.singlePlay = on
                                 }
+                                var route by remember { mutableStateOf(r.prefs.autoRoute) }
+                                CSwitchRow("Audio del PC nelle cuffie", "Se le cuffie sono collegate qui, l'audio del PC arriva da solo", route) { on ->
+                                    route = on; r.prefs.autoRoute = on
+                                }
                                 if (!single) CSwitchRow("Un dispositivo alla volta", "Quando la musica parte qui, gli altri si mettono in pausa", autoPause) { on ->
                                     autoPause = on; r.prefs.autoPause = on
                                 }

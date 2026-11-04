@@ -76,6 +76,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("singlePlay", true)
         set(v) = sp.edit().putBoolean("singlePlay", v).apply()
 
+    /** Se le cuffie sono qui e un PC inizia a suonare, il suo audio arriva da solo nelle cuffie tramite Relay. */
+    var autoRoute: Boolean
+        get() = sp.getBoolean("autoRoute", true)
+        set(v) = sp.edit().putBoolean("autoRoute", v).apply()
+
     /** Se le cuffie preferite non ci sono: true = muto, false = casse. */
     var fallbackMute: Boolean
         get() = sp.getBoolean("fallbackMute", false)
