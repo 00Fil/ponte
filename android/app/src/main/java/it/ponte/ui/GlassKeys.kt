@@ -52,14 +52,16 @@ private fun DrawScope.glassPolys(polys: List<List<Offset>>, corner: Float, tint:
 private fun DrawScope.glassPath(path: android.graphics.Path, corner: Float, tint: Color) {
     val c = drawContext.canvas.nativeCanvas
     val fx = android.graphics.CornerPathEffect(corner)
-    val shadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL; pathEffect = fx; color = android.graphics.Color.argb(46, 0, 0, 0)
-        maskFilter = android.graphics.BlurMaskFilter(size.minDimension * 0.06f + 1f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    // bagliore esterno dello stesso colore: vetro opaco che diffonde luce intorno
+    val halo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.FILL_AND_STROKE; strokeWidth = size.minDimension * 0.06f; pathEffect = fx
+        color = tint.copy(alpha = tint.alpha * 0.45f).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(size.minDimension * 0.16f + 2f, android.graphics.BlurMaskFilter.Blur.OUTER)
     }
-    c.save(); c.translate(0f, size.height * 0.035f); c.drawPath(path, shadow); c.restore()
+    c.drawPath(path, halo)
     val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.FILL; pathEffect = fx
-        shader = android.graphics.LinearGradient(0f, 0f, 0f, size.height, tint.copy(alpha = tint.alpha * 0.98f).toArgb(), tint.copy(alpha = tint.alpha * 0.78f).toArgb(), android.graphics.Shader.TileMode.CLAMP)
+        shader = android.graphics.LinearGradient(0f, 0f, 0f, size.height, tint.copy(alpha = tint.alpha * 0.96f).toArgb(), tint.copy(alpha = tint.alpha * 0.84f).toArgb(), android.graphics.Shader.TileMode.CLAMP)
     }
     c.drawPath(path, fill)
     val gloss = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {

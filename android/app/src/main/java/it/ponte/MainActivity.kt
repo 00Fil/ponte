@@ -230,6 +230,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     val allMedia by r.media.media.collectAsState()
     var remoteId by remember { mutableStateOf<String?>(null) }
     var remoteOpen by remember { mutableStateOf(false) }
+    // player sempre raggiungibile: scorri in su sulla barra, anche se non suona niente
+    var univOpen by remember { mutableStateOf(false) }
     var dock by remember { mutableIntStateOf(0) }      // 0 niente, 1 goccia staccata, 2 schermo intero, 3 agganciato alla barra
     var prevDock by remember { mutableIntStateOf(1) }  // dove tornare chiudendo lo schermo intero
     androidx.compose.runtime.LaunchedEffect(np?.title, np?.playing) {
@@ -402,7 +404,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     else it.ponte.ui.GlassTabBar(
                         layer, TABS, GLYPHS, pos, pager.currentPage, { select(it) },
                         Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 10.dp + navBottom)
-                            .then(it.ponte.ui.swipeUpObserver(dock == 3) { dock = 1 }),
+                            .then(it.ponte.ui.swipeUpObserver(true) { if (dock == 3) dock = 1 else univOpen = true }),
                         merge = { merge.value },
                         song = if (np != null) ({ it.ponte.ui.DockSong(np) { prevDock = 3; dock = 2 } }) else null,
                     )
@@ -426,6 +428,14 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
             enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.9f, 320f)) { it } + fadeIn(tween(160)),
             exit = androidx.compose.animation.slideOutVertically(tween(240)) { it } + fadeOut(tween(200)),
         ) { if (np != null) it.ponte.ui.FullPlayer(np) { dock = prevDock } }
+        androidx.compose.animation.AnimatedVisibility(
+            univOpen, Modifier.fillMaxSize().zIndex(5f),
+            enter = androidx.compose.animation.slideInVertically(androidx.compose.animation.core.spring(0.9f, 320f)) { it } + fadeIn(tween(160)),
+            exit = androidx.compose.animation.slideOutVertically(tween(240)) { it } + fadeOut(tween(200)),
+        ) {
+            val start = remember { allMedia.values.filter { it.playing }.maxByOrNull { it.at }?.id ?: r.deviceId }
+            it.ponte.ui.UniversalPlayer(r, start) { univOpen = false }
+        }
     }
     }
 }
