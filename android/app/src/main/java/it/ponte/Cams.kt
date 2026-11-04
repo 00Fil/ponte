@@ -90,16 +90,46 @@ object Cams {
         """{"IPCam":{"ModeSetting":{"IRCutFilterMode":"$mode"},"ChannelManager":{"ChannelList":"$ch","Operation":"SetChannel"}},"Version":"2.0.0","Method":"set","Authorization":{"Verify":"","username":"$user","password":"$pwd"}}""", ch,
     )
 
+    @Volatile private var rgbaInfo = ""
+
+    /** Lettura della memoria del motore senza codice nativo nostro: Unsafe di sistema. */
+    private object Native {
+        private val unsafe: Any? = try { Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }.get(null) } catch (e: Throwable) { rgbaInfo = "unsafe: ${e.javaClass.simpleName}"; null }
+        private val bulk = try { unsafe?.javaClass?.getMethod("copyMemoryToPrimitiveArray", Long::class.javaPrimitiveType, Any::class.java, Long::class.javaPrimitiveType, Long::class.javaPrimitiveType) } catch (_: Throwable) { null }
+        private val getByte = try { unsafe?.javaClass?.getMethod("getByte", Long::class.javaPrimitiveType) } catch (_: Throwable) { null }
+        private val base: Long = try { (unsafe?.javaClass?.getMethod("arrayBaseOffset", Class::class.java)?.invoke(unsafe, ByteArray::class.java) as Int).toLong() } catch (_: Throwable) { 0L }
+        fun copy(addr: Long, n: Int): ByteArray? {
+            val u = unsafe ?: return null
+            val out = ByteArray(n)
+            try {
+                val b = bulk
+                if (b != null) { b.invoke(u, addr, out, base, n.toLong()); rgbaInfo = "copia ok"; return out }
+            } catch (e: Throwable) { rgbaInfo = "bulk: ${(e.cause ?: e).javaClass.simpleName}" }
+            val g = getByte ?: return null
+            return try { for (i in 0 until n) out[i] = g.invoke(u, addr + i) as Byte; rgbaInfo = "copia lenta"; out } catch (e: Throwable) { rgbaInfo = "getByte: ${(e.cause ?: e).javaClass.simpleName}"; null }
+        }
+    }
+
     private object Sink : JAConnectorV2.Sink {
         override fun status(key: String, st: Int, index: Int) {
             if (st < 12) { status.value = st; online.value = st == 6 }
             if (st == 10) error.value = "Password errata"
             diag.value = "stato $st canale $index · fotogrammi $nFrames"
         }
-        override fun frame(key: String, w: Int, h: Int, data: ByteArray?, len: Int, channel: Int) {
+        override fun frame(key: String, w: Int, h: Int, data: ByteArray?, len: Int, channel: Int, ptr: Long) {
             nFrames++
-            if (nFrames % 15 == 1) diag.value = "fotogrammi $nFrames · ${w}x$h · ${data?.size ?: -1} byte · len $len · can $channel"
-            if (data == null || w <= 0 || h <= 0) return
+            if (nFrames % 15 == 1) diag.value = "fotogrammi $nFrames · ${w}x$h · ${data?.size ?: -1} byte · len $len · can $channel · ptr ${if (ptr != 0L) "sì" else "no"} $rgbaInfo"
+            if (w <= 0 || h <= 0) return
+            if (data == null) {
+                // il fotogramma è già decodificato in RGBA nella memoria del motore: si copia subito, prima che venga riusata
+                if (ptr == 0L || len < w * h * 4 || channel != focus && System.currentTimeMillis() - (lastAt[channel] ?: 0L) < 120) return
+                lastAt[channel] = System.currentTimeMillis()
+                val bytes = Native.copy(ptr, w * h * 4) ?: return
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(bytes))
+                frame(channel).value = bmp
+                return
+            }
             val now = System.currentTimeMillis()
             if (channel != focus && now - (lastAt[channel] ?: 0L) < 120) return
             lastAt[channel] = now

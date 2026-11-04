@@ -6,7 +6,7 @@ import com.app.jagles.listener.VideoEncodeCallback;
 public final class JAConnectorV2 {
     public interface Sink {
         void status(String key, int status, int index);
-        void frame(String key, int w, int h, byte[] data, int len, int channel);
+        void frame(String key, int w, int h, byte[] data, int len, int channel, long ptr);
         void audio(String key, byte[] data);
         void vcon(String key, String json, int index);
         void command(int code, String key, int status, int index);
@@ -112,7 +112,7 @@ public final class JAConnectorV2 {
     public void onVconDataAvailable(String str, byte[] bArr, int i) { Sink s = sink; if (s == null || bArr == null) return; int n = bArr.length; while (n > 0 && bArr[n - 1] == 0) n--; s.vcon(str, new String(bArr, 0, n, java.nio.charset.StandardCharsets.UTF_8), i); }
     public void onVconDataResend(String str, int i, int i2, int i3, int i4, int i5, int i6) {  }
     public void onAudioFrameAvailable(String str, byte[] bArr) { Sink s = sink; if (s != null) s.audio(str, bArr); }
-    public void onTextureAvailable(String str, int i, int i2, float f, byte[] bArr, long j, int i3, int i4, int i5, int i6, int i7, long j2) { Sink s = sink; if (s != null) s.frame(str, i, i2, bArr, i3, i7); }
+    public void onTextureAvailable(String str, int i, int i2, float f, byte[] bArr, long j, int i3, int i4, int i5, int i6, int i7, long j2) { Sink s = sink; if (s != null) s.frame(str, i, i2, bArr, i3, i7, j); }
     public void onOSDTextureAvailable(String str, int i, int i2, long j, int i3, int i4, long j2) {  }
     public void onPlaybackOSDAvailable(String str, int i, int i2) {  }
     public void onRecordVideoDurationAvailable(String str, long j, int i) {  }
