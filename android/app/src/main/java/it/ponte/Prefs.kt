@@ -96,6 +96,10 @@ class Prefs(ctx: Context) {
         get() = sp.getString("camPwd", "") ?: ""
         set(v) = sp.edit().putString("camPwd", v).apply()
 
+    var camHidden: Set<Int>
+        get() = (sp.getString("camHidden", "") ?: "").split(',').mapNotNull { it.toIntOrNull() }.toSet()
+        set(v) = sp.edit().putString("camHidden", v.joinToString(",")).apply()
+
     var hideMoney: Boolean
         get() = sp.getBoolean("hideMoney", false)
         set(v) = sp.edit().putBoolean("hideMoney", v).apply()

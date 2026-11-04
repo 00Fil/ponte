@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -77,10 +78,11 @@ private fun hm(sec: Int) = SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(s
 
 /** Le cam da mostrare: quelle che hanno mandato immagini; finché nessuna l'ha fatto, quelle collegate. */
 @Composable
-private fun camList(): List<Int> {
+private fun camList(all: Boolean = false): List<Int> {
     val seen by Cams.seen.collectAsState()
     val live by Cams.live.collectAsState()
-    return (if (seen.isNotEmpty()) seen else live).sorted()
+    val hidden by Cams.hidden.collectAsState()
+    return (if (seen.isNotEmpty()) seen else live).sorted().filter { all || it !in hidden }
 }
 
 /** Una diretta: l'ultima immagine dal motore, nero finché non c'è. */
@@ -126,10 +128,12 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
     var ready by remember { mutableStateOf(r.prefs.camId.isNotEmpty() && r.prefs.camPwd.isNotEmpty()) }
     var full by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
+    var edit by remember { mutableStateOf(false) }
+    val hidden by Cams.hidden.collectAsState()
     val st by Cams.status.collectAsState()
     val err by Cams.error.collectAsState()
     val alerts by Cams.alerts.collectAsState()
-    val list = camList()
+    val list = camList(all = edit)
     val dens = LocalDensity.current
     val top = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
     LaunchedEffect(ready) { if (ready) Cams.ensure(r) }
@@ -140,6 +144,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                     RoundGlass(42.dp, false, onClose) { Text("‹", style = CanoneType.title2, color = c.labelPrimary) }
                     Text("Telecamere", style = CanoneType.title2.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary, modifier = Modifier.weight(1f))
                     Box(Modifier.size(8.dp).clip(CircleShape).background(when (st) { 6 -> Color(0xFF34C759); 0 -> Tint.third; else -> c.labelTertiary }))
+                    if (ready && tab == 0) RoundGlass(42.dp, edit, { edit = !edit }) { Icon24(if (edit) Ico.CHECK else Ico.EYE, if (edit) Color.White else c.labelPrimary, Modifier.size(17.dp)) }
                     if (ready) RoundGlass(42.dp, false, { ready = false }) { Icon24(Ico.PENCIL, c.labelPrimary, Modifier.size(16.dp)) }
                 }
                 if (err.isNotEmpty()) Text(err, style = CanoneType.footnote, color = Tint.third, modifier = Modifier.padding(horizontal = Space.s5))
@@ -153,9 +158,13 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
                     ) {
                         items(list) { ch ->
-                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(Radius.lg)).dropClickable({ full = ch }, corner = Radius.lg)) {
-                                CamView(ch, Modifier.fillMaxSize())
+                            val off = ch in hidden
+                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(Radius.lg)).dropClickable({ if (edit) Cams.toggleHidden(ch) else full = ch }, corner = Radius.lg)) {
+                                CamView(ch, Modifier.fillMaxSize().graphicsLayer { alpha = if (edit && off) 0.3f else 1f })
                                 Chip("${ch + 1}", Modifier.align(Alignment.TopStart).padding(8.dp), dot = Color(0xFFFF453A))
+                                if (edit) Box(Modifier.align(Alignment.Center).size(44.dp).drop(true, tint = if (off) Color(0xFF1C1C1E).copy(alpha = 0.8f) else Canone.colors.accent), contentAlignment = Alignment.Center) {
+                                    Icon24(if (off) Ico.EYE_OFF else Ico.EYE, Color.White, Modifier.size(20.dp))
+                                }
                             }
                         }
                     } else LazyColumn(contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
@@ -241,8 +250,9 @@ private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
     val playing by Cams.playing.collectAsState()
     val hd by Cams.hd.collectAsState()
     val dens = LocalDensity.current
-    val navB = with(dens) { WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(16.dp)
-    val topB = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
+    // nel dialog a tutto schermo gli inset possono arrivare a zero: margine minimo pari a una barra gesti più mezza bolla
+    val navB = with(dens) { WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(48.dp)
+    val topB = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(32.dp)
     DisposableEffect(ch) {
         Cams.enter(ch)
         if (startAt > 0) Cams.play(ch, startAt)
@@ -260,7 +270,7 @@ private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
             Text("Telecamera ${ch + 1}", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, modifier = Modifier.weight(1f))
             Chip(if (playing == ch) "Registrazione" else if (hd) "Dal vivo · HD" else "Dal vivo", dot = if (playing == ch) Tint.third else Color(0xFFFF453A))
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = navB + 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = navB + 34.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             AnimatedVisibility(recs, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) { Timeline(ch) }
             val labels = listOf("Auto", "Luce", "Notte", if (playing == ch) "Dal vivo" else "Video", "HD")
             val glyphs = listOf(15, 13, 14, if (playing == ch) 17 else 16, 18)
@@ -301,7 +311,8 @@ private fun Timeline(ch: Int) {
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(segs) { if (!dragging && playing != ch) segs.maxByOrNull { it.end }?.let { at = (it.end - 30).coerceAtLeast(it.start) } }
     // durante la riproduzione la lancetta segue il video (orologio del video, o un secondo alla volta)
-    LaunchedEffect(playing, ch) { while (playing == ch) { kotlinx.coroutines.delay(1000); if (!dragging) Cams.playTime.value = Cams.playTime.value + 1 } }
+    val started by Cams.playStarted.collectAsState()
+    LaunchedEffect(playing, ch, started) { while (playing == ch && started) { kotlinx.coroutines.delay(1000); if (!dragging) Cams.playTime.value = Cams.playTime.value + 1 } }
     LaunchedEffect(pt, playing) { if (playing == ch && !dragging && pt > 0) at = pt }
     val pxPerSec = with(LocalDensity.current) { 90.dp.toPx() } / 3600f   // un'ora = 90dp
     Column(

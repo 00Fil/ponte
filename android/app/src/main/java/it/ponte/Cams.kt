@@ -35,6 +35,12 @@ object Cams {
     val playTime = MutableStateFlow(0)
     /** Alta qualità attiva sul canale a tutto schermo. */
     val hd = MutableStateFlow(false)
+    /** La riproduzione ha mandato il primo fotogramma: da lì parte l'orologio della timeline. */
+    val playStarted = MutableStateFlow(false)
+    /** Cam nascoste dall'utente. */
+    val hidden = MutableStateFlow(setOf<Int>())
+    private var prefs: Prefs? = null
+    fun toggleHidden(ch: Int) { val h = if (ch in hidden.value) hidden.value - ch else hidden.value + ch; hidden.value = h; prefs?.camHidden = h }
     /** Avvisi ricevuti dal cloud (persone, movimento). */
     val alerts = MutableStateFlow<List<Alert>>(emptyList())
 
@@ -65,6 +71,7 @@ object Cams {
 
     fun ensure(r: Router) {
         val p = r.prefs
+        if (prefs == null) { prefs = p; hidden.value = p.camHidden }
         if (p.camId.isEmpty() || p.camPwd.isEmpty()) return
         if (key == p.camId && (status.value == 6 || status.value == 0)) return
         connect(p.camId, p.camUser, p.camPwd)
@@ -141,7 +148,7 @@ object Cams {
         if (handle == 0L) return
         if (playing.value >= 0) stopPlay()
         close(ch, 0); close(ch, 1)
-        focus = ch; playing.value = ch; playTime.value = at
+        focus = ch; playing.value = ch; playTime.value = at; playStarted.value = false
         try { c.nativeStartPlayback(handle, at, 15, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
     }
 
@@ -170,6 +177,7 @@ object Cams {
                 else if (now - (bigAt[channel] ?: 0L) < 1500) return
             } else if (now - (lastAt[channel] ?: 0L) < 110) return
             lastAt[channel] = now
+            if (channel == playing.value && !playStarted.value) playStarted.value = true
             if (channel !in seen.value) seen.value = seen.value + channel
             val n = w * h * 4
             var buf = bufs[channel]
