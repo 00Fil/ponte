@@ -86,6 +86,16 @@ class Prefs(ctx: Context) {
         get() = sp.getString("geminiKey", "") ?: ""
         set(v) = sp.edit().putString("geminiKey", v.trim()).apply()
 
+    var camId: String
+        get() = sp.getString("camId", "") ?: ""
+        set(v) = sp.edit().putString("camId", v.trim()).apply()
+    var camUser: String
+        get() = sp.getString("camUser", "admin") ?: "admin"
+        set(v) = sp.edit().putString("camUser", v.trim()).apply()
+    var camPwd: String
+        get() = sp.getString("camPwd", "") ?: ""
+        set(v) = sp.edit().putString("camPwd", v).apply()
+
     var hideMoney: Boolean
         get() = sp.getBoolean("hideMoney", false)
         set(v) = sp.edit().putBoolean("hideMoney", v).apply()
