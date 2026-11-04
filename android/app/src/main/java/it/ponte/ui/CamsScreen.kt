@@ -249,7 +249,7 @@ private fun AlertPic(url: String, modifier: Modifier) {
 private fun MenuRow(glyph: Int, label: String, on: Boolean, sub: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (on) Canone.colors.accent.copy(alpha = 0.22f) else Color.Transparent)
-            .dropClickable(onClick, corner = 16.dp).padding(horizontal = Space.s3, vertical = 10.dp),
+            .dropClickable(onClick, corner = 16.dp).padding(horizontal = Space.s3, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         TabGlyph(glyph, Color.White, false, Modifier.size(20.dp))
@@ -261,27 +261,34 @@ private fun MenuRow(glyph: Int, label: String, on: Boolean, sub: String? = null,
     }
 }
 
-/** Pannello di vetro sopra la barra. */
-@Composable
-private fun Panel(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column(
-        Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-            .drop(true, corner = 28.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.84f)).padding(Space.s3),
-        verticalArrangement = Arrangement.spacedBy(4.dp), content = content,
-    )
-}
-
 private val IMAGE_MODES = listOf(
     Triple("smart", "Automatico", 15), Triple("light", "Luce bianca", 13), Triple("ir", "Infrarossi", 14),
-    Triple("daylight", "Sempre a colori", 13), Triple("night", "Sempre in bianco e nero", 14),
+    Triple("daylight", "Sempre a colori", 13), Triple("night", "Bianco e nero", 14),
 )
 
-/** Schermo intero: video al centro, sotto la barra di navigazione dell'app con le voci della cam e i suoi pannelli. */
+/** Tasto della barra: icona, titolo piccolo e valore attuale; acceso quando il suo pannello è aperto. */
+@Composable
+private fun BarButton(glyph: Int, title: String, value: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val t = rememberDropTouch()
+    Row(
+        modifier.fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(if (on) Canone.colors.accent.copy(alpha = 0.85f) else Color.Transparent)
+            .dropGestures(t, onClick).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        TabGlyph(glyph, Color.White, false, Modifier.size(20.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = CanoneType.footnote.copy(fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp)), color = Color.White.copy(alpha = 0.7f), maxLines = 1)
+            Text(value, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Schermo intero: video al centro, foto in una bolla in alto, sotto una barra chiara con Immagine, Qualità e Registrazioni. */
 @Composable
 private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var mode by remember { mutableStateOf("smart") }
-    // pannello aperto: 0 immagine, 1 video, 2 eventi, -1 nessuno
+    // pannello aperto: 0 immagine, 1 registrazioni, -1 nessuno
     var panel by remember { mutableIntStateOf(if (startAt > 0) 1 else -1) }
     val playing by Cams.playing.collectAsState()
     val hd by Cams.hd.collectAsState()
@@ -296,76 +303,81 @@ private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
         onDispose { Cams.stopPlay(); Cams.leave(ch) }
     }
     androidx.activity.compose.BackHandler { if (panel >= 0) panel = -1 else onBack() }
-    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Box(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) }) {
-            CamView(ch, Modifier.fillMaxSize(), fill = false)
-        }
+    // il tocco sul video chiude i pannelli e non passa mai alla griglia sotto
+    Box(Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { detectTapGestures { panel = -1 } }) {
+        CamView(ch, Modifier.fillMaxSize(), fill = false)
         Row(Modifier.fillMaxWidth().padding(top = topB + Space.s2, start = Space.s4, end = Space.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-            RoundGlass(42.dp, false, onBack) { Text("‹", style = CanoneType.title2, color = Color.White) }
-            Text("Telecamera ${ch + 1}", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, modifier = Modifier.weight(1f))
-            if (shot) Chip("Foto salvata", dot = Color(0xFF34C759))
-            else Chip(if (playing == ch) "Registrazione" else if (hd) "Dal vivo · HD" else "Dal vivo", dot = if (playing == ch) Tint.third else Color(0xFFFF453A))
+            RoundGlass(44.dp, false, onBack) { Text("‹", style = CanoneType.title2, color = Color.White) }
+            Column(Modifier.weight(1f)) {
+                Text("Telecamera ${ch + 1}", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                Text(if (shot) "Foto salvata in galleria" else if (playing == ch) "Registrazione" else "Dal vivo", style = CanoneType.footnote, color = if (shot) Color(0xFF34C759) else if (playing == ch) Tint.third else Color(0xFFFF6961))
+            }
+            RoundGlass(44.dp, false, { shot = Cams.snapshot(ctx, ch) }) { TabGlyph(22, Color.White, false, Modifier.size(20.dp)) }
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = navB + 34.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-            AnimatedVisibility(panel == 0, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
-                Panel {
-                    Text("Immagine", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(start = Space.s3, top = 4.dp, bottom = 2.dp))
-                    IMAGE_MODES.forEach { (m, l, g) -> MenuRow(g, l, mode == m) { mode = m; Cams.light(ch, m) } }
-                    Text("Qualità", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(start = Space.s3, top = 6.dp, bottom = 2.dp))
-                    MenuRow(18, "Alta definizione", hd, "Più dettaglio, si carica in qualche secondo") { Cams.setHd(ch, !hd) }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = navB + 28.dp), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+            AnimatedVisibility(panel == 0, enter = fadeIn() + slideInVertically { it / 4 }, exit = fadeOut() + slideOutVertically { it / 4 }) {
+                Column(
+                    Modifier.padding(horizontal = Space.s4).width(280.dp).clip(RoundedCornerShape(26.dp))
+                        .drop(true, corner = 26.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.9f)).padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    IMAGE_MODES.forEach { (m, l, g) -> MenuRow(g, l, mode == m) { mode = m; Cams.light(ch, m); panel = -1 } }
                 }
             }
-            AnimatedVisibility(panel == 1 || panel == 2, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
-                Timeline(ch, events = panel == 2)
+            AnimatedVisibility(panel == 1, enter = fadeIn() + slideInVertically { it / 4 }, exit = fadeOut() + slideOutVertically { it / 4 }) { Recordings(ch) }
+            Row(
+                Modifier.padding(horizontal = Space.s4).fillMaxWidth().height(60.dp).clip(RoundedCornerShape(30.dp))
+                    .drop(true, corner = 30.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.78f)).padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                BarButton(15, "Immagine ▾", IMAGE_MODES.firstOrNull { it.first == mode }?.second ?: "Automatico", panel == 0, Modifier.weight(1.15f)) { panel = if (panel == 0) -1 else 0 }
+                BarButton(18, "Qualità", if (hd) "Alta (HD)" else "Normale", hd, Modifier.weight(1f)) { Cams.setHd(ch, !hd) }
+                BarButton(16, "Registrazioni", if (playing == ch) "In riproduzione" else "Apri", panel == 1, Modifier.weight(1.15f)) { panel = if (panel == 1) -1 else 1 }
             }
-            val labels = listOf("Immagine", if (playing == ch) "Dal vivo" else "Video", "Eventi", if (hd) "HD" else "SD", "Foto")
-            val glyphs = listOf(15, if (playing == ch) 17 else 16, 21, 18, 22)
-            val cur = if (panel >= 0) panel else if (playing == ch) 1 else 0
-            GlassTabBar(
-                layer, labels, glyphs, { cur.toFloat() }, cur,
-                { i ->
-                    when (i) {
-                        0 -> panel = if (panel == 0) -1 else 0
-                        1 -> if (playing == ch && panel == 1) { Cams.stopPlay(); panel = -1 } else panel = if (panel == 1) -1 else 1
-                        2 -> panel = if (panel == 2) -1 else 2
-                        3 -> Cams.setHd(ch, !hd)
-                        4 -> shot = Cams.snapshot(ctx, ch)
-                    }
-                },
-                Modifier.padding(horizontal = 20.dp),
-            )
         }
     }
 }
 
+/** Piccolo tasto con icona/testo e nome sotto, per i comandi della riproduzione. */
+@Composable
+private fun PlayBtn(label: String, big: Boolean = false, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        RoundGlass(if (big) 50.dp else 40.dp, big, onClick) { content() }
+        Text(label, style = CanoneType.footnote.copy(fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp)), color = Color.White.copy(alpha = 0.7f), maxLines = 1)
+    }
+}
+
 /**
- * Timeline delle registrazioni: 24 ore che scorrono sotto una lancetta fissa al centro, registrazione continua in blu,
- * movimento e persone in ambra. Con [events] sotto c'è l'elenco dei momenti rilevati: un tocco ci salta.
+ * Registrazioni e rilevamenti insieme: giorno, ora, timeline con zoom (blu = registrato, ambra = rilevato),
+ * comandi di riproduzione e sotto l'elenco dei momenti rilevati con la foto. Un tocco ci salta.
  */
 @Composable
-private fun Timeline(ch: Int, events: Boolean) {
+private fun Recordings(ch: Int) {
     val c = Canone.colors
     var day by remember { mutableIntStateOf(0) }
+    var zoom by remember { mutableIntStateOf(1) }   // 0 giorno, 1 ora, 2 dieci minuti
     val segs by Cams.records.collectAsState()
     val busy by Cams.searching.collectAsState()
     val playing by Cams.playing.collectAsState()
+    val paused by Cams.playPaused.collectAsState()
     val pt by Cams.playTime.collectAsState()
+    val alerts by Cams.alerts.collectAsState()
     val off = remember { Cams.tzOff() }
-    // tutto in "ora del registratore": mezzanotte locale + differenza di fuso
     val dayStart = remember(day) { (Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -day); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis / 1000).toInt() + off }
     LaunchedEffect(ch, dayStart) { Cams.search(ch, dayStart, dayStart + 86_399) }
     var at by remember(dayStart) { mutableStateOf(if (day == 0) (System.currentTimeMillis() / 1000).toInt() + off - 60 else dayStart + 12 * 3600) }
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(segs) { if (!dragging && playing != ch) segs.maxByOrNull { it.end }?.let { at = (it.end - 30).coerceAtLeast(it.start) } }
     val started by Cams.playStarted.collectAsState()
-    LaunchedEffect(playing, ch, started) { while (playing == ch && started) { kotlinx.coroutines.delay(1000); if (!dragging) Cams.playTime.value = Cams.playTime.value + 1 } }
+    LaunchedEffect(playing, ch, started, paused) { while (playing == ch && started && !paused) { kotlinx.coroutines.delay(1000); if (!dragging) Cams.playTime.value = Cams.playTime.value + 1 } }
     LaunchedEffect(pt, playing) { if (playing == ch && !dragging && pt > 0) at = pt }
     val evs = remember(segs) { segs.filter { Cams.isEvent(it.type) }.sortedByDescending { it.start } }
-    val pxPerSec = with(LocalDensity.current) { 90.dp.toPx() } / 3600f
+    fun go(t: Int) { at = t.coerceIn(dayStart, dayStart + 86_399); Cams.play(ch, at) }
+    // foto dell'avviso più vicino nel tempo allo stesso canale
+    fun picFor(s: Cams.Seg): String = alerts.filter { it.channel == ch && kotlin.math.abs((it.time + off) - s.start) < 90 }.minByOrNull { kotlin.math.abs((it.time + off) - s.start) }?.img.orEmpty()
     Column(
         Modifier.padding(horizontal = Space.s4).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-            .drop(true, corner = 28.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.82f)).padding(vertical = Space.s3),
+            .drop(true, corner = 28.dp, tint = Color(0xFF1C1C1E).copy(alpha = 0.88f)).padding(vertical = Space.s3),
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
         Row(Modifier.padding(horizontal = Space.s3).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -377,62 +389,86 @@ private fun Timeline(ch: Int, events: Boolean) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4), verticalAlignment = Alignment.CenterVertically) {
-            Text(nvrFmt("HH:mm:ss", at), style = CanoneType.title3.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Color.White, modifier = Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(c.accent)); Text("Registrato", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.7f))
-                Box(Modifier.size(8.dp).clip(CircleShape).background(Tint.third)); Text("Rilevato", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.7f))
-            }
-        }
-        if (segs.isEmpty()) Text(if (busy) "…" else "Niente registrato", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = Space.s4))
-        Canvas(
-            Modifier.fillMaxWidth().height(64.dp).pointerInput(ch, dayStart) {
-                detectHorizontalDragGestures(
-                    onDragStart = { dragging = true },
-                    onDragEnd = { dragging = false; Cams.play(ch, at) },
-                    onDragCancel = { dragging = false },
-                ) { ch2, dx -> ch2.consume(); at = (at - dx / pxPerSec).toInt().coerceIn(dayStart, dayStart + 86_399) }
-            }.pointerInput(ch, dayStart, segs) {
-                detectTapGestures { o -> at = (at + (o.x - size.width / 2f) / pxPerSec).toInt().coerceIn(dayStart, dayStart + 86_399); Cams.play(ch, at) }
-            },
-        ) {
-            val mid = size.width / 2f
-            fun x(t: Int) = mid + (t - at) * pxPerSec
-            val trackY = size.height * 0.42f; val th = size.height * 0.30f
-            drawRoundRect(Color.White.copy(alpha = 0.08f), Offset(x(dayStart), trackY - th / 2), Size(86_400 * pxPerSec, th), androidx.compose.ui.geometry.CornerRadius(th / 2))
-            // prima la registrazione continua, sopra gli eventi
-            segs.sortedBy { if (Cams.isEvent(it.type)) 1 else 0 }.forEach { s ->
-                val a = x(s.start); val b = x(s.end)
-                if (b > 0 && a < size.width) {
-                    val ev = Cams.isEvent(s.type)
-                    drawRoundRect(if (ev) Tint.third else c.accent, Offset(a, trackY - th / 2 + if (ev) -3f else 0f), Size((b - a).coerceAtLeast(if (ev) 5f else 3f), th + if (ev) 6f else 0f), androidx.compose.ui.geometry.CornerRadius(4f))
+            Text(nvrFmt("HH:mm:ss", at), style = CanoneType.title2.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = Color.White, modifier = Modifier.weight(1f))
+            Row(Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).padding(3.dp)) {
+                listOf("24 h", "1 h", "10 min").forEachIndexed { i, l ->
+                    Box(Modifier.clip(CircleShape).background(if (zoom == i) Color.White.copy(alpha = 0.22f) else Color.Transparent).dropClickable({ zoom = i }, corner = 14.dp).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text(l, style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                    }
                 }
             }
-            for (hh in 0..24) {
-                val xx = x(dayStart + hh * 3600)
-                if (xx < -40 || xx > size.width + 40) continue
-                drawLine(Color.White.copy(alpha = 0.35f), Offset(xx, trackY + th / 2 + 6f), Offset(xx, trackY + th / 2 + 14f), 2f)
-                drawContext.canvas.nativeCanvas.drawText("%02d".format(hh % 24), xx, size.height - 2f, android.graphics.Paint().apply { color = 0x99FFFFFF.toInt(); textSize = 26f; textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true })
-            }
-            drawLine(Color.White, Offset(mid, 2f), Offset(mid, trackY + th / 2 + 8f), 4f, StrokeCap.Round)
         }
-        if (events) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = Space.s4).height(1.dp).background(Color.White.copy(alpha = 0.1f)))
-            if (evs.isEmpty()) Text(if (busy) "…" else "Nessun movimento rilevato", style = CanoneType.body, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = Space.s4))
-            LazyColumn(Modifier.heightIn(max = 220.dp).padding(horizontal = Space.s2), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                items(evs) { s ->
-                    val on = at in s.start..s.end
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (on) Tint.third.copy(alpha = 0.18f) else Color.Transparent)
-                            .dropClickable({ at = s.start; Cams.play(ch, (s.start - 3).coerceAtLeast(dayStart)) }, corner = 14.dp).padding(horizontal = Space.s3, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
-                    ) {
-                        Box(Modifier.size(30.dp).clip(CircleShape).background(Tint.third.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
-                            if (s.type and Cams.T_HUMAN != 0) PersonGlyph(Tint.third, Modifier.size(16.dp)) else Box(Modifier.size(8.dp).clip(CircleShape).background(Tint.third))
-                        }
-                        Text(Cams.eventName(s.type), style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = Color.White, modifier = Modifier.weight(1f))
-                        Text(hm(s.start), style = CanoneType.body.copy(fontFeatureSettings = "tnum"), color = Color.White)
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val wPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val pxPerSec = wPx / when (zoom) { 0 -> 86_400f; 1 -> 3_600f; else -> 600f }
+            Canvas(
+                Modifier.fillMaxWidth().height(70.dp).pointerInput(ch, dayStart, zoom) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragging = true },
+                        onDragEnd = { dragging = false; Cams.play(ch, at) },
+                        onDragCancel = { dragging = false },
+                    ) { ch2, dx -> ch2.consume(); at = (at - dx / pxPerSec).toInt().coerceIn(dayStart, dayStart + 86_399) }
+                }.pointerInput(ch, dayStart, zoom) {
+                    detectTapGestures { o -> go((at + (o.x - size.width / 2f) / pxPerSec).toInt()) }
+                },
+            ) {
+                val mid = size.width / 2f
+                fun x(t: Int) = mid + (t - at) * pxPerSec
+                val trackY = size.height * 0.40f; val th = size.height * 0.34f
+                drawRoundRect(Color.White.copy(alpha = 0.08f), Offset(x(dayStart), trackY - th / 2), Size(86_400 * pxPerSec, th), androidx.compose.ui.geometry.CornerRadius(8f))
+                segs.sortedBy { if (Cams.isEvent(it.type)) 1 else 0 }.forEach { s ->
+                    val a = x(s.start); val b = x(s.end)
+                    if (b > 0 && a < size.width) {
+                        val ev = Cams.isEvent(s.type)
+                        drawRoundRect(if (ev) Tint.third else c.accent.copy(alpha = 0.85f), Offset(a, trackY - th / 2 + if (ev) -4f else 0f), Size((b - a).coerceAtLeast(if (ev) 6f else 3f), th + if (ev) 8f else 0f), androidx.compose.ui.geometry.CornerRadius(5f))
+                    }
+                }
+                val step = when (zoom) { 0 -> 3 * 3600; 1 -> 600; else -> 60 }
+                var t = dayStart
+                val paint = android.graphics.Paint().apply { color = 0x99FFFFFF.toInt(); textSize = 26f; textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true }
+                while (t <= dayStart + 86_400) {
+                    val xx = x(t)
+                    if (xx > -60 && xx < size.width + 60) {
+                        drawLine(Color.White.copy(alpha = 0.35f), Offset(xx, trackY + th / 2 + 6f), Offset(xx, trackY + th / 2 + 14f), 2f)
+                        drawContext.canvas.nativeCanvas.drawText(nvrFmt("HH:mm", t), xx, size.height - 2f, paint)
+                    }
+                    t += step
+                }
+                drawLine(Color.White, Offset(mid, 0f), Offset(mid, trackY + th / 2 + 8f), 4f, StrokeCap.Round)
+                drawCircle(Color.White, 6f, Offset(mid, 4f))
+            }
+        }
+        if (segs.isEmpty()) Text(if (busy) "Ricerca…" else "Niente registrato in questo giorno", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = Space.s4))
+        // comandi di riproduzione
+        Row(Modifier.fillMaxWidth().padding(horizontal = Space.s3), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
+            PlayBtn("Evento prima", onClick = { evs.filter { it.start < at - 2 }.maxByOrNull { it.start }?.let { go(it.start - 3) } }) { TransportGlyph(0, Color.White, Modifier.size(14.dp)) }
+            PlayBtn("−30 s", onClick = { go(at - 30) }) { Text("−30", style = CanoneType.footnote.copy(fontWeight = FontWeight.Bold), color = Color.White) }
+            PlayBtn(if (playing != ch) "Riproduci" else if (paused) "Riprendi" else "Pausa", big = true, onClick = { if (playing != ch) go(at) else Cams.pausePlay(!paused) }) {
+                TransportGlyph(if (playing == ch && !paused) 2 else 1, Color.White, Modifier.size(18.dp))
+            }
+            PlayBtn("+30 s", onClick = { go(at + 30) }) { Text("+30", style = CanoneType.footnote.copy(fontWeight = FontWeight.Bold), color = Color.White) }
+            PlayBtn("Evento dopo", onClick = { evs.filter { it.start > at + 2 }.minByOrNull { it.start }?.let { go(it.start - 3) } }) { TransportGlyph(3, Color.White, Modifier.size(14.dp)) }
+        }
+        if (playing == ch) Box(Modifier.align(Alignment.CenterHorizontally).clip(CircleShape).background(Color(0xFFFF453A).copy(alpha = 0.85f)).dropClickable({ Cams.stopPlay() }, corner = 16.dp).padding(horizontal = 14.dp, vertical = 6.dp)) {
+            Text("Torna al vivo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = Space.s4).height(1.dp).background(Color.White.copy(alpha = 0.1f)))
+        Text("Rilevamenti · ${evs.size}", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(horizontal = Space.s4))
+        LazyColumn(Modifier.heightIn(max = 200.dp).padding(horizontal = Space.s2), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (evs.isEmpty()) item { Text(if (busy) "…" else "Nessun movimento", style = CanoneType.body, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = Space.s3, vertical = 6.dp)) }
+            items(evs) { s ->
+                val on = at in s.start..s.end
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (on) Tint.third.copy(alpha = 0.18f) else Color.Transparent)
+                        .dropClickable({ go(s.start - 3) }, corner = 14.dp).padding(horizontal = Space.s2, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
+                ) {
+                    AlertPic(picFor(s), Modifier.width(72.dp).aspectRatio(16f / 10f).clip(RoundedCornerShape(10.dp)))
+                    Column(Modifier.weight(1f)) {
+                        Text(Cams.eventName(s.type), style = CanoneType.body.copy(fontWeight = FontWeight.Medium), color = if (s.type and Cams.T_HUMAN != 0) Tint.third else Color.White)
                         Text("${((s.end - s.start).coerceAtLeast(1) + 59) / 60} min", style = CanoneType.footnote, color = Color.White.copy(alpha = 0.6f))
                     }
+                    Text(hm(s.start), style = CanoneType.bodyMedium.copy(fontFeatureSettings = "tnum"), color = Color.White)
                 }
             }
         }

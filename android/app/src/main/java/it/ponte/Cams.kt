@@ -148,11 +148,21 @@ object Cams {
         if (handle == 0L) return
         if (playing.value >= 0) stopPlay()
         close(ch, 0); close(ch, 1)
-        focus = ch; playing.value = ch; playTime.value = at; playStarted.value = false
+        focus = ch; playing.value = ch; playTime.value = at; playStarted.value = false; playPaused.value = false
         try { c.nativeStartPlayback(handle, at, 65535, false, ch, ch, ch) } catch (_: Throwable) { playing.value = -1 }
     }
 
+    val playPaused = MutableStateFlow(false)
+    fun pausePlay(on: Boolean) {
+        val c = engine() ?: return
+        val ch = playing.value
+        if (ch < 0) return
+        try { if (on) c.nativePausePlayback(handle, ch, ch) else c.nativeResumePlayback(handle, ch, ch) } catch (_: Throwable) {}
+        playPaused.value = on
+    }
+
     fun stopPlay() {
+        playPaused.value = false
         val c = engine() ?: return
         val ch = playing.value
         if (ch < 0) return
@@ -219,13 +229,41 @@ object Cams {
         val url = "$PM/message/message?method=newlist_v5&start=0&count=30&time=" + java.net.URLEncoder.encode(time, "utf-8")
         val form = okhttp3.FormBody.Builder().add("mac_token", "02:00:00:00:00:00").add("eseeid", "[\"$id\"]").add("request_id", rid).add("verify", verify).build()
         val body = http.newCall(okhttp3.Request.Builder().url(url).header("Cookie", "PHPSESSID=$rid").post(form).build()).execute().use { it.body?.string().orEmpty() }
-        val arr = org.json.JSONObject(body).optJSONArray("list") ?: org.json.JSONArray()
+        val root = org.json.JSONObject(body)
+        val arr = root.optJSONArray("list") ?: org.json.JSONArray()
+        // credenziali temporanee per leggere le foto dal deposito Aliyun (come fa l'app ufficiale)
+        val rt = root.optJSONObject("readToken")
+        val kid = root.optString("sts_key_id").ifEmpty { rt?.optString("appReadId").orEmpty() }
+        val ksec = root.optString("sts_key_secret").ifEmpty { rt?.optString("appReadSecret").orEmpty() }
+        val ktok = root.optString("sts_token").ifEmpty { rt?.optString("appReadToken").orEmpty() }
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
-            val img = o.optString("img_url").let { u -> if (u.startsWith("http")) u else try { String(android.util.Base64.decode(u, 0)) } catch (_: Exception) { "" } }
-            Alert(o.optLong("time"), o.optInt("channel"), o.optString("type"), img)
+            val raw = o.optString("img_url").let { u -> if (u.startsWith("http")) u else try { String(android.util.Base64.decode(u, 0)) } catch (_: Exception) { "" } }
+            val id2 = o.optString("appReadId").ifEmpty { kid }; val sec2 = o.optString("appReadSecret").ifEmpty { ksec }; val tok2 = o.optString("appReadToken").ifEmpty { ktok }
+            val bucket = o.optString("bucket"); val ep = o.optString("endpoint").removePrefix("https://").removePrefix("http://").trimEnd('/'); val obj = o.optString("project_name")
+            val url = when {
+                o.optString("ossImageUrl").startsWith("http") -> o.optString("ossImageUrl")
+                id2.isNotEmpty() && bucket.isNotEmpty() && ep.isNotEmpty() && obj.isNotEmpty() -> ossSign("https://$bucket.$ep/${obj.trimStart('/')}", id2, sec2, tok2)
+                id2.isNotEmpty() && raw.startsWith("http") -> ossSign(raw, id2, sec2, tok2)
+                else -> raw
+            }
+            Alert(o.optLong("time"), o.optInt("channel"), o.optString("type"), url)
         }
     } catch (_: Exception) { null }
+
+    /** Indirizzo firmato (OSS v1 con token temporaneo) per una foto nel deposito Aliyun. */
+    private fun ossSign(url: String, id: String, secret: String, token: String): String = try {
+        val u = java.net.URL(url.substringBefore('?'))
+        val bucket = u.host.substringBefore('.')
+        val path = u.path
+        val exp = System.currentTimeMillis() / 1000 + 1800
+        val sub = if (token.isNotEmpty()) "?security-token=$token" else ""
+        val sts = "GET\n\n\n$exp\n/$bucket$path$sub"
+        val mac = javax.crypto.Mac.getInstance("HmacSHA1").apply { init(javax.crypto.spec.SecretKeySpec(secret.toByteArray(), "HmacSHA1")) }
+        val sig = android.util.Base64.encodeToString(mac.doFinal(sts.toByteArray()), android.util.Base64.NO_WRAP)
+        fun e(x: String) = java.net.URLEncoder.encode(x, "utf-8")
+        "${u.protocol}://${u.host}$path?OSSAccessKeyId=${e(id)}&Expires=$exp&Signature=${e(sig)}" + if (token.isNotEmpty()) "&security-token=${e(token)}" else ""
+    } catch (_: Exception) { url }
 
     /** Controllo periodico: una notifica per ogni persona (o movimento) nuova. */
     fun watch(ctx: Context, r: Router) {
