@@ -74,12 +74,30 @@ private fun Mic(color: Color, modifier: Modifier) {
     }
 }
 
+/** To-do: 0 = vita, 1 = università. Condiviso tra la Home e l'Agenda. */
+internal val todoMode = androidx.compose.runtime.mutableIntStateOf(0)
+
+/** Cose da fare per l'università: prima quelle libere, poi gli argomenti d'esame nell'ordine in cui conviene farli. */
+internal fun uniOpen(p: PlanState): List<Task> {
+    val free = p.topics.filter { it.subject == "uni" && !it.done }
+    val next = courses(p).filter { it.open.isNotEmpty() && (it.days ?: 0) >= 0 }
+        .sortedWith(compareBy<Course>({ if (it.doneToday < it.perDay) 0 else 1 }, { -it.pressure }, { it.exam?.date ?: Long.MAX_VALUE }))
+        .flatMap { it.open }
+    return free + next
+}
+
+/** Selettore Life / Uni. */
+@Composable
+fun TodoSwitch(modifier: Modifier = Modifier) {
+    GlassSegmented(listOf("Life", "Uni"), todoMode.intValue, { todoMode.intValue = it }, modifier)
+}
+
 /** Campo per aggiungere alla To-do. */
 @Composable
-fun AddTodo(r: Router, modifier: Modifier = Modifier) {
+fun AddTodo(r: Router, modifier: Modifier = Modifier, subject: String = "") {
     val c = Canone.colors
     var text by remember { mutableStateOf("") }
-    fun add() { if (text.isNotBlank()) { r.plan.saveTask(Task("", text.trim(), "", 0L, false)); text = "" } }
+    fun add() { if (text.isNotBlank()) { r.plan.saveTask(Task("", text.trim(), subject, 0L, false)); text = "" } }
     val shape = RoundedCornerShape(24.dp)
     Row(
         modifier.fillMaxWidth().height(48.dp).clip(shape).glass(shape).padding(start = Space.s4, end = 4.dp),
@@ -100,6 +118,7 @@ fun AddTodo(r: Router, modifier: Modifier = Modifier) {
 /** Una riga della To-do: bolla di spunta e testo. */
 @Composable
 fun TodoRow(r: Router, t: Task, compact: Boolean = false) {
+    val showDue = t.subject.isEmpty()
     val c = Canone.colors
     val dark = isDark()
     val done by animateFloatAsState(if (t.done) 1f else 0f, spring(0.6f, 300f), label = "fatto")
@@ -108,14 +127,14 @@ fun TodoRow(r: Router, t: Task, compact: Boolean = false) {
         Box(
             Modifier.size(if (compact) 22.dp else 26.dp).graphicsLayer { val p = tt.press.value; scaleX = 1f + 0.12f * p; scaleY = 1f + 0.12f * p }
                 .then(if (t.done) Modifier.drop(dark, tint = c.accent) else Modifier.border(1.5.dp, c.labelTertiary, CircleShape))
-                .clip(CircleShape).dropGestures(tt, { r.plan.saveTask(t.copy(done = !t.done)) }),
+                .clip(CircleShape).dropGestures(tt, { r.plan.saveTask(t.copy(done = !t.done, doneAt = if (t.done) 0L else System.currentTimeMillis())) }),
             contentAlignment = Alignment.Center,
         ) { if (done > 0.01f) Icon24(Ico.CHECK, Color.White, Modifier.size(14.dp).graphicsLayer { scaleX = done; scaleY = done }) }
         Text(
             t.title, style = (if (compact) CanoneType.footnote else CanoneType.body).copy(textDecoration = if (t.done) TextDecoration.LineThrough else null),
             color = if (t.done) c.labelTertiary else c.labelPrimary, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
-        if (!compact && t.due > 0) Text(dayLabel(t.due), style = CanoneType.footnote, color = if (!t.done && t.due < dayStart(System.currentTimeMillis())) Tint.third else c.labelTertiary)
+        if (!compact && showDue && t.due > 0) Text(dayLabel(t.due), style = CanoneType.footnote, color = if (!t.done && t.due < dayStart(System.currentTimeMillis())) Tint.third else c.labelTertiary)
     }
 }
 
@@ -124,12 +143,14 @@ fun TodoRow(r: Router, t: Task, compact: Boolean = false) {
 fun TodoTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onLong: () -> Unit) {
     val c = Canone.colors
     val p by r.plan.state.collectAsState()
-    val open = p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
+    val uni = todoMode.intValue == 1
+    val open = if (uni) uniOpen(p) else p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
         Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconBubble(12)
-                Text("To-do", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary, modifier = Modifier.weight(1f))
+                Text(if (uni) "Uni" else "Life", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary,
+                    modifier = Modifier.weight(1f).clip(CircleShape).dropClickable({ todoMode.intValue = 1 - todoMode.intValue }, corner = 12.dp))
                 if (open.isNotEmpty()) Text("${open.size}", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.accent)
             }
             if (open.isEmpty()) Text("Tutto fatto", style = CanoneType.bodyMedium, color = c.labelTertiary, modifier = Modifier.padding(vertical = 4.dp))
@@ -140,9 +161,11 @@ fun TodoTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onL
 
 /** Pagina To-do nell'Agenda. */
 fun LazyListScope.todoItems(r: Router, p: PlanState) {
-    item { AddTodo(r) }
-    val open = p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
-    val done = p.tasks.filter { it.done }
+    item { TodoSwitch(Modifier.fillMaxWidth()) }
+    val uni = todoMode.intValue == 1
+    item { AddTodo(r, subject = if (uni) "uni" else "") }
+    val open = if (uni) uniOpen(p) else p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
+    val done = if (uni) p.topics.filter { it.done }.sortedByDescending { it.doneAt } else p.tasks.filter { it.done }
     item {
         GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0) {
             Column(Modifier.padding(horizontal = Space.s4, vertical = Space.s2)) {
@@ -159,7 +182,7 @@ fun LazyListScope.todoItems(r: Router, p: PlanState) {
             Column(Modifier.padding(horizontal = Space.s4, vertical = Space.s2)) {
                 Row(Modifier.fillMaxWidth().padding(vertical = Space.s2), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Fatte", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Canone.colors.labelSecondary)
-                    Text("Svuota", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Canone.colors.accent,
+                    if (!uni) Text("Svuota", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = Canone.colors.accent,
                         modifier = Modifier.clip(CircleShape).dropClickable({ done.forEach { r.plan.removeTask(it.id) } }, corner = 12.dp).padding(horizontal = 8.dp, vertical = 4.dp))
                 }
                 done.take(20).forEach { TodoRow(r, it) }
