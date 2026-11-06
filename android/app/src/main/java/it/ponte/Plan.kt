@@ -19,7 +19,8 @@ data class Ev(val id: String, val start: Long, val end: Long, val allDay: Boolea
 /** Evento di Google Calendar copiato da un telefono: gli altri dispositivi lo vedono senza account. */
 data class ExtEv(val id: String, val start: Long, val end: Long, val allDay: Boolean, val title: String, val place: String, val color: Int, val device: String)
 data class Subject(val id: String, val name: String, val color: Int)
-data class Task(val id: String, val title: String, val subject: String, val due: Long, val done: Boolean)
+/** Una cosa da fare. Con [subject] è un argomento d'esame: [due] allora è la sua posizione nella lista, [doneAt] quando è stato fatto. */
+data class Task(val id: String, val title: String, val subject: String, val due: Long, val done: Boolean, val doneAt: Long = 0)
 data class Exam(val id: String, val title: String, val subject: String, val date: Long)
 data class Sess(val id: String, val subject: String, val start: Long, val minutes: Int)
 data class Card(val id: String, val subject: String, val q: String, val a: String, val box: Int, val due: Long)
@@ -31,6 +32,8 @@ data class PlanState(
     val events: List<Ev> = emptyList(), val subjects: List<Subject> = emptyList(), val tasks: List<Task> = emptyList(),
     val exams: List<Exam> = emptyList(), val sessions: List<Sess> = emptyList(), val cards: List<Card> = emptyList(),
     val cfg: Map<String, Int> = emptyMap(), val timer: Timer = Timer(), val ext: List<ExtEv> = emptyList(),
+    /** Argomenti d'esame (cose da fare legate a una materia), in ordine. */
+    val topics: List<Task> = emptyList(),
 ) {
     fun cfg(k: String, def: Int) = cfg[k] ?: def
 }
@@ -74,13 +77,14 @@ class Plan(private val ctx: Context, private val r: Router) {
         state.value = PlanState(
             live("ev").map { (id, v) -> Ev(id, v.optLong("t"), v.optLong("e"), v.optInt("a") == 1, v.optString("ti"), v.optInt("c"), v.optString("n"), v.optString("l"), v.optInt("r", -1)) }.sortedBy { it.start },
             live("sub").map { (id, v) -> Subject(id, v.optString("ti"), v.optInt("c")) }.sortedBy { it.name.lowercase() },
-            live("tk").map { (id, v) -> Task(id, v.optString("ti"), v.optString("s"), v.optLong("due"), v.optInt("f") == 1) },
+            live("tk").filter { (_, v) -> v.optString("s").isEmpty() }.map { (id, v) -> Task(id, v.optString("ti"), "", v.optLong("due"), v.optInt("f") == 1, v.optLong("fd")) },
             live("ex").map { (id, v) -> Exam(id, v.optString("ti"), v.optString("s"), v.optLong("t")) }.sortedBy { it.date },
             live("ses").map { (id, v) -> Sess(id, v.optString("s"), v.optLong("t"), v.optInt("m")) }.sortedByDescending { it.start },
             live("card").map { (id, v) -> Card(id, v.optString("s"), v.optString("q"), v.optString("a"), v.optInt("b"), v.optLong("due")) },
             cfg,
             if (t == null) Timer() else Timer(t.optString("p", "focus"), t.optInt("n") == 1, t.optLong("s"), t.optLong("e"), t.optString("sb"), t.optInt("c"), t.optString("dv")),
             live("gev").map { (id, v) -> ExtEv(id, v.optLong("t"), v.optLong("e"), v.optInt("a") == 1, v.optString("ti"), v.optString("l"), v.optInt("c"), v.optString("dv")) },
+            live("tk").filter { (_, v) -> v.optString("s").isNotEmpty() }.map { (id, v) -> Task(id, v.optString("ti"), v.optString("s"), v.optLong("due"), v.optInt("f") == 1, v.optLong("fd")) }.sortedBy { it.due }
         )
     }
 
@@ -152,7 +156,12 @@ class Plan(private val ctx: Context, private val r: Router) {
     // ---------------------------------------------------------------- studio
     fun saveSubject(s: Subject) = mutate { put("sub", s.id.ifEmpty { id() }) { put("ti", s.name); put("c", s.color) } }
     fun removeSubject(id: String) = mutate { del("sub", id) }
-    fun saveTask(t: Task) = mutate { put("tk", t.id.ifEmpty { id() }) { put("ti", t.title); put("s", t.subject); put("due", t.due); put("f", if (t.done) 1 else 0) } }
+    fun saveTask(t: Task) = mutate { put("tk", t.id.ifEmpty { id() }) { put("ti", t.title); put("s", t.subject); put("due", t.due); put("f", if (t.done) 1 else 0); put("fd", if (t.done) (if (t.doneAt > 0) t.doneAt else System.currentTimeMillis()) else 0L) } }
+    /** Aggiunge argomenti in fondo alla lista della materia (uno per riga). */
+    fun addTopics(subject: String, titles: List<String>) {
+        val last = state.value.topics.filter { it.subject == subject }.maxOfOrNull { it.due } ?: 0L
+        mutate { titles.forEachIndexed { i, ti -> put("tk", id()) { put("ti", ti); put("s", subject); put("due", last + 1 + i); put("f", 0) } } }
+    }
     fun removeTask(id: String) = mutate { del("tk", id) }
     fun saveExam(e: Exam) = mutate { put("ex", e.id.ifEmpty { id() }) { put("ti", e.title); put("s", e.subject); put("t", e.date) } }
     fun removeExam(id: String) = mutate { del("ex", id) }

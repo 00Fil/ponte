@@ -88,7 +88,11 @@ private fun daysTo(t: Long): String {
 }
 
 /** Il pomodoro e i dati di studio, dentro l'Agenda. */
+private val addingSubject = androidx.compose.runtime.mutableStateOf(false)
+
 fun androidx.compose.foundation.lazy.LazyListScope.studyItems(r: Router, p: PlanState, onSettings: () -> Unit) {
+    item { NowStudy(r, p) { addingSubject.value = true } }
+    item { ExamsCard(r, p, addingSubject.value) { addingSubject.value = it } }
     item { PomodoroCard(r, p, onSettings) }
     item { TodayCard(p) }
     item { StatsPage(p) }

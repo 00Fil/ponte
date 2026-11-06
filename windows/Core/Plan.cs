@@ -106,7 +106,7 @@ public sealed class Plan
             {
                 Events = Live("ev").Select(kv => new Ev(kv.Key, Num(kv.Value["t"]), Num(kv.Value["e"]), Num(kv.Value["a"]) == 1, Str(kv.Value["ti"]), (int)Num(kv.Value["c"]), Str(kv.Value["n"]), Str(kv.Value["l"]), kv.Value["r"] == null ? -1 : (int)Num(kv.Value["r"]))).OrderBy(e => e.Start).ToList(),
                 Subjects = Live("sub").Select(kv => new Subject(kv.Key, Str(kv.Value["ti"]), (int)Num(kv.Value["c"]))).OrderBy(s => s.Name.ToLowerInvariant()).ToList(),
-                Tasks = Live("tk").Select(kv => new StudyTask(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["due"]), Num(kv.Value["f"]) == 1)).ToList(),
+                Tasks = Live("tk").Where(kv => Str(kv.Value["s"]).Length == 0).Select(kv => new StudyTask(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["due"]), Num(kv.Value["f"]) == 1)).ToList(),
                 Exams = Live("ex").Select(kv => new Exam(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["t"]))).OrderBy(e => e.Date).ToList(),
                 Sessions = Live("ses").Select(kv => new Sess(kv.Key, Str(kv.Value["s"]), Num(kv.Value["t"]), (int)Num(kv.Value["m"]))).OrderByDescending(s => s.Start).ToList(),
                 Cards = Live("card").Select(kv => new StudyCard(kv.Key, Str(kv.Value["s"]), Str(kv.Value["q"]), Str(kv.Value["a"]), (int)Num(kv.Value["b"]), Num(kv.Value["due"]))).ToList(),
