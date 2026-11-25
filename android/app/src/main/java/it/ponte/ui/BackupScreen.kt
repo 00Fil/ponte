@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.LinearProgressIndicator
@@ -61,7 +62,7 @@ fun BackupScreen(r: Router, onClose: () -> Unit) {
     val storage = st.storage
     val plan = st.plan
 
-    Box(Modifier.fillMaxSize().background(c.bgCanvas).statusBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(c.bgCanvas).statusBarsPadding().navigationBarsPadding()) {
         ScreenList("Backup") {
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

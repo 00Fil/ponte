@@ -282,7 +282,7 @@ fun UniversalPlayer(r: Router, startId: String, onClose: () -> Unit) {
                             Text("Una alla volta", style = CanoneType.body, color = c.labelPrimary)
                             GlassSegmented(listOf("No", "Sì"), if (single) 1 else 0, { single = it == 1; r.prefs.singlePlay = single }, Modifier.widthIn(max = 120.dp))
                         }
-                        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        Column(Modifier.heightIn(max = (maxHeight * 0.45f).coerceAtLeast(160.dp)).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                             ids.forEach { id ->
                                 val d = state(id)
                                 val on = d?.playing == true

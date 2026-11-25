@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -187,9 +188,11 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     @Composable
     fun AddPage() {
         val dark = isDark()
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            // il tastierino prende l'altezza che resta; se lo schermo è basso la pagina scorre e il tasto in fondo resta raggiungibile
+            val padH = (maxHeight - 330.dp - LocalBarInset.current - (if (showNote) 76.dp else 0.dp)).coerceIn(230.dp, 560.dp)
             Column(
-                Modifier.widthIn(max = 720.dp).fillMaxSize().padding(start = Space.s4, end = Space.s4, top = Space.s3, bottom = Space.s3 + LocalBarInset.current),
+                Modifier.widthIn(max = 720.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Space.s4, end = Space.s4, top = Space.s3, bottom = Space.s3 + LocalBarInset.current),
                 verticalArrangement = Arrangement.spacedBy(Space.s3),
             ) {
                 Back(if (income) "Nuova entrata" else "Nuova spesa")
@@ -235,7 +238,7 @@ fun FinanceScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
                     }
                 }
                 if (showNote) CField("Nota", note, { note = it }, "Dove o cosa")
-                AmountPad(amount, Modifier.weight(1f).fillMaxWidth()) { amount = it }
+                AmountPad(amount, Modifier.height(padH).fillMaxWidth()) { amount = it }
                 CButton(if (income) "Aggiungi entrata" else "Aggiungi spesa", {
                     val v = r.finance.toCents(amount)
                     if (v == null || v == 0L) { toast(ctx, "Scrivi un importo"); return@CButton }

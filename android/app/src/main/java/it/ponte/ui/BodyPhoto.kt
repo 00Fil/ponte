@@ -32,6 +32,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -453,9 +458,14 @@ fun BodyCamera(r: Router, onClose: () -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Box(Modifier.fillMaxWidth().aspectRatio(3f / 4f).background(Color(0xFF0B0B0C))) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        // l'anteprima resta 3:4 ma si restringe se lo schermo è basso: i comandi sotto hanno sempre il loro spazio
+        val topB = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navB = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val ph = minOf(maxWidth * 4f / 3f, maxHeight - topB - navB - 190.dp).coerceAtLeast(220.dp)
+        val pw = ph * 3f / 4f
+        Column(Modifier.fillMaxSize().statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.width(pw).height(ph).background(Color(0xFF0B0B0C))) {
                 val s = shot
                 if (s != null) {
                     val ib = remember(s) { s.asImageBitmap() }

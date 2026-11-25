@@ -329,7 +329,16 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     if (docked) { kotlinx.coroutines.delay(150); merge.animateTo(1f, androidx.compose.animation.core.spring(0.62f, 230f)) }
                     else merge.animateTo(0f, androidx.compose.animation.core.spring(1f, 520f))
                 }
-                val inset = 66.dp + 10.dp + navBottom + if (docked) it.ponte.ui.SONG_H else 0.dp
+                // la goccia (locale o di un altro dispositivo) sta sopra la barra: le pagine alzano il fondo di quanto serve, così nulla resta coperto
+                val cashOn0 = it.ponte.ui.CashBar.on && pager.currentPage == 2
+                val drawerOn0 = it.ponte.ui.DrawerBar.mode != 0 && pager.currentPage == 3
+                val remote0 = np == null && allMedia.values.any { m -> m.id != r.deviceId && (m.playing || m.id == remoteId) }
+                val local0 = np != null && (dock == 1 || (dock == 2 && prevDock == 1))
+                val dropPad by androidx.compose.animation.core.animateDpAsState(
+                    if (!cashOn0 && !drawerOn0 && (remote0 || local0)) 68.dp else 0.dp,
+                    androidx.compose.animation.core.spring(1f, 380f), label = "fondoGoccia",
+                )
+                val inset = 66.dp + 10.dp + navBottom + (if (docked) it.ponte.ui.SONG_H else 0.dp) + dropPad
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
                         pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })

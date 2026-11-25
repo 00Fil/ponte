@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +52,8 @@ fun DevicesMorph(r: Router, open: Boolean, onClose: () -> Unit = {}, onToggle: (
     val p by animateFloatAsState(if (open) 1f else 0f, spring(0.86f, 240f), label = "morph")
     var full by remember { mutableIntStateOf(0) }
     val d = LocalDensity.current
+    // il menu non supera il 60% dello schermo: oltre scorre
+    val capPx = with(d) { (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.6f).dp.roundToPx() }
     BoxWithConstraints(Modifier.fillMaxWidth().height(30.dp)) {
         val maxW = maxWidth
         val bleed = 8.dp
@@ -78,11 +81,11 @@ fun DevicesMorph(r: Router, open: Boolean, onClose: () -> Unit = {}, onToggle: (
             if (p > 0.05f) Box(
                 Modifier.width(maxW + bleed * 2).graphicsLayer { alpha = ((p - 0.45f) * 2f).coerceIn(0f, 1f) }
                     .layout { m, cs ->
-                        val pl = m.measure(Constraints(cs.maxWidth, cs.maxWidth, 0, Constraints.Infinity))
+                        val pl = m.measure(Constraints(cs.maxWidth, cs.maxWidth, 0, capPx))
                         if (full != pl.height) full = pl.height
                         layout(cs.maxWidth, pl.height) { pl.place(0, 0) }
                     },
-            ) { DevicesCard(r, bare = true) }
+            ) { Box(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) { DevicesCard(r, bare = true) } }
         }
     }
 }

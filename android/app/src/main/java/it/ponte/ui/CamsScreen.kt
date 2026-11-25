@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -156,7 +157,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                         GlassSegmented(listOf("Dal vivo", "Avvisi"), tab, { tab = it })
                     }
                     if (tab == 0) LazyVerticalGrid(
-                        GridCells.Fixed(2), contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 40.dp),
+                        GridCells.Fixed(2), contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                         horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
                     ) {
                         items(list) { ch ->
@@ -169,7 +170,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                                 }
                             }
                         }
-                    } else LazyColumn(contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    } else LazyColumn(contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                         if (alerts.isEmpty()) item { Text("Nessun avviso", style = CanoneType.body, color = c.labelTertiary, modifier = Modifier.padding(Space.s4)) }
                         items(alerts) { a ->
                             GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0, { full = a.channel; pendingPlay = a.time.toInt() - 5 + Cams.tzOff() }) {
