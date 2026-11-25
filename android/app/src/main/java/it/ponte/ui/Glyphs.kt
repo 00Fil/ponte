@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.vector.PathParser
  * Ogni icona è un unico tracciato tratteggiato in un solo passaggio, così dove le linee si incrociano non si vede nessuna sovrapposizione.
  * Quando la scheda diventa attiva l'icona si ridisegna (come in lucide-animated) e l'ingranaggio ruota piano.
  *
- * Indici: 0 casa, 1 dispositivi, 2 appunti, 3 archivio, 4 cuffie, 5 impostazioni, 6 portafoglio, 7 invia, 8 disco, 9 banconote, 10 scudo, 11 calendario, 12 laurea.
+ * Indici: 0 casa, 1 dispositivi, 2 appunti, 3 archivio, 4 cuffie, 5 impostazioni, 6 portafoglio, 7 invia, 8 disco, 9 banconote, 10 scudo, 11 calendario, 12 laurea, 22 fotocamera, 23 fiamma.
  */
 private fun rr(x: Float, y: Float, w: Float, h: Float, r: Float) =
     "M${x + r} ${y}H${x + w - r}A$r $r 0 0 1 ${x + w} ${y + r}V${y + h - r}A$r $r 0 0 1 ${x + w - r} ${y + h}H${x + r}A$r $r 0 0 1 $x ${y + h - r}V${y + r}A$r $r 0 0 1 ${x + r} ${y}Z"
@@ -88,6 +88,8 @@ private val ICONS: List<List<String>> = listOf(
     listOf("M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"),
     // 22 camera (foto)
     listOf("M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z", circ(12f, 13f, 3f)),
+    // 23 flame (corpo)
+    listOf("M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"),
 )
 
 @Composable

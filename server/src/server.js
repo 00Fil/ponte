@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { createBackup } from './backup.js';
 import { createFinance } from './finance.js';
 import { createPlan } from './plan.js';
+import { createBody } from './body.js';
 import { WebSocketServer } from 'ws';
 import { GALLERY_HTML } from './gallery.js';
 
@@ -87,6 +88,7 @@ export async function start({
 
   const finance = createFinance(dataDir);
   const plan = createPlan(dataDir);
+  const body = createBody(dataDir);
   const backup = createBackup(dataDir, { reserveBytes: Number(process.env.PONTE_BACKUP_RESERVE_MB ?? 1024) * 1024 * 1024 });
   const filesDir = path.join(dataDir, 'files');
   const tmpDir = path.join(dataDir, 'tmp');
@@ -208,6 +210,9 @@ export async function start({
     }
     if (url.pathname === '/api/finance') {
       return void finance.handle(req, res).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
+    }
+    if (url.pathname === '/api/body') {
+      return void body.handle(req, res).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
     }
     if (url.pathname === '/api/plan') {
       return void plan.handle(req, res).catch(() => { if (!res.headersSent) res.statusCode = 500; res.end(); });
@@ -365,7 +370,7 @@ export async function start({
         if (st && st.from === dev.id) streams.delete(m.sid);
       } else if (m.t === 'clip') {
         saveClip(m);
-      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'media.state', 'media.pause', 'media.cmd', 'fin', 'plan'].includes(m.t)) {
+      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'media.state', 'media.pause', 'media.cmd', 'fin', 'plan', 'body'].includes(m.t)) {
         return;
       }
 

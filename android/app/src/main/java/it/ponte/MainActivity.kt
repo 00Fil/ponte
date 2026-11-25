@@ -140,9 +140,9 @@ private fun android.app.Activity.fastestMode() {
     } catch (_: Throwable) {}
 }
 
-private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Impostazioni")
+private val TABS = listOf("Home", "Condividi", "Finanze", "Agenda", "Corpo", "Impostazioni")
 /** Icona di ogni scheda (indici di TabGlyph). */
-private val GLYPHS = listOf(0, 1, 6, 11, 5)
+private val GLYPHS = listOf(0, 1, 6, 11, 23, 5)
 
 @Composable
 private fun PonteApp(r: Router) {
@@ -196,10 +196,11 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
     var finSub by remember { mutableStateOf<String?>(null) }
     var setSub by remember { mutableStateOf<String?>(null) }
     var agSub by remember { mutableStateOf<String?>(null) }
+    var bodySub by remember { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(
-        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 4 && setSub != null) || (pager.currentPage == 3 && agSub != null),
+        enabled = (pager.currentPage == 2 && finSub != null) || (pager.currentPage == 5 && setSub != null) || (pager.currentPage == 3 && agSub != null) || (pager.currentPage == 4 && bodySub != null),
     ) {
-        when (pager.currentPage) { 2 -> finSub = null; 3 -> agSub = null; else -> setSub = null }
+        when (pager.currentPage) { 2 -> finSub = null; 3 -> agSub = null; 4 -> bodySub = null; else -> setSub = null }
     }
     val content: @Composable (Int) -> Unit = { t ->
         when (t) {
@@ -211,15 +212,16 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     "agenda" -> { agSub = null; select(3) }
                     "studio" -> { agSub = "study"; select(3) }
                     "todo" -> { agSub = "todo"; select(3) }
-                    "perm" -> { setSub = "perm"; select(4) }
+                    "perm" -> { setSub = "perm"; select(5) }
                     "backup" -> onBackup()
                     "fin-add" -> { finSub = "add"; select(2) }
-                    else -> { setSub = null; select(4) }
+                    else -> { setSub = null; select(5) }
                 }
             }
             1 -> ShareScreen(r, shareSub, { shareSub = it }, onBackup)
             2 -> it.ponte.ui.FinanceScreen(r, finSub) { finSub = it }
             3 -> it.ponte.ui.AgendaScreen(r, agSub) { agSub = it }
+            4 -> it.ponte.ui.BodyScreen(r, bodySub) { bodySub = it }
             else -> SettingsScreen(r, setSub, { setSub = it }, replayOnboarding)
         }
     }
@@ -413,6 +415,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         }
         val camsOpen by Cams.ui.collectAsState()
         if (camsOpen) it.ponte.ui.CamsScreen(r) { Cams.ui.value = false }
+        val bodyCam by it.ponte.ui.BodyCam.open.collectAsState()
+        if (bodyCam) it.ponte.ui.BodyCamera(r) { it.ponte.ui.BodyCam.open.value = false }
         val openRemote = if (remoteOpen) remoteId?.let { allMedia[it] } else null
         androidx.compose.animation.AnimatedVisibility(
             openRemote != null, Modifier.fillMaxSize().zIndex(5f),

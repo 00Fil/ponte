@@ -46,6 +46,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     val clipboard = ClipboardSync(ctx, this)
     val files = FileStore(ctx, this)
     val finance = Finance(ctx, this)
+    val body = Body(ctx, this)
     val plan = Plan(ctx, this)
     val audio = AudioSink(this)
     val headphones = Headphones(ctx, this)
@@ -85,6 +86,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         bt.start()
         updater.start()
         finance.start()
+        body.start()
         plan.start()
         Cams.watch(ctx, this)
         LockLive.start(ctx, this)
@@ -113,6 +115,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
         clipboard.catchUp()
         finance.push()
         plan.push()
+        body.push()
     }
 
     /** Da chiamare dopo ogni cambio di impostazioni. */
@@ -240,6 +243,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "media.cmd" -> media.onCmd(m)
             "fin" -> finance.onRemote(m.optJSONObject("doc"))
             "plan" -> plan.onRemote(m.optJSONObject("doc"))
+            "body" -> body.onRemote(m.optJSONObject("doc"))
         }
     }
 
