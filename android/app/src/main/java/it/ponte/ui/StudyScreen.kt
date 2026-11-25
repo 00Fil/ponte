@@ -238,8 +238,8 @@ private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Floa
     val rounds = p.cfg("rounds", 4)
     // margini letti dalla finestra dell'app: nel dialog a tutto schermo gli inset possono arrivare a zero
     val dens = androidx.compose.ui.platform.LocalDensity.current
-    val navB = with(dens) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(24.dp)
-    val topB = with(dens) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
+    val navB = with(dens) { androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(LocalNavBottom.current).coerceAtLeast(24.dp)
+    val topB = with(dens) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(LocalStatusTop.current).coerceAtLeast(24.dp)
     // colore fisso della fase (blu lavoro, verde pausa) sempre presente, la canzone aggiunge il secondo tono delle onde
     val phaseC by androidx.compose.animation.animateColorAsState(if (focus) Color(0xFF3E7BFF) else Color(0xFF34C759), tween(1200), label = "fase")
     val waves = listOf(phaseC, palette.firstOrNull() ?: phaseC.copy(red = (phaseC.red + 0.3f).coerceAtMost(1f)))

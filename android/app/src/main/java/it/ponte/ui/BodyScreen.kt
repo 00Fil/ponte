@@ -452,6 +452,12 @@ private fun FoodForm(r: Router, initial: Food?, onDone: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Food>?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val scanned by BodyScan.result.collectAsState()
+    LaunchedEffect(scanned) {
+        val code = scanned ?: return@LaunchedEffect
+        BodyScan.result.value = null
+        query = code; busy = true; results = OpenFood.search(code); busy = false
+    }
     fun fill(f: Food) {
         name = f.name; brand = f.brand; serving = f.serving.toString()
         kcal = s(f.per100.kcal); p = s(f.per100.p); cb = s(f.per100.c); sugar = s(f.per100.sugar); fat = s(f.per100.f); fiber = s(f.per100.fiber); salt = s(f.per100.salt)
@@ -468,6 +474,7 @@ private fun FoodForm(r: Router, initial: Food?, onDone: () -> Unit) {
                             if (query.isNotBlank()) { busy = true; scope.launch { results = OpenFood.search(query); busy = false } }
                         }, busy = busy)
                     }
+                    CButton("Scansiona codice", { BodyScan.open.value = true }, Modifier.fillMaxWidth())
                     results?.let { list ->
                         if (list.isEmpty()) Text("Nessun risultato", style = CanoneType.footnote, color = c.labelTertiary)
                         list.forEachIndexed { i, f ->

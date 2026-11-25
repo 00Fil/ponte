@@ -73,6 +73,7 @@ class Body(private val ctx: Context, private val r: Router) {
     private var syncJob: kotlinx.coroutines.Job? = null
 
     init {
+        OpenFood.assets = ctx.assets
         try { merge(JSONObject(file.readText())) } catch (_: Exception) {}
         publish(); scanPhotos()
     }

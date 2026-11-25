@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.draw.drawWithContent
@@ -340,7 +341,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                 )
                 val inset = 66.dp + 10.dp + navBottom + (if (docked) it.ponte.ui.SONG_H else 0.dp) + dropPad
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset) {
+                    androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalBarInset provides inset, it.ponte.ui.LocalNavBottom provides navBottom, it.ponte.ui.LocalStatusTop provides WindowInsets.statusBars.asPaddingValues().calculateTopPadding()) {
                         pages(Modifier.fillMaxSize().drawWithContent { layer.record { this@drawWithContent.drawContent() }; drawLayer(layer) })
                     }
                                         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = inset)) { sheet() }
@@ -426,6 +427,8 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         if (camsOpen) it.ponte.ui.CamsScreen(r) { Cams.ui.value = false }
         val bodyCam by it.ponte.ui.BodyCam.open.collectAsState()
         if (bodyCam) it.ponte.ui.BodyCamera(r) { it.ponte.ui.BodyCam.open.value = false }
+        val bodyScan by it.ponte.ui.BodyScan.open.collectAsState()
+        if (bodyScan) it.ponte.ui.BarcodeScanner({ code -> it.ponte.ui.BodyScan.result.value = code; it.ponte.ui.BodyScan.open.value = false }) { it.ponte.ui.BodyScan.open.value = false }
         val openRemote = if (remoteOpen) remoteId?.let { allMedia[it] } else null
         androidx.compose.animation.AnimatedVisibility(
             openRemote != null, Modifier.fillMaxSize().zIndex(5f),

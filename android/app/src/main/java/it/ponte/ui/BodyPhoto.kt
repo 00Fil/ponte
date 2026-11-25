@@ -297,8 +297,8 @@ private fun PhotoDetail(r: Router, b: BodyState, day: String, photos: List<Strin
     var weightSheet by remember { mutableStateOf(false) }
     val kgNow = b.weights.firstOrNull { it.day == day }
     val kgFirst = first?.let { f -> b.weights.firstOrNull { it.day == f } }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)) {
-        Column(Modifier.fillMaxSize().background(Color.Black)) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Column(Modifier.fillMaxSize().background(Color.Black).padding(top = LocalStatusTop.current, bottom = LocalNavBottom.current + Space.s4)) {
             Row(Modifier.fillMaxWidth().padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(cap(fmt(keyTime(day), "EEEE d MMMM yyyy")), style = CanoneType.bodyMedium, color = Color.White)

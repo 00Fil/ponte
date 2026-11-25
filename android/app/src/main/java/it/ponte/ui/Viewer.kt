@@ -101,7 +101,7 @@ fun PhotoViewer(items: List<FileEntry>, start: Int, onShare: (FileEntry) -> Unit
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().alpha(a)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
-                    .navigationBarsPadding().padding(Space.s5),
+                    .padding(bottom = LocalNavBottom.current).padding(Space.s5),
                 verticalArrangement = Arrangement.spacedBy(Space.s3),
             ) {
                 Column {

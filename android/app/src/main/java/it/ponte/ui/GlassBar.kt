@@ -72,6 +72,9 @@ import kotlin.math.roundToInt
 
 /** Spazio che il contenuto deve lasciare in basso perché la barra di vetro non copra l'ultima riga. */
 val LocalBarInset = compositionLocalOf { 0.dp }
+/** Altezza della barra di navigazione e della barra di stato, misurate fuori dai dialoghi (dentro i dialoghi gli inset arrivano a zero). */
+val LocalNavBottom = compositionLocalOf { 0.dp }
+val LocalStatusTop = compositionLocalOf { 0.dp }
 
 // ---------------------------------------------------------------- vetro che rifrange (Android 13+)
 

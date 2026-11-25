@@ -138,7 +138,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
     val alerts by Cams.alerts.collectAsState()
     val list = camList(all = edit)
     val dens = LocalDensity.current
-    val top = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(24.dp)
+    val top = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(LocalStatusTop.current).coerceAtLeast(24.dp)
     LaunchedEffect(ready) { if (ready) Cams.ensure(r) }
     androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
@@ -157,7 +157,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                         GlassSegmented(listOf("Dal vivo", "Avvisi"), tab, { tab = it })
                     }
                     if (tab == 0) LazyVerticalGrid(
-                        GridCells.Fixed(2), contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+                        GridCells.Fixed(2), contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + LocalNavBottom.current),
                         horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3),
                     ) {
                         items(list) { ch ->
@@ -170,7 +170,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
                                 }
                             }
                         }
-                    } else LazyColumn(contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    } else LazyColumn(contentPadding = PaddingValues(start = Space.s4, end = Space.s4, top = Space.s2, bottom = 24.dp + LocalNavBottom.current), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                         if (alerts.isEmpty()) item { Text("Nessun avviso", style = CanoneType.body, color = c.labelTertiary, modifier = Modifier.padding(Space.s4)) }
                         items(alerts) { a ->
                             GlassTile(Modifier.fillMaxWidth(), Tint.blue, 0, { full = a.channel; pendingPlay = a.time.toInt() - 5 + Cams.tzOff() }) {
@@ -296,8 +296,8 @@ private fun CamFull(ch: Int, startAt: Int, onBack: () -> Unit) {
     var shot by remember { mutableStateOf(false) }
     LaunchedEffect(shot) { if (shot) { kotlinx.coroutines.delay(1500); shot = false } }
     val dens = LocalDensity.current
-    val navB = with(dens) { WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(48.dp)
-    val topB = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(32.dp)
+    val navB = with(dens) { WindowInsets.navigationBars.getBottom(this).toDp() }.coerceAtLeast(LocalNavBottom.current).coerceAtLeast(48.dp)
+    val topB = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(LocalStatusTop.current).coerceAtLeast(32.dp)
     DisposableEffect(ch) {
         Cams.enter(ch)
         if (startAt > 0) Cams.play(ch, startAt)
