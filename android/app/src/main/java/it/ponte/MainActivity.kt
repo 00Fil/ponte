@@ -210,6 +210,7 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
                     "devices" -> select(1)
                     "clips", "images" -> { shareSub = to; select(1) }
                     "finance" -> { finSub = null; select(2) }
+                    "body" -> { bodySub = null; select(4) }
                     "agenda" -> { agSub = null; select(3) }
                     "studio" -> { agSub = "study"; select(3) }
                     "todo" -> { agSub = "todo"; select(3) }

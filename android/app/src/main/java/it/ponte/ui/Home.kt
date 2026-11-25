@@ -118,6 +118,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                             BalanceCard(r, money, sq, { go("finance") }) { panel = "finance" }
                             TodoTile(r, sq, 4, { go("todo") }) { panel = "agenda" }
                         }
+                        BodyTile(r, Modifier.fillMaxWidth().height(cell * 0.62f)) { go("body") }
                         // cam: tenendo premuto la card si allarga a tutta riga e cresce in altezza, l'audio si fa da parte
                         val grow by androidx.compose.animation.core.animateFloatAsState(if (camBig) 1f else 0f, androidx.compose.animation.core.spring(0.78f, 260f), label = "cam")
                         Row {
@@ -142,6 +143,36 @@ private fun FixWidget(n: Int, modifier: Modifier, onClick: () -> Unit) {
             Text("!", style = CanoneType.title2, color = OnGlass)
             Text(if (n == 1) "Un permesso da concedere" else "$n permessi da concedere", style = CanoneType.bodyMedium, color = OnGlass, modifier = Modifier.weight(1f))
             Text("›", style = CanoneType.title3, color = OnGlass2)
+        }
+    }
+}
+
+/** Corpo: anello delle calorie di oggi, macro e prossimo pasto del piano. */
+@Composable
+private fun BodyTile(r: Router, modifier: Modifier, onClick: () -> Unit) {
+    val c = Canone.colors
+    val b by r.body.state.collectAsState()
+    val today = it.ponte.dayKey()
+    val tot = b.entries.filter { it.day == today }.fold(it.ponte.Nut()) { a, e -> a + e.n }
+    val g = b.goals
+    val cal = Calendar.getInstance()
+    val dow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val nowMin = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+    val next = b.slots.firstOrNull { it.dow == dow && it.minute >= nowMin - 30 } ?: b.slots.filter { it.dow == (dow + 1) % 7 }.minByOrNull { it.minute }
+    GlassTile(modifier, Tint.blue, 4, onClick) {
+        Row(Modifier.fillMaxSize().padding(Space.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+            Ring(if (g.kcal > 0) tot.kcal / g.kcal else 0f, Modifier.fillMaxHeight().aspectRatio(1f), 12f) {
+                Text(Math.round(tot.kcal).toString(), style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconBubble(23)
+                    Text("Corpo", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary)
+                }
+                Text("${Math.round(tot.kcal)} / ${g.kcal} kcal", style = CanoneType.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = c.labelPrimary)
+                Text("P ${Math.round(tot.p)} · C ${Math.round(tot.c)} · G ${Math.round(tot.f)}", style = CanoneType.footnote, color = c.labelSecondary)
+                if (next != null) Text("%02d:%02d  %s".format(next.minute / 60, next.minute % 60, next.label), style = CanoneType.footnote, color = c.labelSecondary, maxLines = 1)
+            }
         }
     }
 }
