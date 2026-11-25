@@ -58,6 +58,8 @@ object OpenFood {
         } catch (_: Exception) { emptyList() }
     }
 
+    fun crea(name: String): Food? = GENERIC.firstOrNull { it.name == name }
+
     suspend fun search(query: String): List<Food> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.isEmpty()) return@withContext emptyList()

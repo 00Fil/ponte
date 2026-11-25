@@ -147,7 +147,56 @@ class Body(private val ctx: Context, private val r: Router) {
 
     fun start() {
         r.scope.launch {
-            while (true) { syncServer(); kotlinx.coroutines.delay(10 * 60_000L) }
+            var first = true
+            while (true) { syncServer(); if (first) { first = false; loadPreset() }; kotlinx.coroutines.delay(10 * 60_000L) }
+        }
+    }
+
+    /** Una sola volta, a piano vuoto: carica obiettivi, alimenti CREA e pasti della settimana su misura. */
+    private fun loadPreset() {
+        val prefs = ctx.getSharedPreferences("body_preset", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("v1", false)) return
+        prefs.edit().putBoolean("v1", true).apply()
+        if (state.value.slots.isNotEmpty()) return
+        val foods = HashMap<String, Food>()
+        fun fd(display: String, crea: String): String {
+            val base = OpenFood.crea(crea) ?: return ""
+            val id = "p" + crea.hashCode().toUInt().toString(16)
+            foods[id] = base.copy(id = id, name = display, brand = "CREA")
+            return id
+        }
+        fun pi(display: String, crea: String, g: Int): PlanItem {
+            val id = fd(display, crea)
+            val f = foods[id]
+            return PlanItem(id, display, g.toFloat(), (f?.per100 ?: Nut()) * (g / 100f))
+        }
+        fun frutta(d: Int) = when (d % 3) { 0 -> pi("Mela", "Mele, fresche, golden", 150); 1 -> pi("Banana", "Banane, fresche", 120); else -> pi("Arancia", "Arance Tarocco, fresche", 150) }
+        val slots = ArrayList<Slot>()
+        for (d in 0..6) {
+            val toast = d % 2 == 0
+            val colaz = if (toast) listOf(pi("Pane bianco", "Pane bianco", 80), pi("Prosciutto cotto", "Prosciutto cotto, sgrassato", 50), pi("Grana Padano", "Grana Padano, DOP", 20))
+            else listOf(pi("Fette biscottate", "Fette biscottate", 50), pi("Marmellata", "Marmellata", 30), frutta(d))
+            slots += Slot("pl${d}a", d, 7 * 60, 0, if (toast) "Toast" else "Colazione dolce", colaz)
+            slots += Slot("pl${d}b", d, 10 * 60 + 30, 3, "Spuntino", listOf(frutta(d + 1), pi("Grana Padano", "Grana Padano, DOP", 30)))
+            val carb = if (d % 2 == 0) pi("Pasta", "Pasta di semola", 100) else pi("Riso", "Riso, brillato", 90)
+            val prot = if (d >= 5) pi("Tacchino", "Tacchino, fesa, crudo", 200) else pi("Pollo", "Pollo, petto, crudo", 200)
+            slots += Slot("pl${d}c", d, 13 * 60, 1, "Pranzo", listOf(carb, prot, pi("Olio d'oliva", "Olio di oliva extra vergine", 10), pi("Pomodori", "Pomodori, da insalata, freschi", 200)))
+            slots += Slot("pl${d}d", d, 16 * 60, 3, "Merenda", listOf(pi("Pane bianco", "Pane bianco", 80), pi("Tacchino arrosto", "Tacchino, fesa, cotta, al forno", 60), frutta(d + 2)))
+            val cena = if (d == 0 || d == 3 || d == 6) listOf(pi("Uova", "Uova di gallina, intero", 180), pi("Patate", "Patate, crude", 300), pi("Olio d'oliva", "Olio di oliva extra vergine", 10), pi("Zucchine", "Zucchine, crude", 200), pi("Pane bianco", "Pane bianco", 40))
+            else listOf(pi("Pollo", "Pollo, petto, crudo", 200), pi("Patate", "Patate, crude", 300), pi("Olio d'oliva", "Olio di oliva extra vergine", 10), pi("Carote", "Carote, crude", 200), pi("Pane bianco", "Pane bianco", 40))
+            slots += Slot("pl${d}e", d, 20 * 60 + 30, 2, if (d == 0 || d == 3 || d == 6) "Frittata" else "Cena", cena)
+        }
+        mutate {
+            foods.values.forEach { f -> put("fd", f.id) { put("n", f.name); put("b", f.brand); put("s", f.serving); put("v", f.per100.toJson()) } }
+            slots.forEach { s ->
+                put("sl", s.id) {
+                    put("w", s.dow); put("h", s.minute); put("m", s.meal); put("l", s.label)
+                    put("it", JSONArray().also { a -> s.items.forEach { i -> a.put(JSONObject().put("f", i.foodId).put("n", i.name).put("g", i.grams.toDouble()).put("v", i.n.toJson())) } })
+                }
+            }
+            if (state.value.goals.height == 0) put("cfg", "g") { put("k", 2350); put("p", 165); put("c", 260); put("f", 75); put("fi", 30); put("gw", 795); put("h", 186); put("sx", 0); put("a", 19); put("ac", 3) }
+            val today = dayKey()
+            if (state.value.weights.none { it.day == today }) put("wt", today) { put("k", 886) }
         }
     }
 
