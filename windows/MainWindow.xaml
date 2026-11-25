@@ -107,6 +107,7 @@
                 <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="PageA" Visibility="Collapsed"><StackPanel x:Name="HostA" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="PageB" Visibility="Collapsed"><StackPanel x:Name="HostB" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="PageS" Visibility="Collapsed"><StackPanel x:Name="HostS" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
                 <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
             </Grid>
