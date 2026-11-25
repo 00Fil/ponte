@@ -277,8 +277,9 @@ public sealed partial class MainWindow
             var grams = new TextBox { Text = food.Serving.ToString(It), Width = 70, TextAlignment = TextAlignment.Center };
             var tr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             tr.Children.Add(grams);
-            tr.Children.Add(T("g", 13, "LabelTertiary"));
-            tr.Children[1].VerticalAlignment = VerticalAlignment.Center;
+            var unit = T("g", 13, "LabelTertiary");
+            unit.VerticalAlignment = VerticalAlignment.Center;
+            tr.Children.Add(unit);
             tr.Children.Add(Btn("Aggiungi", () =>
             {
                 var g = BdParse(grams.Text);
