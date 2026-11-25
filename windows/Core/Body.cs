@@ -262,7 +262,7 @@ public sealed class BodyStore
     public void SaveGoals(Goals g) => Mutate(() => Put("cfg", "g", new JsonObject
     {
         ["k"] = g.Kcal, ["p"] = g.P, ["c"] = g.C, ["f"] = g.F, ["fi"] = g.Fiber, ["gw"] = g.GoalKg10, ["h"] = g.Height, ["sx"] = g.Sex, ["a"] = g.Age, ["ac"] = g.Act,
-    });
+    }));
 
     // ---------------------------------------------------------------- piano su misura
 
