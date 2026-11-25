@@ -85,16 +85,16 @@ internal fun shortDay(key: String): String = cap(fmt(keyTime(key), "EEE d MMM"))
 @Composable
 internal fun BodySheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val c = Canone.colors
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)) {
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
             contentAlignment = Alignment.BottomCenter,
         ) {
             Column(
-                Modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl)).background(c.bgSurface)
+                Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp).clip(RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl)).background(c.bgSurface)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
-                    .navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(Space.s5),
+                    .imePadding().verticalScroll(rememberScrollState()).padding(start = Space.s5, end = Space.s5, top = Space.s5, bottom = Space.s5),
                 verticalArrangement = Arrangement.spacedBy(Space.s4),
             ) { content() }
         }

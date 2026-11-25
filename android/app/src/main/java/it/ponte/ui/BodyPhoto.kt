@@ -297,10 +297,20 @@ private fun PhotoDetail(r: Router, b: BodyState, day: String, photos: List<Strin
     var weightSheet by remember { mutableStateOf(false) }
     val kgNow = b.weights.firstOrNull { it.day == day }
     val kgFirst = first?.let { f -> b.weights.firstOrNull { it.day == f } }
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)) {
+        Column(Modifier.fillMaxSize().background(Color.Black)) {
+            Row(Modifier.fillMaxWidth().padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(cap(fmt(keyTime(day), "EEEE d MMMM yyyy")), style = CanoneType.bodyMedium, color = Color.White)
+                    Text(
+                        if (compare && first != null) "Prima " + shortDay(first) + (kgFirst?.let { " · " + kg(it.kg) + " kg" } ?: "") else (kgNow?.let { kg(it.kg) + " kg" } ?: ""),
+                        style = CanoneType.footnote.copy(fontFeatureSettings = "tnum"), color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+                RoundGlass(40.dp, false, onClose) { Icon24(Ico.CLOSE, Color.White, Modifier.size(18.dp)) }
+            }
             Canvas(
-                Modifier.fillMaxSize().padding(top = 96.dp, bottom = 120.dp).pointerInput(compare) {
+                Modifier.weight(1f).fillMaxWidth().pointerInput(compare) {
                     if (compare) detectHorizontalDragGestures { change, _ -> frac = (change.position.x / size.width).coerceIn(0f, 1f) }
                 },
             ) {
@@ -312,17 +322,7 @@ private fun PhotoDetail(r: Router, b: BodyState, day: String, photos: List<Strin
                     drawCircle(Color.Black, 4.dp.toPx(), Offset(size.width * frac, size.height / 2f))
                 }
             }
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(cap(fmt(keyTime(day), "EEEE d MMMM yyyy")), style = CanoneType.bodyMedium, color = Color.White)
-                    Text(
-                        if (compare && first != null) "Prima " + shortDay(first) + (kgFirst?.let { " · " + kg(it.kg) + " kg" } ?: "") else (kgNow?.let { kg(it.kg) + " kg" } ?: ""),
-                        style = CanoneType.footnote.copy(fontFeatureSettings = "tnum"), color = Color.White.copy(alpha = 0.7f),
-                    )
-                }
-                RoundGlass(40.dp, false, onClose) { Icon24(Ico.CLOSE, Color.White, Modifier.size(18.dp)) }
-            }
-            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+            Row(Modifier.fillMaxWidth().padding(Space.s4), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                 if (first != null && ref != null && img != null) CButton(if (compare) "Foto" else "Confronta", { compare = !compare }, Modifier.weight(1f), kind = ButtonKind.Primary)
                 CButton("Peso", { weightSheet = true }, Modifier.weight(1f))
                 CButton(if (sure) "Conferma" else "Elimina", {
