@@ -41,6 +41,7 @@ public sealed partial class MainWindow
         row.Children.Add(clip);
         row.Children.Add(bal);
         h.Children.Add(row);
+        h.Children.Add(BodyWidget());
 
         // musica in un quadrato + attività della settimana
         var row2 = new Grid { ColumnSpacing = 12 };
@@ -142,29 +143,95 @@ public sealed partial class MainWindow
 
     // ---------------------------------------------------------------- saldo
 
-    /// <summary>Il saldo come un riquadro qualsiasi: l'occhio nasconde l'importo, il resto del riquadro apre Finanze.</summary>
+    /// <summary>Saldo: importo grande che si riduce per stare nel riquadro, spese del mese sotto, occhio per nasconderli. Il resto del riquadro apre Finanze.</summary>
     private Border BalanceCard()
     {
         var m = _r.Fin.State;
+        var monthStart = new DateTimeOffset(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)).ToUnixTimeMilliseconds();
+        var spent = -m.Txs.Where(t => t.Ts >= monthStart && t.Cents < 0).Sum(t => t.Cents);
+        var hidden = _r.S.HideMoney;
+
+        var amount = T(hidden ? "••••••" : Finance.Eur(m.TotalCents), 28, "LabelPrimary", true);
+        amount.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+        amount.TextTrimming = TextTrimming.None;
+        var fit = new Viewbox { StretchDirection = StretchDirection.DownOnly, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Left, Child = amount };
+        var month = T(hidden ? "Spese del mese  ••••" : "Spese del mese  " + Finance.Eur(spent), 12, "LabelTertiary");
+
+        var eyeIcon = Icon(hidden ? "\uED1A" : "\uE7B3", 15, B("LabelSecondary"));
+        var eye = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(16), Background = B("BgSunken"), Child = eyeIcon, HorizontalAlignment = HorizontalAlignment.Right };
+        eye.Tapped += (_, e) =>
+        {
+            e.Handled = true;
+            var on = !_r.S.HideMoney;
+            _r.S.HideMoney = on;
+            _r.S.Save();
+            amount.Text = on ? "••••••" : Finance.Eur(m.TotalCents);
+            month.Text = on ? "Spese del mese  ••••" : "Spese del mese  " + Finance.Eur(spent);
+            eyeIcon.Glyph = on ? "\uED1A" : "\uE7B3";
+        };
+
         var col = new Grid();
         col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         col.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(T("Saldo", 13, "LabelTertiary"));
-        var eye = EyeToggle();
-        eye.Width = 32; eye.Height = 32;
+        var label = T("Saldo", 13, "LabelTertiary");
+        label.VerticalAlignment = VerticalAlignment.Center;
+        head.Children.Add(label);
         Grid.SetColumn(eye, 1);
         head.Children.Add(eye);
         col.Children.Add(head);
-        var bal = MoneyText("home.total", m.TotalCents, 24);
-        bal.VerticalAlignment = VerticalAlignment.Bottom;
-        Grid.SetRow(bal, 1);
-        col.Children.Add(bal);
-        var w = Widget(col, 190);
+        fit.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetRow(fit, 1);
+        col.Children.Add(fit);
+        Grid.SetRow(month, 2);
+        col.Children.Add(month);
+        var w = Widget(col, 190, new Thickness(18));
         w.Tapped += (_, _) => Select(2);
         Bounce(w, 1.02f);
+        return w;
+    }
+
+    // ---------------------------------------------------------------- corpo
+
+    /// <summary>Calorie di oggi, macro, prossimo pasto e peso. Un tocco apre Corpo.</summary>
+    private Border BodyWidget()
+    {
+        var b = _r.Bd.State;
+        var today = BodyStore.DayKey();
+        var tot = BdDayTotal(b, today);
+        var g = b.Goals;
+        var dow = ((int)DateTime.Today.DayOfWeek + 6) % 7;
+        var nowMin = DateTime.Now.Hour * 60 + DateTime.Now.Minute;
+        var next = b.Slots.FirstOrDefault(s => s.Dow == dow && s.Minute >= nowMin - 30)
+            ?? b.Slots.Where(s => s.Dow == (dow + 1) % 7).OrderBy(s => s.Minute).FirstOrDefault();
+
+        var left = new StackPanel { Spacing = 8 };
+        left.Children.Add(T("Corpo oggi", 13, "LabelTertiary"));
+        left.Children.Add(T($"{BdN(tot.Kcal)} / {g.Kcal} kcal", 24, "LabelPrimary", true));
+        left.Children.Add(BdBar(g.Kcal > 0 ? tot.Kcal / g.Kcal : 0, tot.Kcal > g.Kcal ? MacroF : C("AccentDefault")));
+        left.Children.Add(BdMacros(tot, g));
+
+        var right = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        if (next != null)
+        {
+            right.Children.Add(T($"{BdClock(next.Minute)}  {next.Label}", 15, "LabelPrimary", true));
+            var line = T(string.Join(" · ", next.Items.Take(3).Select(i => i.Name)), 12, "LabelSecondary");
+            right.Children.Add(line);
+        }
+        if (b.Weights.Count > 0) right.Children.Add(T(BdG(b.Weights[^1].Kg) + " kg", 15, "LabelTertiary"));
+
+        var grid = new Grid { ColumnSpacing = 24 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(left);
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
+        var w = Widget(grid, null, new Thickness(20));
+        w.Tapped += (_, _) => Select(4);
+        Bounce(w, 1.01f);
         return w;
     }
 

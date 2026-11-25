@@ -81,8 +81,11 @@ public sealed partial class MainWindow : Window
         if (AppWindow.Presenter is OverlappedPresenter p) p.SetBorderAndTitleBar(true, false);
 
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        var w = Math.Min(1100, (int)(area.Width * 0.9));
-        var h = Math.Min(760, (int)(area.Height * 0.9));
+        // dimensione in pixel logici: segue la scala dello schermo, quindi su schermi ad alta densità non resta minuscola
+        var scale = 1.0;
+        try { scale = GetDpiForWindow(WindowNative.GetWindowHandle(this)) / 96.0; } catch (Exception) { }
+        var w = (int)Math.Min(1360 * scale, area.Width * 0.92);
+        var h = (int)Math.Min(900 * scale, area.Height * 0.92);
         AppWindow.MoveAndResize(new RectInt32(area.X + (area.Width - w) / 2, area.Y + (area.Height - h) / 2, w, h));
 
         // Finestra in secondo piano: i pallini diventano grigi, come su macOS.
@@ -147,12 +150,32 @@ public sealed partial class MainWindow : Window
     // ---------------------------------------------------------------- struttura
 
     /// <summary>Il layout segue la finestra: barra laterale da 1024 in su, barra in basso sotto.</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    /// <summary>Titolo e pagine hanno la stessa larghezza esatta, centrata nell'area dei contenuti: niente più scarti a destra.</summary>
+    private void FitColumn()
+    {
+        var avail = Root.ActualWidth - (Side.Visibility == Visibility.Visible ? SideCol.Width.Value : 0);
+        if (avail <= 0) return;
+        var w = Math.Max(260, Math.Min(840, avail - 64));
+        TitleBox.MaxWidth = 100000; TitleBox.Margin = new Thickness(0); TitleBox.Width = w; TitleBox.HorizontalAlignment = HorizontalAlignment.Center;
+        Col5.MaxWidth = 100000; Col5.Margin = new Thickness(0, 4, 0, 40); Col5.Width = w; Col5.HorizontalAlignment = HorizontalAlignment.Center;
+        for (var i = 0; i < _hosts.Length; i++)
+        {
+            if (_hosts[i] == Host5) continue;
+            _hosts[i].MaxWidth = 100000; _hosts[i].Margin = new Thickness(0, 4, 0, 40); _hosts[i].Width = w; _hosts[i].HorizontalAlignment = HorizontalAlignment.Center;
+        }
+        foreach (var pg in _pages) pg.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+    }
+
     private void ApplyLayout()
     {
         var wide = Root.ActualWidth >= 1024;
         SideCol.Width = new GridLength(wide ? 232 : 0);
         Side.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
         Bottom.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
+        FitColumn();
     }
 
     private readonly List<Button> _nav = new();

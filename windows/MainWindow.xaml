@@ -83,13 +83,13 @@
             <Grid x:Name="Header">
                 <WebView2 x:Name="HeaderWeb" />
                 <Border x:Name="HeaderFade" IsHitTestVisible="False" />
-                <Grid MaxWidth="840" Margin="32,0" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                <Grid x:Name="TitleBox" MaxWidth="840" Margin="32,0" VerticalAlignment="Bottom" IsHitTestVisible="False">
                     <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" Margin="0,0,0,12" />
                 </Grid>
             </Grid>
             <Grid Grid.Row="1">
                 <ScrollViewer x:Name="Page5">
-                    <StackPanel MaxWidth="840" Margin="32,4,32,40" Spacing="12">
+                    <StackPanel x:Name="Col5" MaxWidth="840" Margin="32,4,32,40" Spacing="12">
                         <!-- Scheda grande della Home: MicroSlats dietro il saluto. -->
                         <Grid x:Name="HomeHero" Height="208" CornerRadius="24" Background="{StaticResource BrandGradient}">
                             <WebView2 x:Name="HomeWeb" />
