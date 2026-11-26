@@ -430,6 +430,15 @@ private fun MainShell(r: Router, onBackup: () -> Unit, replayOnboarding: () -> U
         if (bodyCam) it.ponte.ui.BodyCamera(r) { it.ponte.ui.BodyCam.open.value = false }
         val bodyScan by it.ponte.ui.BodyScan.open.collectAsState()
         if (bodyScan) it.ponte.ui.BarcodeScanner({ code -> it.ponte.ui.BodyScan.result.value = code; it.ponte.ui.BodyScan.open.value = false }) { it.ponte.ui.BodyScan.open.value = false }
+        // pagine e fogli a tutto schermo: stesse barre di sistema dell'app, misurate qui
+        val overlays by it.ponte.ui.Overlays.items.collectAsState()
+        val ovNav = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val ovTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        overlays.values.forEach { o ->
+            Box(Modifier.fillMaxSize().zIndex(40f).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
+                androidx.compose.runtime.CompositionLocalProvider(it.ponte.ui.LocalNavBottom provides ovNav, it.ponte.ui.LocalStatusTop provides ovTop) { o() }
+            }
+        }
         val openRemote = if (remoteOpen) remoteId?.let { allMedia[it] } else null
         androidx.compose.animation.AnimatedVisibility(
             openRemote != null, Modifier.fillMaxSize().zIndex(5f),

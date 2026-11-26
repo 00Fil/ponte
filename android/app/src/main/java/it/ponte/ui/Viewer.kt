@@ -80,7 +80,7 @@ fun PhotoViewer(items: List<FileEntry>, start: Int, onShare: (FileEntry) -> Unit
     LaunchedEffect(Unit) { enter.animateTo(1f, tween(320, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))) }
     val cur = items[pager.currentPage.coerceIn(0, items.lastIndex)]
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppOverlay(onClose) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.96f * enter.value))) {
             HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !zoomed, key = { items[it].fid }) { i ->
                 Zoomable(

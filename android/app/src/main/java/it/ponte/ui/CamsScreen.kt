@@ -140,7 +140,7 @@ fun CamsScreen(r: Router, onClose: () -> Unit) {
     val dens = LocalDensity.current
     val top = with(dens) { WindowInsets.statusBars.getTop(this).toDp() }.coerceAtLeast(LocalStatusTop.current).coerceAtLeast(24.dp)
     LaunchedEffect(ready) { if (ready) Cams.ensure(r) }
-    androidx.compose.ui.window.Dialog(onClose, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppOverlay(onClose) {
         Box(Modifier.fillMaxSize().background(c.bgCanvas)) {
             Column(Modifier.fillMaxSize().padding(top = top + Space.s2)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s2), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {

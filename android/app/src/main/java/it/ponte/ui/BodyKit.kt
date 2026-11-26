@@ -86,7 +86,7 @@ internal fun shortDay(key: String): String = cap(fmt(keyTime(key), "EEE d MMM"))
 @Composable
 internal fun BodySheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val c = Canone.colors
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppOverlay(onDismiss) {
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),

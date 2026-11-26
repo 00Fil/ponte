@@ -246,7 +246,7 @@ private fun PomodoroImmersive(r: Router, p: PlanState, secs: Int, progress: Floa
     // battito a ogni secondo
     val beat = remember { androidx.compose.animation.core.Animatable(1f) }
     LaunchedEffect(secs) { beat.snapTo(1.035f); beat.animateTo(1f, spring(0.55f, 260f)) }
-    androidx.compose.ui.window.Dialog(onMinimize, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppOverlay(onMinimize) {
         Box(Modifier.fillMaxSize().background(Color(0xFF070A14))) {
             WavesBackground(waves, Color(0xFF070A14), Modifier.fillMaxSize())
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.30f), phaseC.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.50f)))))
