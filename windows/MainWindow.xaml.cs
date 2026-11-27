@@ -23,8 +23,11 @@ internal sealed class Cmd : ICommand
 
 public sealed partial class MainWindow : Window
 {
-    // Stessi moduli di Android: Home, Condividi (dispositivi, appunti, immagini, file), Finanze, Agenda, Studio, Audio, Impostazioni.
-    private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Agenda", "Corpo", "Audio", "Impostazioni" };
+    // Le stesse sei voci di Android, con le stesse icone. L'audio sta in Home e nelle Impostazioni.
+    private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Agenda", "Corpo", "Impostazioni" };
+    private static readonly int[] TabIcons = { Tab.House, Tab.Devices, Tab.Wallet, Tab.Calendar, Tab.Flame, Tab.Settings };
+    /// <summary>Larghezza massima della colonna di ogni pagina, come su Android.</summary>
+    private static readonly double[] PageMax = { 720, 1024, 720, 720, 720, 720 };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -39,10 +42,8 @@ public sealed partial class MainWindow : Window
         InitViewerKeys();
         _r = r;
         InitUpdateCard();
-        _pages = new[] { Page5, Page0, Page1, PageA, PageB, Page2, Page3 };
-        _hosts = new[] { Host5, Host0, Host1, HostA, HostB, Host2, Host3 };
-        Page4.Visibility = Visibility.Collapsed;
-        HomeHero.Visibility = Visibility.Collapsed;
+        _pages = new[] { Page0, Page1, Page2, Page3, Page4, Page5 };
+        _hosts = new[] { Host0, Host1, Host2, Host3, Host4, Host5 };
 
         Title = "Relay";
         SetupFrame();
@@ -56,15 +57,15 @@ public sealed partial class MainWindow : Window
             // Finestra nascosta: il gradiente si ferma, niente consumo.
             HeaderWeb.Visibility = Visibility.Collapsed;
         };
-        _ = InitWebAsync(HeaderWeb, "shape=band&cell=10");
+        _ = InitWebAsync(HeaderWeb, "shape=band&ascii=0");
         Root.ActualThemeChanged += (_, _) => OnThemeChanged();
         UpdateFades();
         Root.SizeChanged += (_, _) => ApplyLayout();
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
-        Root.ActualThemeChanged += (_, _) => UpdateSideStatus();
+        InitShell();
 
-        try { Select(_r.S.Token.Length == 0 ? 6 : 0); }
-        catch (Exception e) { Crash.Log(e, "Barra laterale"); }
+        try { Select(_r.S.Token.Length == 0 ? 5 : 0); }
+        catch (Exception e) { Crash.Log(e, "Primo disegno"); }
         if (!_r.S.Onboarded) ShowOnboarding();
     }
 
@@ -73,9 +74,6 @@ public sealed partial class MainWindow : Window
     /// <summary>Finestra senza barra di sistema: bordo e ridimensionamento restano, i tre pallini sono nostri. Dimensione e posizione seguono lo schermo.</summary>
     private void SetupFrame()
     {
-        // Senza Mica (Windows 10) la barra laterale usa il suo colore pieno.
-        if (!Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported()) SideFallback.Visibility = Visibility.Visible;
-        try { SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop { Kind = Microsoft.UI.Composition.SystemBackdrops.MicaKind.BaseAlt }; } catch (Exception) { }
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragArea);
         if (AppWindow.Presenter is OverlappedPresenter p) p.SetBorderAndTitleBar(true, false);
@@ -149,140 +147,98 @@ public sealed partial class MainWindow : Window
 
     // ---------------------------------------------------------------- struttura
 
-    /// <summary>Il layout segue la finestra: barra laterale da 1024 in su, barra in basso sotto.</summary>
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
-    /// <summary>Titolo e pagine hanno la stessa larghezza esatta, centrata nell'area dei contenuti: niente più scarti a destra.</summary>
+    private bool Wide => Root.ActualWidth >= 1024;
+
+    /// <summary>Ogni pagina è una colonna centrata con la sua larghezza massima; il titolo si allinea alla stessa colonna.</summary>
     private void FitColumn()
     {
-        var avail = Root.ActualWidth - (Side.Visibility == Visibility.Visible ? SideCol.Width.Value : 0);
+        var avail = Root.ActualWidth - (Wide ? 240 : 0);
         if (avail <= 0) return;
-        var w = Math.Max(260, Math.Min(840, avail - 64));
-        TitleBox.MaxWidth = 100000; TitleBox.Margin = new Thickness(0); TitleBox.Width = w; TitleBox.HorizontalAlignment = HorizontalAlignment.Center;
-        Col5.MaxWidth = 100000; Col5.Margin = new Thickness(0, 4, 0, 40); Col5.Width = w; Col5.HorizontalAlignment = HorizontalAlignment.Center;
+        var bottom = Wide ? 24 : 100;
         for (var i = 0; i < _hosts.Length; i++)
         {
-            if (_hosts[i] == Host5) continue;
-            _hosts[i].MaxWidth = 100000; _hosts[i].Margin = new Thickness(0, 4, 0, 40); _hosts[i].Width = w; _hosts[i].HorizontalAlignment = HorizontalAlignment.Center;
+            _hosts[i].Width = Math.Max(260, Math.Min(PageMax[i], avail) - 32);
+            _hosts[i].HorizontalAlignment = HorizontalAlignment.Center;
+            _hosts[i].Margin = new Thickness(0, 12, 0, bottom);
         }
         foreach (var pg in _pages) pg.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        TitleBox.Width = Math.Max(100, _hosts[_tab].Width - 16);
+        TitleBox.HorizontalAlignment = HorizontalAlignment.Center;
+        // sotto "Home" resta il posto per la pillola dei dispositivi
+        TitleBox.Margin = new Thickness(0, 0, 0, _tab == 0 ? 46 : 12);
+        PlaceMorph();
     }
 
     private void ApplyLayout()
     {
-        var wide = Root.ActualWidth >= 1024;
-        SideCol.Width = new GridLength(wide ? 232 : 0);
-        Side.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
-        Bottom.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;
+        SideCol.Width = new GridLength(Wide ? 240 : 0);
+        Side.Visibility = Wide ? Visibility.Visible : Visibility.Collapsed;
+        Bottom.Visibility = Wide ? Visibility.Collapsed : Visibility.Visible;
         FitColumn();
+        // la Home è fatta di quadrati: se la colonna cambia larghezza si ridisegna
+        if (_tab == 0 && _homeWidth > 0 && Math.Abs(_hosts[0].Width - _homeWidth) > 0.5) RenderHome();
     }
-
-    private readonly List<Button> _nav = new();
 
     private void Select(int i)
     {
+        i = Math.Clamp(i, 0, Tabs.Length - 1);
         var dir = i >= _tab ? 1 : -1;
-        var changed = i != _tab || PageTitle.Text.Length == 0;
-        var first = _nav.Count == 0;
-        if (changed && i == 0) _homeIntro = true;
+        var first = PageTitle.Text.Length == 0;
+        var changed = first || i != _tab;
+        if (changed)
+        {
+            ClosePanel();
+            SetDevOpen(false);
+        }
         _tab = i;
         PageTitle.Text = Tabs[i];
         for (var p = 0; p < _pages.Length; p++) _pages[p].Visibility = p == i ? Visibility.Visible : Visibility.Collapsed;
         if (changed && !first)
         {
-            // Titolo e pagina si muovono insieme, nella stessa direzione della voce scelta.
-            Enter(PageTitle, 0, 10 * dir, 340);
-            Enter(_pages[i], 0, 10 * dir, 340);
+            // titolo e pagina scorrono insieme, nella direzione della voce scelta; il titolo un po' di più
+            Enter(PageTitle, 72 * dir, 0, 420);
+            Enter(_pages[i], 48 * dir, 0, 380);
         }
-
-        // Barra laterale: le voci restano, cambia lo stile e l'indicatore scivola con una molla.
-        if (first)
-        {
-            for (var t = 0; t < Tabs.Length; t++)
-            {
-                var idx = t;
-                var nb = new Button { Style = St("NavItem"), Content = NavContent(t) };
-                nb.Click += (_, _) => Select(idx);
-                _nav.Add(nb);
-                (t < 5 ? NavMain : t == 5 ? NavTools : NavFoot).Children.Add(nb);
-            }
-        }
-        for (var t = 0; t < _nav.Count; t++) _nav[t].Style = St(t == i ? "NavItemSelected" : "NavItem");
-        MoveIndicator(i, animate: !first);
-        if (first) NavLayer.SizeChanged += (_, _) => MoveIndicator(_tab, animate: false);
-
-        BottomTabs.Children.Clear();
-        BottomTabs.ColumnDefinitions.Clear();
-        for (var t = 0; t < Tabs.Length; t++)
-        {
-            var idx = t;
-            var b = Btn(Tabs[t], () => Select(idx), t == i ? "TabButtonSelected" : "TabButton");
-            BottomTabs.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            Grid.SetColumn(b, t);
-            BottomTabs.Children.Add(b);
-        }
-        ApplyLayout();
-        UpdateSideStatus();
+        MarkNav(!first);
+        FitColumn();
         Refresh();
-    }
-
-    private static readonly string[] Glyphs = { "\uE80F", "\uE72D", "\uE8C7", "\uE787", "\uEB51", "\uE7F6", "\uE713" };
-    private readonly TextBlock[] _badge = new TextBlock[7];
-    private readonly Border[] _badgeBox = new Border[7];
-
-    private Grid NavContent(int t)
-    {
-        var g = new Grid { ColumnSpacing = 12 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(new FontIcon { Glyph = Glyphs[t], FontSize = 17, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
-        var label = new TextBlock { Text = Tabs[t], VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(label, 1);
-        g.Children.Add(label);
-        // Contatore a destra (non per Impostazioni).
-        var n = new TextBlock { FontSize = 11, FontFamily = (FontFamily)Application.Current.Resources["FontSansMedium"], Foreground = Canone.Get("LabelSecondary", Dark) };
-        var box = new Border { Background = Canone.Get("BgSunken", Dark), CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 1, 7, 1), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Child = n };
-        Grid.SetColumn(box, 2);
-        g.Children.Add(box);
-        _badge[t] = n;
-        _badgeBox[t] = box;
-        return g;
-    }
-
-    private void SetBadge(int t, int count)
-    {
-        if (_badge[t] == null) return;
-        _badge[t].Text = count > 99 ? "99+" : count.ToString();
-        _badgeBox[t].Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>Contatori delle voci e identità di questo dispositivo, in fondo alla barra laterale.</summary>
-    private void UpdateSideStatus()
-    {
-        try { UpdateSide(); } catch (Exception e) { Crash.Log(e, "Contatori"); }
-    }
-
-    private void UpdateSide()
-    {
-        SideDevice.Text = _r.S.Name.Length > 0 ? _r.S.Name : Environment.MachineName;
-        SideVersion.Text = "Questo PC · " + _r.Update.Current.ToString("'1.0.'0");
-        // niente contatori sulle voci (come su Android): restano solo le icone
     }
 
     private void Refresh()
     {
-        UpdateSideStatus();
         switch (_tab)
         {
             case 0: RenderHome(); break;
-            case 1: RenderShare(); break;
+            case 1: if (!Typing()) RenderShare(); break;
             case 2: RenderFinance(); break;
             case 3: if (!Typing()) RenderAgenda(); break;
             case 4: if (!Typing()) RenderBody(); break;
-            case 5: RenderAudio(); break;
-            case 6: RenderSettings(); break;
+            default: if (!Typing()) RenderSettings(); break;
+        }
+        UpdateMorph();
+        if (_panel != null) RenderPanel();
+    }
+
+    /// <summary>Apre una funzione direttamente, come dalla Home di Android.</summary>
+    private void Open(string to)
+    {
+        ClosePanel();
+        switch (to)
+        {
+            case "clips": _shareTab = 0; _folder = null; Select(1); break;
+            case "images": _shareTab = 1; _folder = null; Select(1); break;
+            case "share": Select(1); break;
+            case "finance": _finSub = null; Select(2); break;
+            case "fin-add": _finSub = "add"; Select(2); break;
+            case "agenda": _agSub = null; Select(3); break;
+            case "studio": _agSub = "study"; Select(3); break;
+            case "todo": _agSub = "todo"; Select(3); break;
+            case "body": _bdSub = null; Select(4); break;
+            case "audio": _setSub = "audio"; Select(5); break;
+            default: _setSub = null; Select(5); break;
         }
     }
 
@@ -366,20 +322,15 @@ public sealed partial class MainWindow : Window
     private static TextBlock Text(string text, string style = "BodyText") =>
         new() { Text = text, Style = St(style), TextWrapping = TextWrapping.Wrap };
 
+    /// <summary>Scheda (CCard): piana, raggio 28, spazio 16.</summary>
     private static Border Card(params UIElement[] children)
     {
-        var col = new StackPanel { Spacing = 12 };
+        var col = new StackPanel { Spacing = 16 };
         foreach (var c in children) col.Children.Add(c);
         return new Border { Style = St("CardStyle"), Child = col };
     }
 
     private static Border Divider() => new() { Style = St("DividerStyle") };
-
-    private static Border Badge(string text, string tone = "Neutral") => new()
-    {
-        Style = St("Badge" + tone),
-        Child = new TextBlock { Text = text, Style = St(tone == "Neutral" ? "BadgeText" : "BadgeText" + tone) },
-    };
 
     private static Button Btn(string label, Action click, string style = "SecondaryButton")
     {
@@ -395,14 +346,15 @@ public sealed partial class MainWindow : Window
         return b;
     }
 
+    /// <summary>Riga di scheda (CRow / CSwitchRow): titolo, nota sotto, controllo a destra; alta almeno 48.</summary>
     private static Grid Row(string title, string? note, FrameworkElement? trailing = null)
     {
-        var g = new Grid { ColumnSpacing = 12, MinHeight = 40 };
+        var g = new Grid { ColumnSpacing = 12, MinHeight = 48 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(Text(title));
-        if (note != null) left.Children.Add(Text(note, "Footnote"));
+        if (!string.IsNullOrEmpty(note)) left.Children.Add(Text(note, "Footnote"));
         g.Children.Add(left);
         if (trailing != null)
         {
@@ -413,17 +365,12 @@ public sealed partial class MainWindow : Window
         return g;
     }
 
-    private static Grid Toggle(string title, string note, bool on, Action<bool> changed)
-    {
-        var ts = new ToggleSwitch { IsOn = on, OnContent = "", OffContent = "", MinWidth = 0, Margin = new Thickness(0, 0, -8, 0) };
-        ts.Toggled += (_, _) => changed(ts.IsOn);
-        return Row(title, note, ts);
-    }
+    private static Grid Toggle(string title, string? note, bool on, Action<bool> changed) => Row(title, note, GlassSwitch(on, changed, title));
 
     /// <summary>Etichetta sempre sopra e sempre visibile; il segnaposto mostra solo un esempio.</summary>
     private static StackPanel Field(string label, Control input)
     {
-        var p = new StackPanel { Spacing = 6 };
+        var p = new StackPanel { Spacing = 8 };
         p.Children.Add(Text(label, "Footnote"));
         p.Children.Add(input);
         return p;

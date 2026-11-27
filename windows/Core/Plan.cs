@@ -7,7 +7,8 @@ namespace Ponte;
 
 public sealed record Ev(string Id, long Start, long End, bool AllDay, string Title, int Color, string Note, string Place, int Remind);
 public sealed record Subject(string Id, string Name, int Color);
-public sealed record StudyTask(string Id, string Title, string Subject, long Due, bool Done);
+/// <summary>Una cosa da fare. Con <c>Subject</c> è un argomento d'esame: <c>Due</c> allora è la sua posizione nella lista, <c>DoneAt</c> quando è stato fatto.</summary>
+public sealed record StudyTask(string Id, string Title, string Subject, long Due, bool Done, long DoneAt = 0);
 public sealed record Exam(string Id, string Title, string Subject, long Date);
 public sealed record Sess(string Id, string Subject, long Start, int Minutes);
 public sealed record StudyCard(string Id, string Subject, string Q, string A, int Box, long Due);
@@ -20,6 +21,8 @@ public sealed class PlanState
     public List<Ev> Events { get; init; } = new();
     public List<Subject> Subjects { get; init; } = new();
     public List<StudyTask> Tasks { get; init; } = new();
+    /// <summary>Gli argomenti d'esame e le cose da fare per l'università: le stesse cose da fare, ma con una materia.</summary>
+    public List<StudyTask> Topics { get; init; } = new();
     public List<Exam> Exams { get; init; } = new();
     public List<Sess> Sessions { get; init; } = new();
     public List<StudyCard> Cards { get; init; } = new();
@@ -106,7 +109,8 @@ public sealed class Plan
             {
                 Events = Live("ev").Select(kv => new Ev(kv.Key, Num(kv.Value["t"]), Num(kv.Value["e"]), Num(kv.Value["a"]) == 1, Str(kv.Value["ti"]), (int)Num(kv.Value["c"]), Str(kv.Value["n"]), Str(kv.Value["l"]), kv.Value["r"] == null ? -1 : (int)Num(kv.Value["r"]))).OrderBy(e => e.Start).ToList(),
                 Subjects = Live("sub").Select(kv => new Subject(kv.Key, Str(kv.Value["ti"]), (int)Num(kv.Value["c"]))).OrderBy(s => s.Name.ToLowerInvariant()).ToList(),
-                Tasks = Live("tk").Where(kv => Str(kv.Value["s"]).Length == 0).Select(kv => new StudyTask(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["due"]), Num(kv.Value["f"]) == 1)).ToList(),
+                Tasks = Live("tk").Where(kv => Str(kv.Value["s"]).Length == 0).Select(kv => new StudyTask(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["due"]), Num(kv.Value["f"]) == 1, Num(kv.Value["fd"]))).ToList(),
+                Topics = Live("tk").Where(kv => Str(kv.Value["s"]).Length > 0).Select(kv => new StudyTask(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["due"]), Num(kv.Value["f"]) == 1, Num(kv.Value["fd"]))).OrderBy(t => t.Due).ToList(),
                 Exams = Live("ex").Select(kv => new Exam(kv.Key, Str(kv.Value["ti"]), Str(kv.Value["s"]), Num(kv.Value["t"]))).OrderBy(e => e.Date).ToList(),
                 Sessions = Live("ses").Select(kv => new Sess(kv.Key, Str(kv.Value["s"]), Num(kv.Value["t"]), (int)Num(kv.Value["m"]))).OrderByDescending(s => s.Start).ToList(),
                 Cards = Live("card").Select(kv => new StudyCard(kv.Key, Str(kv.Value["s"]), Str(kv.Value["q"]), Str(kv.Value["a"]), (int)Num(kv.Value["b"]), Num(kv.Value["due"]))).ToList(),
@@ -263,7 +267,7 @@ public sealed class Plan
     // ---------------------------------------------------------------- studio
     public void SaveSubject(Subject s) => Mutate(() => Put("sub", s.Id.Length == 0 ? NewId() : s.Id, new JsonObject { ["ti"] = s.Name, ["c"] = s.Color }));
     public void RemoveSubject(string id) => Mutate(() => Del("sub", id));
-    public void SaveTask(StudyTask t) => Mutate(() => Put("tk", t.Id.Length == 0 ? NewId() : t.Id, new JsonObject { ["ti"] = t.Title, ["s"] = t.Subject, ["due"] = t.Due, ["f"] = t.Done ? 1 : 0 }));
+    public void SaveTask(StudyTask t) => Mutate(() => Put("tk", t.Id.Length == 0 ? NewId() : t.Id, new JsonObject { ["ti"] = t.Title, ["s"] = t.Subject, ["due"] = t.Due, ["f"] = t.Done ? 1 : 0, ["fd"] = t.Done ? (t.DoneAt > 0 ? t.DoneAt : Now) : 0L }));
     public void RemoveTask(string id) => Mutate(() => Del("tk", id));
     public void SaveExam(Exam e) => Mutate(() => Put("ex", e.Id.Length == 0 ? NewId() : e.Id, new JsonObject { ["ti"] = e.Title, ["s"] = e.Subject, ["t"] = e.Date }));
     public void RemoveExam(string id) => Mutate(() => Del("ex", id));

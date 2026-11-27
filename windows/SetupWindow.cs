@@ -62,10 +62,10 @@ public sealed class SetupWindow : Window
     private void ShowInstall()
     {
         var update = Installer.IsInstalled;
-        var autostart = new ToggleSwitch { IsOn = true, OnContent = "", OffContent = "", MinWidth = 0, Margin = new Thickness(0, 0, -8, 0) };
-        var desktop = new ToggleSwitch { IsOn = false, OnContent = "", OffContent = "", MinWidth = 0, Margin = new Thickness(0, 0, -8, 0) };
+        var autostart = MainWindow.GlassSwitch(true, _ => { }, "Avvia con Windows");
+        var desktop = MainWindow.GlassSwitch(false, _ => { }, "Icona sul desktop");
         var install = Btn(update ? "Aggiorna" : "Installa", "PrimaryButton");
-        install.Click += async (_, _) => await RunInstallAsync(autostart.IsOn, desktop.IsOn);
+        install.Click += async (_, _) => await RunInstallAsync(autostart.IsChecked == true, desktop.IsChecked == true);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         actions.Children.Add(install);
@@ -79,13 +79,12 @@ public sealed class SetupWindow : Window
         Show(
             Brand(),
             Text(update ? "Aggiorna Relay" : "Installa Relay", "Title1"),
-            Text("Appunti, file, notifiche e cuffie passano tra i tuoi dispositivi. Si installa solo per il tuo utente, senza permessi di amministratore, e poi si aggiorna da solo.", "Footnote"),
             Card(
-                Row("Avvia con Windows", "Parte in background all'accesso", autostart),
+                Row("Avvia con Windows", autostart),
                 Divider(),
-                Row("Icona sul desktop", null, desktop)),
+                Row("Icona sul desktop", desktop)),
             actions,
-            Text($"Versione {Installer.Version} · {Installer.InstallDir}", "FootnoteTertiary"));
+            Text($"Versione {Installer.Version}", "FootnoteTertiary"));
     }
 
     private async Task RunInstallAsync(bool autostart, bool desktop)
@@ -105,7 +104,7 @@ public sealed class SetupWindow : Window
             return;
         }
         var check = Check();
-        Show(Brand(), check, Text("Relay è installato", "Title1"), Text("Lo trovi nel menu Start. Si apre adesso.", "Footnote"));
+        Show(Brand(), check, Text("Relay è installato", "Title1"));
         await Task.Delay(1100);
         Installer.Launch(Installer.InstalledExe);
         Environment.Exit(0);
@@ -115,7 +114,7 @@ public sealed class SetupWindow : Window
 
     private void ShowUninstall()
     {
-        var data = new CheckBox { Content = "Elimina anche impostazioni, appunti e archivio su questo PC", IsChecked = false };
+        var data = new CheckBox { Content = "Elimina anche i dati di questo PC", IsChecked = false };
         var go = Btn("Disinstalla", "DestructiveButton");
         var cancel = Btn("Annulla", "SecondaryButton");
         cancel.Click += (_, _) => Environment.Exit(0);
@@ -125,7 +124,7 @@ public sealed class SetupWindow : Window
             Show(Brand(), Text("Disinstallo", "Title1"), new ProgressBar { IsIndeterminate = true, Height = 4, Foreground = Res("AccentDefault"), Background = Res("BgSunken") });
             try { await Task.Run(() => Installer.Uninstall(removeData)); }
             catch (Exception e) { ShowError("Disinstallazione non riuscita", e.Message); return; }
-            Show(Brand(), Check(), Text("Relay è stato rimosso", "Title1"), Text(removeData ? "Anche i dati di questo PC sono stati eliminati." : "I tuoi dati restano qui, se lo reinstalli li ritrovi.", "Footnote"));
+            Show(Brand(), Check(), Text("Relay è stato rimosso", "Title1"), Text(removeData ? "Dati eliminati" : "Dati conservati", "Footnote"));
             await Task.Delay(1400);
             Environment.Exit(0);
         };
@@ -135,7 +134,6 @@ public sealed class SetupWindow : Window
         Show(
             Brand(),
             Text("Disinstallare Relay?", "Title1"),
-            Text("Relay si chiude e smette di sincronizzare questo PC. Sugli altri dispositivi non cambia niente.", "Footnote"),
             data,
             actions);
     }
@@ -218,30 +216,16 @@ public sealed class SetupWindow : Window
     private static UIElement Brand()
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        row.Children.Add(Logo(28));
+        row.Children.Add(MainWindow.RelayMark(28));
         row.Children.Add(new TextBlock { Text = "Relay", Style = St("SectionTitle"), VerticalAlignment = VerticalAlignment.Center });
         return row;
     }
 
-    /// <summary>Il logo vero di Ponte (Assets/logo.png, lo stesso dell'icona dell'app).</summary>
-    public static UIElement Logo(double size) => new Border
+    private static UIElement Check() => new Border
     {
-        Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.22),
-        Child = new Microsoft.UI.Xaml.Controls.Image
-        {
-            Stretch = Stretch.UniformToFill,
-            Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png"))),
-        },
+        Width = 44, Height = 44, CornerRadius = new CornerRadius(22), HorizontalAlignment = HorizontalAlignment.Left,
+        Background = Res("AccentDefault"), Child = Icons.Of(Ico.Check, new SolidColorBrush(Microsoft.UI.Colors.White), 22),
     };
-
-    private static UIElement Check()
-    {
-        var g = new Grid { Width = 40, Height = 40, HorizontalAlignment = HorizontalAlignment.Left };
-        g.Children.Add(new Ellipse { Fill = Res("AccentDefault") });
-        g.Children.Add(new FontIcon { Glyph = "", FontSize = 18, Foreground = Res("AccentOnAccent"),
-            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") });
-        return g;
-    }
 
     private static Style St(string key) => (Style)Application.Current.Resources[key];
     private static Brush Res(string key) => Canone.Get(key);
@@ -259,14 +243,13 @@ public sealed class SetupWindow : Window
 
     private static Border Divider() => new() { Style = St("DividerStyle") };
 
-    private static Grid Row(string title, string? note, FrameworkElement trailing)
+    private static Grid Row(string title, FrameworkElement trailing)
     {
         var g = new Grid { ColumnSpacing = 12, MinHeight = 36 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(Text(title, "BodyText"));
-        if (note != null) left.Children.Add(Text(note, "Footnote"));
         g.Children.Add(left);
         trailing.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(trailing, 1);

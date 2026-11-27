@@ -14,6 +14,7 @@ public sealed partial class MainWindow
 {
     private int _lastTenth = -1;
     private Updater.Progress? _shownUpdate;
+    private FrameworkElement? _updateIcon;
 
     private void InitUpdateCard() => _r.Update.Changed += p => DispatcherQueue.TryEnqueue(() => ShowUpdate(p));
 
@@ -44,21 +45,19 @@ public sealed partial class MainWindow
         UpdateRing.Visibility = outcome ? Visibility.Collapsed : Visibility.Visible;
         UpdateRing.IsIndeterminate = p.Step is 0 or 2 or 3;
         if (p.Step == 1) UpdateRing.Value = frac * 100;
+        if (_updateIcon != null) { UpdateRingBox.Children.Remove(_updateIcon); _updateIcon = null; }
         if (outcome)
         {
-            UpdatePercent.FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets");
-            UpdatePercent.FontSize = 26;
-            UpdatePercent.Text = p.Step == -1 ? "" : "";
-            UpdatePercent.Foreground = Canone.Get(p.Step == -1 ? "AccentDefault" : "CriticalDefault", dark);
-            Enter(UpdatePercent, 0, 0, 300);
+            // esito: bolla piena con la spunta, o con il punto esclamativo
+            var ok = p.Step == -1;
+            UIElement sign = ok ? Icons.Of(Ico.Check, White, 26) : Center(Semi("!", 25));
+            if (sign is TextBlock bang) bang.Foreground = White;
+            _updateIcon = Bubble(sign, 48, C(ok ? "AccentDefault" : "CriticalDefault"));
+            UpdateRingBox.Children.Add(_updateIcon);
+            UpdatePercent.Text = "";
+            Enter(_updateIcon, 0, 0, 300);
         }
-        else
-        {
-            UpdatePercent.ClearValue(TextBlock.FontFamilyProperty);
-            UpdatePercent.ClearValue(TextBlock.FontSizeProperty);
-            UpdatePercent.ClearValue(TextBlock.ForegroundProperty);
-            UpdatePercent.Text = p.Step == 1 ? $"{(int)(frac * 100)}%" : "";
-        }
+        else UpdatePercent.Text = p.Step == 1 ? $"{(int)(frac * 100)}%" : "";
 
         UpdateTitle.Text = p.Step switch
         {
@@ -70,15 +69,16 @@ public sealed partial class MainWindow
         };
         UpdateDetail.Text = p.Step switch
         {
-            0 => "Chiedo al server l'ultima release",
+            0 => "",
             1 => $"{Mb(p.Done)}" + (p.Total > 0 ? $" di {Mb(p.Total)}" : "") +
                  (p.BytesPerSec > 1 ? $" · {Mb((long)p.BytesPerSec)}/s" : "") +
                  (p.BytesPerSec > 1 && p.Total > p.Done ? $" · {Eta((p.Total - p.Done) / p.BytesPerSec)}" : ""),
-            2 => "Preparo i file nuovi",
-            3 => "Relay si chiude e riparte da solo",
+            2 or 3 => "",
             -1 => $"Versione installata: 1.0.{_r.Update.Current}",
             _ => p.Message,
         };
+
+        UpdateDetail.Visibility = UpdateDetail.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         if (p.Step != 1) _lastTenth = -1;
 

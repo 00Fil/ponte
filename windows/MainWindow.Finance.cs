@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         foreach (var el in _hosts[_tab].Children.Take(3)) Enter(el, sub == null ? -12 : 12, 0, 320);
     }
 
-    // ---------------------------------------------------------------- cruscotto
+    // ---------------------------------------------------------------- cruscotto: saldo, mese, azioni, andamento, dove, ultimi
 
     private void FinDashboard(StackPanel h)
     {
@@ -68,114 +68,107 @@ public sealed partial class MainWindow
         var inPeriod = m.Txs.Where(t => t.Ts >= from && t.Ts < to).ToList();
         var spent = -inPeriod.Where(t => t.Cents < 0).Sum(t => t.Cents);
         var earned = inPeriod.Where(t => t.Cents > 0).Sum(t => t.Cents);
+        var (pf, pt) = _finMonth < 0 ? Range(_finYear - 1, -1) : _finMonth == 0 ? Range(_finYear - 1, 11) : Range(_finYear, _finMonth - 1);
+        var before = -m.Txs.Where(t => t.Ts >= pf && t.Ts < pt && t.Cents < 0).Sum(t => t.Cents);
 
-        // saldo + ritmo di spesa
-        var hero = new StackPanel { Spacing = 10 };
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(T("Saldo", 13, "LabelTertiary"));
-        var eye = EyeToggle();
-        Grid.SetColumn(eye, 1);
-        head.Children.Add(eye);
-        hero.Children.Add(head);
-        hero.Children.Add(MoneyText("fin.total", m.TotalCents, 38));
-        hero.Children.Add(PaceChart(m));
-        var split = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
-        foreach (var (sk0, sn0) in Sources)
+        var head = Cols("*a", 8, CardLabel("Saldo"), EyeToggle(28));
+        head.Height = 28;
+        var incomes = VStack(0, T("Entrate", 13, "LabelTertiary"), MoneyText("fin.in", earned, 25));
+        var outcomes = VStack(0, T("Uscite", 13, "LabelTertiary"), MoneyText("fin.out", spent, 25));
+        if (before > 0 && (spent - before) * 100 / before is var diff && diff != 0)
         {
-            var lg = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            lg.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(SrcColor(sk0)), VerticalAlignment = VerticalAlignment.Center });
-            lg.Children.Add(T(sn0, 12, "LabelSecondary"));
-            split.Children.Add(lg);
+            var pct = Semi((diff > 0 ? "+" : "") + diff + "%", 13, "AccentDefault");
+            if (diff > 0) pct.Foreground = Sb(Third);
+            outcomes.Children.Add(pct);
         }
-        hero.Children.Add(split);
-        h.Children.Add(Widget(hero));
+        var line = new Border { Height = 1, Background = B("LineSeparator") };
+        h.Children.Add(Panelled(VStack(16, head, MoneyText("fin.total", m.TotalCents, 44), line, PeriodRow(), Cols("**", 12, incomes, outcomes)), new Thickness(24)));
 
-        // azioni
-        var acts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 26, HorizontalAlignment = HorizontalAlignment.Center };
-        acts.Children.Add(ActionBubble("", "Spesa", true, () => { _income = false; FinGo("add"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Entrata", false, () => { _income = true; FinGo("add"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Contanti", false, () => { _cashSpend = true; _tally = new(); FinGo("cash"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Revolut", false, () => { FinGo("revolut"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Movimenti", false, () => { FinGo("moves"); return Task.CompletedTask; }));
+        var acts = Cols("****", 0,
+            Round("−", "Spesa", true, () => { _income = false; FinGo("add"); }),
+            Round("+", "Entrata", false, () => { _income = true; FinGo("add"); }),
+            Round("€", "Contanti", false, () => { _cashSpend = true; _tally = new(); FinGo("cash"); }),
+            Round("≡", "Movimenti", false, () => FinGo("moves")));
         h.Children.Add(acts);
 
-        // periodo
-        h.Children.Add(Segmented("finper", new[] { "Mese", "Anno" }, _finMonth < 0 ? 1 : 0, i => { _finMonth = i == 1 ? -1 : DateTime.Today.Month - 1; RenderFinance(); }));
-        h.Children.Add(PeriodRow());
+        var forecast = T("", 13, "LabelTertiary");
+        var chart = PaceChart(m, forecast);
+        HideChart(forecast);
+        h.Children.Add(Panelled(VStack(12, Cols("*a", 8, CardLabel("Andamento"), forecast), chart), new Thickness(24)));
 
-        // KPI
-        var k = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
-        k.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        k.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        k.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        k.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var days = _finMonth < 0 ? (_finYear == DateTime.Today.Year ? DateTime.Today.DayOfYear : 365)
-            : (_finYear == DateTime.Today.Year && _finMonth == DateTime.Today.Month - 1 ? DateTime.Today.Day : DateTime.DaysInMonth(_finYear, _finMonth + 1));
-        var kpis = new[] { ("Entrate", earned), ("Uscite", spent), ("Risparmio", earned - spent), ("Al giorno", days > 0 ? spent / days : 0) };
-        for (var i = 0; i < 4; i++)
+        var by = inPeriod.Where(t => t.Cents < 0).GroupBy(t => t.Cat).Select(g => (Cat: g.Key, V: -g.Sum(t => t.Cents))).OrderByDescending(x => x.V).Take(4).ToList();
+        if (by.Count > 0)
         {
-            var c = new StackPanel { Spacing = 2 };
-            c.Children.Add(T(kpis[i].Item1, 12, "LabelTertiary"));
-            c.Children.Add(MoneyText("fin.kpi" + i, kpis[i].Item2, 20, kpis[i].Item2 < 0 ? "CriticalOnSubtle" : "LabelPrimary"));
-            var w = Widget(c);
-            Grid.SetColumn(w, i % 2);
-            Grid.SetRow(w, i / 2);
-            k.Children.Add(w);
+            var rows = new StackPanel { Spacing = 12 };
+            var top = Math.Max(1, by[0].V);
+            for (var i = 0; i < by.Count; i++)
+            {
+                var name = T(by[i].Cat, 16);
+                var value = T(Finance.Eur(by[i].V), 16, "LabelPrimary", true);
+                rows.Children.Add(VStack(5, Cols("*a", 8, name, value),
+                    Progress(by[i].V / (double)top, i == 0 ? B("AccentDefault") : Sb(Alpha(C("AccentDefault"), 0.45)), 6, B("BgSunken"))));
+            }
+            h.Children.Add(Panelled(VStack(12, CardLabel("Dove spendi"), HideChart(rows)), new Thickness(24)));
         }
-        h.Children.Add(k);
 
-        // mese per mese
-        var bars = new List<(string L, long In, long Out)>();
-        for (var i = 0; i < (_finMonth < 0 ? 12 : 6); i++)
+        var last = m.Txs.OrderByDescending(t => t.Ts).Take(5).ToList();
+        if (last.Count == 0) return;
+        var chevron = Icons.Of(Ico.Forward, B("LabelTertiary"), 14);
+        var list = new StackPanel();
+        var title = Cols("*a", 8, CardLabel("Ultimi movimenti"), chevron);
+        title.Margin = new Thickness(0, 0, 0, 8);
+        list.Children.Add(title);
+        for (var i = 0; i < last.Count; i++)
         {
-            int y = _finYear, mo;
-            if (_finMonth < 0) mo = i;
-            else { mo = _finMonth - 5 + i; while (mo < 0) { mo += 12; y--; } }
-            var (a, b) = Range(y, mo);
-            var l = m.Txs.Where(t => t.Ts >= a && t.Ts < b).ToList();
-            bars.Add((Months[mo], l.Where(t => t.Cents > 0).Sum(t => t.Cents), -l.Where(t => t.Cents < 0).Sum(t => t.Cents)));
+            var t = last[i];
+            if (i > 0) list.Children.Add(new Border { Height = 1, Margin = new Thickness(40, 0, 0, 0), Background = B("LineSeparator") });
+            var income = t.Cents > 0;
+            var sign = new Border
+            {
+                Width = 28, Height = 28, CornerRadius = new CornerRadius(14), VerticalAlignment = VerticalAlignment.Center,
+                Background = income ? Sb(Alpha(C("AccentDefault"), 0.18)) : B("BgSunken"),
+                Child = Center(T(income ? "+" : "−", 16, income ? "AccentDefault" : "LabelSecondary", true)),
+            };
+            var amount = MoneyText("fl." + t.Id, t.Cents, 16, income ? "AccentDefault" : "LabelPrimary", false, income ? "+" : "");
+            amount.VerticalAlignment = VerticalAlignment.Center;
+            var row = Cols("a*a", 12, sign, VStack(0, T(t.Note.Length > 0 ? t.Note : t.Cat, 16), T(t.Cat, 13, "LabelTertiary")), amount);
+            row.Margin = new Thickness(0, 10, 0, 10);
+            list.Children.Add(row);
         }
-        var bc = new StackPanel { Spacing = 10 };
-        bc.Children.Add(T(_finMonth < 0 ? "Mese per mese" : "Ultimi mesi", 17, "LabelPrimary", true));
-        bc.Children.Add(HideChart(BarChart(bars)));
-        h.Children.Add(Widget(bc));
+        var recent = Tile(list, () => FinGo("moves"), null, "Ultimi movimenti", new Thickness(24, 16, 24, 16));
+        recent.HorizontalAlignment = HorizontalAlignment.Stretch;
+        h.Children.Add(recent);
+    }
 
-        // dove vanno i soldi
-        var dc = new StackPanel { Spacing = 10 };
-        dc.Children.Add(T("Dove vanno i soldi", 17, "LabelPrimary", true));
-        dc.Children.Add(HideChart(Donut(inPeriod.Where(t => t.Cents < 0).ToList())));
-        h.Children.Add(Widget(dc));
+    private TextBlock CardLabel(string text)
+    {
+        var t = Semi(text, 13, "LabelSecondary");
+        t.VerticalAlignment = VerticalAlignment.Center;
+        return t;
     }
 
     private Grid PeriodRow()
     {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         void Step(int d)
         {
             if (_finMonth < 0) _finYear += d;
             else { var mo = _finMonth + d; if (mo < 0) { mo = 11; _finYear--; } else if (mo > 11) { mo = 0; _finYear++; } _finMonth = mo; }
             RenderFinance();
         }
-        g.Children.Add(BubbleButton("", 36, () => Step(-1)));
-        var title = _finMonth < 0 ? _finYear.ToString() : It.TextInfo.ToTitleCase(new DateTime(_finYear, _finMonth + 1, 1).ToString("MMMM yyyy", It));
-        var t = T(title, 20, "LabelPrimary", true);
-        t.HorizontalAlignment = HorizontalAlignment.Center;
-        t.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(t, 1);
-        g.Children.Add(t);
-        var n = BubbleButton("", 36, () => Step(1));
-        Grid.SetColumn(n, 2);
-        g.Children.Add(n);
-        return g;
+        Button Arrow(Ico icon, int d, string name)
+        {
+            var b = Bare(Center(Icons.Of(icon, B("LabelSecondary"), 18)), () => Step(d), name, 16);
+            b.Width = b.Height = 32;
+            Bounce(b, 1.12f);
+            return b;
+        }
+        var title = _finMonth < 0 ? _finYear.ToString() : Cap(new DateTime(_finYear, _finMonth + 1, 1).ToString("MMMM yyyy", It));
+        var t = Center(T(title, 16, "LabelPrimary", true));
+        return Cols("a*a", 8, Arrow(Ico.Back, -1, "Periodo prima"), t, Arrow(Ico.Forward, 1, "Periodo dopo"));
     }
 
     /// <summary>Ritmo di spesa: spesa cumulata di questo periodo (linea piena) contro il periodo prima (grigia), con la previsione tratteggiata.</summary>
-    private StackPanel PaceChart(Money m)
+    private StackPanel PaceChart(Money m, TextBlock forecast)
     {
         var year = _finMonth < 0;
         var buckets = year ? 12 : DateTime.DaysInMonth(_finYear, _finMonth + 1);
@@ -202,6 +195,7 @@ public sealed partial class MainWindow
         var col = new StackPanel { Spacing = 6 };
         var read = new Grid { Height = 20 };
         var readL = T("", 13, "LabelSecondary", true);
+        forecast.Text = proj != null ? "Previsti " + Finance.Eur((long)(proj.Value * 100)) : "";
         var readR = T("", 13, "LabelTertiary");
         readR.HorizontalAlignment = HorizontalAlignment.Right;
         read.Children.Add(readL);
@@ -210,8 +204,8 @@ public sealed partial class MainWindow
         {
             var diff = (curCum.Length > 0 ? curCum[^1] : 0) - (curCum.Length > 0 ? prevCum[Math.Min(curCum.Length - 1, buckets - 1)] : 0);
             readL.Text = curCum.Length == 0 ? "Nessuna spesa ancora" : Math.Abs(diff) < 0.5 ? "Come il periodo prima" : (diff > 0 ? "+" : "−") + Finance.Eur((long)Math.Abs(diff * 100)) + " rispetto a prima";
-            readL.Foreground = diff > 0.5 ? B("CriticalDefault") : Sb(Argb(255, 0x1F, 0x9A, 0x5A));
-            readR.Text = proj != null ? "a fine " + (year ? "anno" : "mese") + " ~" + Finance.Eur((long)(proj.Value * 100)) : "";
+            readL.Foreground = diff > 0.5 ? Sb(Third) : B("AccentDefault");
+            readR.Text = "";
         }
         Idle();
         col.Children.Add(read);
@@ -271,145 +265,50 @@ public sealed partial class MainWindow
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         p.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(color), VerticalAlignment = VerticalAlignment.Center });
-        p.Children.Add(T(text, 12, "LabelSecondary"));
+        p.Children.Add(T(text, 13, "LabelSecondary"));
         return p;
-    }
-
-    /// <summary>Colonne entrate/uscite; passa sopra o tocca una colonna per il valore preciso.</summary>
-    private StackPanel BarChart(List<(string L, long In, long Out)> bars)
-    {
-        var col = new StackPanel { Spacing = 8 };
-        var read = T("Passa sopra una colonna", 13, "LabelTertiary");
-        col.Children.Add(read);
-        var max = Math.Max(1, bars.Max(b => Math.Max(b.In, b.Out)));
-        var g = new Grid { Height = 140, ColumnSpacing = 8 };
-        for (var i = 0; i < bars.Count; i++)
-        {
-            var b = bars[i];
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var cell = new Grid { Background = Sb(Microsoft.UI.Colors.Transparent) };
-            cell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            cell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var pair = new Grid { ColumnSpacing = 3 };
-            pair.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            pair.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var rin = new Border { VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(4), Background = B("AccentDefault") };
-            var rout = new Border { VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(4), Background = B("LabelTertiary") };
-            Grid.SetColumn(rout, 1);
-            pair.Children.Add(rin);
-            pair.Children.Add(rout);
-            pair.SizeChanged += (_, _) => { rin.Height = Math.Max(3, pair.ActualHeight * b.In / max); rout.Height = Math.Max(3, pair.ActualHeight * b.Out / max); };
-            cell.Children.Add(pair);
-            var lbl = T(b.L, 11, "LabelTertiary");
-            lbl.HorizontalAlignment = HorizontalAlignment.Center;
-            Grid.SetRow(lbl, 1);
-            cell.Children.Add(lbl);
-            void Show() { read.Text = $"{b.L}   +{Finance.Eur(b.In)}   −{Finance.Eur(b.Out)}"; read.Foreground = B("LabelPrimary"); }
-            cell.PointerEntered += (_, _) => Show();
-            cell.Tapped += (_, _) => Show();
-            Grid.SetColumn(cell, i);
-            g.Children.Add(cell);
-        }
-        col.Children.Add(g);
-        var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
-        legend.Children.Add(Legend("Entrate", C("AccentDefault")));
-        legend.Children.Add(Legend("Uscite", C("LabelTertiary")));
-        col.Children.Add(legend);
-        return col;
-    }
-
-    /// <summary>Ciambella per categoria: passa o tocca uno spicchio o una voce e al centro compare l'importo preciso.</summary>
-    private UIElement Donut(List<Tx> list)
-    {
-        var by = list.GroupBy(t => t.Cat).Select(g => (Cat: g.Key, V: Math.Abs(g.Sum(t => t.Cents)))).OrderByDescending(x => x.V).ToList();
-        if (by.Count == 0) return T("Nessuna spesa in questo periodo.", 13, "LabelTertiary");
-        var total = Math.Max(1, by.Sum(x => x.V));
-        var row = new Grid { ColumnSpacing = 20 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        const double size = 140, thick = 22;
-        var box = new Grid { Width = size, Height = size };
-        var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var cl = T("Totale", 12, "LabelTertiary"); cl.HorizontalAlignment = HorizontalAlignment.Center;
-        var cv = T(Finance.Eur(total), 15, "LabelPrimary", true); cv.HorizontalAlignment = HorizontalAlignment.Center;
-        center.Children.Add(cl);
-        center.Children.Add(cv);
-        void Pick(int i) { cl.Text = i < 0 ? "Totale" : by[i].Cat; cv.Text = Finance.Eur(i < 0 ? total : by[i].V); }
-        double a0 = -90;
-        var r = (size - thick) / 2;
-        var c0 = new Point(size / 2, size / 2);
-        Point P(double deg) => new(c0.X + r * Math.Cos(deg * Math.PI / 180), c0.Y + r * Math.Sin(deg * Math.PI / 180));
-        for (var i = 0; i < by.Count; i++)
-        {
-            var idx = i;
-            var sweep = Math.Max(0.5, 360.0 * by[i].V / total - (by.Count > 1 ? 2 : 0));
-            if (sweep >= 359.9) sweep = 359.9;
-            var fig = new PathFigure { StartPoint = P(a0), IsClosed = false };
-            fig.Segments.Add(new ArcSegment { Point = P(a0 + sweep), Size = new Size(r, r), IsLargeArc = sweep > 180, SweepDirection = SweepDirection.Clockwise });
-            var geo = new PathGeometry();
-            geo.Figures.Add(fig);
-            var path = new Microsoft.UI.Xaml.Shapes.Path { Data = geo, Stroke = Sb(CatColor(by[i].Cat)), StrokeThickness = thick, StrokeStartLineCap = PenLineCap.Flat, StrokeEndLineCap = PenLineCap.Flat };
-            path.PointerEntered += (_, _) => Pick(idx);
-            path.Tapped += (_, _) => Pick(idx);
-            path.PointerExited += (_, _) => Pick(-1);
-            box.Children.Add(path);
-            a0 += 360.0 * by[i].V / total;
-        }
-        box.Children.Add(center);
-        row.Children.Add(box);
-        var leg = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        for (var i = 0; i < Math.Min(6, by.Count); i++)
-        {
-            var idx = i;
-            var lr = new Grid { ColumnSpacing = 8, Background = Sb(Microsoft.UI.Colors.Transparent), Padding = new Thickness(4, 2, 4, 2) };
-            lr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            lr.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            lr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            lr.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = Sb(CatColor(by[i].Cat)), VerticalAlignment = VerticalAlignment.Center });
-            var n = T(by[i].Cat, 13, "LabelSecondary"); Grid.SetColumn(n, 1); lr.Children.Add(n);
-            var pc = T($"{by[i].V * 100 / total}%", 13, "LabelTertiary"); Grid.SetColumn(pc, 2); lr.Children.Add(pc);
-            lr.PointerEntered += (_, _) => Pick(idx);
-            lr.PointerExited += (_, _) => Pick(-1);
-            lr.Tapped += (_, _) => Pick(idx);
-            leg.Children.Add(lr);
-        }
-        Grid.SetColumn(leg, 1);
-        row.Children.Add(leg);
-        return row;
     }
 
     // ---------------------------------------------------------------- nuova spesa / entrata
 
-    private void FinAdd(StackPanel h)
+    private bool _showNote;
+
+    private void FinAdd(StackPanel host)
     {
+        // contenitore proprio: i tasti da tastiera si agganciano qui e spariscono con la pagina
+        var h = new StackPanel { Spacing = 12 };
+        host.Children.Add(h);
         h.Children.Add(BackRow("Finanze", _income ? "Nuova entrata" : "Nuova spesa", () => FinGo(null)));
-        h.Children.Add(Segmented("finadd", new[] { "Spesa", "Entrata" }, _income ? 1 : 0, i => { _income = i == 1; RenderFinance(); }));
-        var amt = T("€" + (_amount.Length > 0 ? _amount : "0"), 52, _amount.Length > 0 ? "LabelPrimary" : "LabelTertiary", true);
-        amt.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-        amt.HorizontalAlignment = HorizontalAlignment.Center;
-        amt.FontFamily = (FontFamily)Application.Current.Resources["FontMono"];
-        h.Children.Add(amt);
+        h.Children.Add(Segmented("finadd", new[] { "Spesa", "Entrata" }, _income ? 1 : 0, i => { _income = i == 1; _cat = ""; RenderFinance(); }));
+        var amt = Center(Semi("€" + (_amount.Length > 0 ? _amount : "0"), 48, _amount.Length > 0 ? "LabelPrimary" : "LabelTertiary"));
+        var notes = Round(Tab.Banknote, "Banconote", false, () => { _cashSpend = !_income; _tally = new(); FinGo("cash"); });
+        h.Children.Add(Cols("a*a", 0, new Border { Width = notes.Width, MinWidth = 66 }, amt, notes));
+
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         foreach (var k in new[] { "" }.Concat(_income ? new[] { "Entrate" } : Finance.Categories.Take(Finance.Categories.Length - 1)))
         {
             var kk = k;
             chips.Children.Add(Chip(k.Length > 0 ? k : "Auto", _cat == k, () => { _cat = kk; RenderFinance(); }));
         }
-        var srcBtn = new DropDownButton { Content = SrcName(_src), CornerRadius = new CornerRadius(100), Padding = new Thickness(14, 6, 10, 6) };
-        var srcMenu = new MenuFlyout();
+        var src = Chip(SrcName(_src) + "  ▾", false, () => { }, SrcColor(_src), Alpha(SrcColor(_src), 0.22));
+        var menu = new MenuFlyout();
         foreach (var (sk, sn) in Sources)
         {
-            var kk2 = sk;
-            var mi = new MenuFlyoutItem { Text = sn, Icon = new FontIcon { Glyph = "\uEA3B", Foreground = Sb(SrcColor(sk)), FontSize = 12 } };
-            mi.Click += (_, _) => { _src = kk2; srcBtn.Content = SrcName(kk2); };
-            srcMenu.Items.Add(mi);
+            var kk = sk;
+            var item = new MenuFlyoutItem { Text = sn };
+            item.Click += (_, _) => { _src = kk; RenderFinance(); };
+            menu.Items.Add(item);
         }
-        srcBtn.Flyout = srcMenu;
-        chips.Children.Insert(0, srcBtn);
-        h.Children.Add(new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, Content = chips });
-        var note = new TextBox { Text = _note, PlaceholderText = "Nota (dove o cosa)", MaxWidth = 420 };
-        note.TextChanged += (_, _) => _note = note.Text;
-        h.Children.Add(note);
+        src.Flyout = menu;
+        chips.Children.Add(src);
+        chips.Children.Add(Chip(_showNote ? "Nascondi nota" : "+ Nota", false, () => { _showNote = !_showNote; RenderFinance(); }));
+        h.Children.Add(HScroll(chips));
+        if (_showNote)
+        {
+            var note = new TextBox { Text = _note, PlaceholderText = "Dove o cosa" };
+            note.TextChanged += (_, _) => _note = note.Text;
+            h.Children.Add(Field("Nota", note));
+        }
 
         void Press(string k)
         {
@@ -423,21 +322,18 @@ public sealed partial class MainWindow
             amt.Text = "€" + (_amount.Length > 0 ? _amount : "0");
             amt.Foreground = B(_amount.Length > 0 ? "LabelPrimary" : "LabelTertiary");
         }
-        // tastierino vero: tre colonne strette e centrate, tasti rotondi di vetro
-        var pad = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, RowSpacing = 8, ColumnSpacing = 8 };
+        // tastierino a tutta larghezza: tre colonne, righe uguali
+        var pad = new Grid { RowSpacing = 8, ColumnSpacing = 8 };
         for (var c = 0; c < 3; c++) pad.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var keys = new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫" };
         for (var i = 0; i < keys.Length; i++)
         {
             if (i % 3 == 0) pad.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var k = keys[i];
-            var key = new Grid { Height = 64, Background = Sb(Microsoft.UI.Colors.Transparent) };
-            key.Children.Add(new Border { CornerRadius = new CornerRadius(20), Background = B("BgSurface"), BorderBrush = B("LineSeparator"), BorderThickness = new Thickness(1) });
-            var kt = T(k, 26, "LabelPrimary", true);
-            kt.HorizontalAlignment = HorizontalAlignment.Center;
-            kt.VerticalAlignment = VerticalAlignment.Center;
-            key.Children.Add(kt);
-            key.Tapped += (_, _) => Press(k);
+            var face = new Border { Height = 60, CornerRadius = new CornerRadius(20), Background = B("BgSurface"), Child = Center(T(k, 31, "LabelPrimary", true)) };
+            var key = Bare(face, () => Press(k), k == "⌫" ? "Cancella" : k, 20);
+            key.HorizontalAlignment = HorizontalAlignment.Stretch;
+            if (k == "⌫") key.RightTapped += (_, _) => { _amount = ""; Press("⌫"); };
             Bounce(key, 1.04f);
             Grid.SetColumn(key, i % 3);
             Grid.SetRow(key, i / 3);
@@ -447,6 +343,7 @@ public sealed partial class MainWindow
         // si scrive anche da tastiera
         h.KeyDown += (_, e) =>
         {
+            if (e.OriginalSource is TextBox) return;
             var vk = (int)e.Key;
             if (vk >= 48 && vk <= 57) Press(((char)vk).ToString());
             else if (vk >= 96 && vk <= 105) Press((vk - 96).ToString());
@@ -461,7 +358,7 @@ public sealed partial class MainWindow
             var before = _r.Fin.State.TotalCents;
             _r.Fin.Add(_income ? v.Value : -v.Value, k, _note.Trim(), _src);
             FlashMoney(before, _income ? v.Value : -v.Value);
-            _amount = ""; _note = ""; _cat = "";
+            _amount = ""; _note = ""; _cat = ""; _showNote = false;
             FinGo(null);
         }, "PrimaryButton");
         confirm.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -493,7 +390,7 @@ public sealed partial class MainWindow
         {
             var v = Tally();
             big.Text = Finance.Eur(v);
-            big.Foreground = v == 0 ? B("LabelTertiary") : _cashSpend ? B("CriticalDefault") : Sb(Argb(255, 0x1F, 0x9A, 0x5A));
+            big.Foreground = B(v == 0 ? "LabelTertiary" : _cashSpend ? "CriticalDefault" : "Positive");
         }
         Update();
 
@@ -509,8 +406,6 @@ public sealed partial class MainWindow
             grid.Children.Add(note);
         }
         h.Children.Add(grid);
-        h.Children.Add(T("Ogni clic conta una banconota. Il − sul contatore ne toglie una.", 13, "LabelTertiary"));
-
         if (_cashSpend)
         {
             var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -519,7 +414,7 @@ public sealed partial class MainWindow
                 var kk = k;
                 chips.Children.Add(Chip(k, _cat == k, () => { _cat = _cat == kk ? "" : kk; RenderFinance(); }));
             }
-            h.Children.Add(new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Auto, VerticalScrollMode = ScrollMode.Disabled, Content = chips });
+            h.Children.Add(HScroll(chips));
         }
         var ok = Btn(_cashSpend ? "Registra spesa" : "Registra entrata", () =>
         {
@@ -595,12 +490,11 @@ public sealed partial class MainWindow
     {
         h.Children.Add(BackRow("Finanze", "Movimenti", () => FinGo(null)));
         h.Children.Add(Segmented("finper", new[] { "Mese", "Anno" }, _finMonth < 0 ? 1 : 0, i => { _finMonth = i == 1 ? -1 : DateTime.Today.Month - 1; RenderFinance(); }));
-        h.Children.Add(PeriodRow());
         var (from, to) = Range(_finYear, _finMonth);
         var list = _r.Fin.State.Txs.Where(t => t.Ts >= from && t.Ts < to).Take(200).ToList();
         var col = new StackPanel { Spacing = 2 };
-        if (list.Count == 0) col.Children.Add(T("Niente in questo periodo.", 13, "LabelTertiary"));
-        else col.Children.Add(T("Clic destro su un movimento per eliminarlo.", 12, "LabelTertiary"));
+        col.Children.Add(PeriodRow());
+        if (list.Count == 0) col.Children.Add(T("Niente in questo periodo", 16, "LabelTertiary"));
         foreach (var t in list)
         {
             var tx = t;
@@ -613,11 +507,11 @@ public sealed partial class MainWindow
             dots.Children.Add(new Border { Width = 4, Height = 30, CornerRadius = new CornerRadius(2), Background = Sb(SrcColor(t.Src)) });
             r.Children.Add(dots);
             var mid = new StackPanel();
-            mid.Children.Add(T(t.Note.Length > 0 ? t.Note : t.Cat, 14));
-            mid.Children.Add(T(t.Cat + " · " + DateTimeOffset.FromUnixTimeMilliseconds(t.Ts).LocalDateTime.ToString("d MMM", It) + " · " + SrcName(t.Src), 12, "LabelTertiary"));
+            mid.Children.Add(T(t.Note.Length > 0 ? t.Note : t.Cat, 16));
+            mid.Children.Add(T(t.Cat + " · " + DateTimeOffset.FromUnixTimeMilliseconds(t.Ts).LocalDateTime.ToString("d MMM", It) + " · " + SrcName(t.Src), 13, "LabelTertiary"));
             Grid.SetColumn(mid, 1);
             r.Children.Add(mid);
-            var v = MoneyText("mv." + t.Id, t.Cents, 14, t.Cents > 0 ? "PositiveOnSubtle" : "LabelPrimary", false, t.Cents > 0 ? "+" : "");
+            var v = MoneyText("mv." + t.Id, t.Cents, 16, t.Cents > 0 ? "PositiveOnSubtle" : "LabelPrimary", false, t.Cents > 0 ? "+" : "");
             v.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(v, 2);
             r.Children.Add(v);
@@ -639,7 +533,7 @@ public sealed partial class MainWindow
     {
         h.Children.Add(BackRow("Finanze", "Revolut", () => FinGo(null)));
         var col = new StackPanel { Spacing = 12 };
-        col.Children.Add(MoneyText("rev.total", _r.Fin.State.TotalCents, 34));
+        col.Children.Add(MoneyText("rev.total", _r.Fin.State.TotalCents, 39));
         var status = T("", 13, "LabelTertiary");
         var imp = Btn("Importa estratto (CSV)", async () =>
         {
@@ -664,8 +558,6 @@ public sealed partial class MainWindow
             bal.Text = "";
             status.Text = "Saldo aggiornato";
         }));
-        col.Children.Add(T("Revolut non ha un'API per i conti personali. I pagamenti arrivano dalle notifiche sul telefono; lo storico dall'estratto: in Revolut apri Conto → Estratti → Excel/CSV.", 12, "LabelTertiary"));
-        foreach (var c in col.Children) if (c is TextBlock tb) tb.TextWrapping = TextWrapping.Wrap;
         h.Children.Add(Widget(col));
     }
 }

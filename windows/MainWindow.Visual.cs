@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Shapes;
 using Microsoft.Web.WebView2.Core;
 
 namespace Ponte;
@@ -42,7 +41,7 @@ public sealed partial class MainWindow
     /// <summary>Colore di fondo della pagina in esadecimale: lo sfondo animato lo usa pieno, senza contare sulla trasparenza del WebView.</summary>
     private string BgHex()
     {
-        var c = (ContentArea.Background as SolidColorBrush)?.Color ?? (Dark ? Windows.UI.Color.FromArgb(255, 14, 14, 15) : Windows.UI.Color.FromArgb(255, 244, 244, 242));
+        var c = (ContentArea.Background as SolidColorBrush)?.Color ?? (Dark ? Windows.UI.Color.FromArgb(255, 0, 0, 0) : Windows.UI.Color.FromArgb(255, 242, 242, 247));
         return $"{c.R:X2}{c.G:X2}{c.B:X2}";
     }
 
@@ -52,28 +51,23 @@ public sealed partial class MainWindow
         var js = $"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{BgHex()}' }})";
         foreach (var w in new[] { HeaderWeb, OnboardWeb })
             if (w.CoreWebView2 != null) _ = w.CoreWebView2.ExecuteScriptAsync(js);
-        if (HomeWeb.CoreWebView2 != null)
-            _ = HomeWeb.CoreWebView2.ExecuteScriptAsync($"window.ponteSet && ponteSet({{ lightMode: {(Dark ? "false" : "true")}, bg: '{SurfaceHex()}' }})");
-        if (_tab == 0) RenderHome();
+        // i colori disegnati dal codice vanno rifatti con il tema nuovo
+        ClosePanel();
+        InitNavigation();
+        Select(_tab);
     }
 
     /// <summary>Sfumature dal gradiente al colore di fondo, così testata e pagina si fondono.</summary>
     private void UpdateFades()
     {
-        var bg = (ContentArea.Background as SolidColorBrush)?.Color ?? Microsoft.UI.Colors.Black;
-        Brush Fade(double from, double to, bool horizontal) => new LinearGradientBrush
-        {
-            StartPoint = new Windows.Foundation.Point(0, 0),
-            EndPoint = horizontal ? new Windows.Foundation.Point(1, 0) : new Windows.Foundation.Point(0, 1),
-            GradientStops =
-            {
-                new GradientStop { Color = horizontal ? bg : Windows.UI.Color.FromArgb(0, bg.R, bg.G, bg.B), Offset = from },
-                new GradientStop { Color = horizontal ? Windows.UI.Color.FromArgb(0, bg.R, bg.G, bg.B) : bg, Offset = to },
-            },
-        };
-        HeaderFade.Background = Fade(0.45, 1, false);
+        var bg = Canone.Color("BgCanvas", Dark);
+        HeaderFade.Background = Vertical((Alpha(bg, 0), 0.30), (Alpha(bg, 0.92), 0.82), (bg, 1));
         // Configurazione iniziale: testo a sinistra sul fondo pieno, fibre libere a destra.
-        OnboardFade.Background = Fade(0.36, 0.75, true);
+        OnboardFade.Background = new LinearGradientBrush
+        {
+            StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 0),
+            GradientStops = { new GradientStop { Color = bg, Offset = 0.36 }, new GradientStop { Color = Alpha(bg, 0), Offset = 0.75 } },
+        };
     }
 
     // ---------------------------------------------------------------- animazioni
@@ -109,36 +103,6 @@ public sealed partial class MainWindow
         v.StartAnimation("Opacity", o);
     }
 
-    /// <summary>Indicatore della barra laterale: una molla smorzata, così se cambi voce a metà corsa riparte dalla velocità che ha.</summary>
-    private void MoveIndicator(int index, bool animate)
-    {
-        if (index >= _nav.Count || _nav[index].ActualHeight < 1) return;
-        try { MoveIndicatorCore(index, animate); } catch (Exception e) { Crash.Log(e, "Indicatore"); }
-    }
-
-    private void MoveIndicatorCore(int index, bool animate)
-    {
-        var y = (float)_nav[index].TransformToVisual(NavLayer).TransformPoint(new Windows.Foundation.Point(0, 0)).Y + 2f;
-        var v = ElementCompositionPreview.GetElementVisual(NavIndicator);
-        var c = v.Compositor;
-        ElementCompositionPreview.SetIsTranslationEnabled(NavIndicator, true);
-        var target = new Vector3(0f, y, 0f);
-        if (!animate)
-        {
-            v.StopAnimation("Translation");
-            var snap = c.CreateVector3KeyFrameAnimation();
-            snap.InsertKeyFrame(1f, target);
-            snap.Duration = TimeSpan.FromMilliseconds(1);
-            v.StartAnimation("Translation", snap);
-            return;
-        }
-        var spring = c.CreateSpringVector3Animation();
-        spring.FinalValue = target;
-        spring.DampingRatio = 0.9f;
-        spring.Period = TimeSpan.FromMilliseconds(48);
-        v.StartAnimation("Translation", spring);
-    }
-
     private static void FadeTo(UIElement el, double to, int ms)
     {
         var a = new DoubleAnimation { To = to, Duration = TimeSpan.FromMilliseconds(ms), EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 4 } };
@@ -161,7 +125,7 @@ public sealed partial class MainWindow
         if (!_onboardWebReady)
         {
             _onboardWebReady = true;
-            _ = InitWebAsync(OnboardWeb, "shape=hero");
+            _ = InitWebAsync(OnboardWeb, "shape=hero&ascii=0");
         }
         _step = 0;
         RenderStep(1);
@@ -210,8 +174,6 @@ public sealed partial class MainWindow
         return new List<UIElement>
         {
             title,
-            Text("I tuoi dispositivi, un solo spazio.", "SectionTitle"),
-            Text("Appunti, file, screenshot, notifiche e cuffie passano da un dispositivo all'altro senza che tu ci pensi.", "BodyText"),
             Btn("Inizia", () => Go(1), "PrimaryButton"),
         };
     }
@@ -227,7 +189,6 @@ public sealed partial class MainWindow
         return new List<UIElement>
         {
             title,
-            Text("Stesso server e stesso token su tutti i dispositivi. Senza server funzionano comunque rete locale e Bluetooth.", "BodyText"),
             Card(Field("Nome di questo PC", name), Field("Indirizzo del server", hub), Field("Token", token)),
             Btn("Continua", () =>
             {
@@ -251,13 +212,11 @@ public sealed partial class MainWindow
         {
             title,
             Card(
-                Toggle("Avvia con Windows", "Relay parte in background all'accesso", GetAutostart(), SetAutostart),
+                Toggle("Avvia con Windows", null, GetAutostart(), SetAutostart),
                 Divider(),
-                Toggle("Screenshot automatici", "Ogni nuovo screenshot va nell'archivio di tutti", s.Screenshots, on => { s.Screenshots = on; Apply(); }),
+                Toggle("Screenshot automatici", null, s.Screenshots, on => { s.Screenshots = on; Apply(); }),
                 Divider(),
-                Toggle("Notifiche del telefono", "Le vedi qui come notifiche di Windows", s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); })),
-            Text("Quando Windows chiede del firewall, consenti Relay anche sulle reti pubbliche: serve ai collegamenti diretti. " +
-                 "Nello Strumento di cattura attiva il salvataggio automatico degli screenshot.", "FootnoteTertiary"),
+                Toggle("Notifiche del telefono", null, s.ShowPhoneNotifications, on => { s.ShowPhoneNotifications = on; Apply(); })),
             Btn("Continua", () => Go(3), "PrimaryButton"),
             Btn("Indietro", () => Go(1)),
         };
@@ -265,18 +224,12 @@ public sealed partial class MainWindow
 
     private List<UIElement> StepReady()
     {
-        var check = new Grid { Width = 48, Height = 48, HorizontalAlignment = HorizontalAlignment.Left };
-        check.Children.Add(new Ellipse { Fill = Canone.Get("AccentDefault", Dark) });
-        check.Children.Add(new FontIcon
-        {
-            Glyph = "\uE73E", FontSize = 20, Foreground = Canone.Get("AccentOnAccent", Dark),
-            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-        });
+        var check = Bubble(Center(Icons.Of(Ico.Check, White, 24)), 56, C("AccentDefault"));
+        check.HorizontalAlignment = HorizontalAlignment.Left;
         return new List<UIElement>
         {
             check,
             Text("Tutto pronto", "Display"),
-            Text("Copia qualcosa qui e incollalo sul telefono. Il resto lo fa Ponte.", "BodyText"),
             Btn("Apri Relay", FinishOnboarding, "PrimaryButton"),
         };
     }

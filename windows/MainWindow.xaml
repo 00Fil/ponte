@@ -5,77 +5,17 @@
     xmlns:tb="using:H.NotifyIcon"
     Title="Relay">
 
-    <Grid x:Name="Root" Background="Transparent">
+    <Grid x:Name="Root" Background="{ThemeResource BgCanvas}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="SideCol" Width="232" />
+            <ColumnDefinition x:Name="SideCol" Width="240" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
 
-        <!-- Barra laterale, dalle finestre estese (1024) in su: marchio, voci con icona e contatori, questo dispositivo. -->
-        <Grid x:Name="Side" Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Background="Transparent"
-              BorderBrush="{ThemeResource LineSeparator}" BorderThickness="0,0,1,0" Padding="12,0,12,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Border x:Name="SideFallback" Grid.RowSpan="3" Margin="-12,0,-12,-16" Background="{ThemeResource BgSunken}" Visibility="Collapsed" />
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,52,8,20">
-                <Border Width="28" Height="28" CornerRadius="6">
-                    <Image Source="ms-appx:///Assets/logo.png" Stretch="UniformToFill" />
-                </Border>
-                <TextBlock Text="Relay" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <!-- Voci in tre gruppi: spazio di lavoro, strumenti, impostazioni in fondo. L'indicatore scivola sotto la voce attiva. -->
-            <Grid x:Name="NavLayer" Grid.Row="1" Margin="0,0,0,12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Border x:Name="NavIndicator" Grid.RowSpan="4" Height="36" VerticalAlignment="Top" CornerRadius="9"
-                        Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1">
-                    <Border Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" Margin="-1,0,0,0" Background="{ThemeResource AccentDefault}" />
-                </Border>
-                <StackPanel Grid.Row="0" Spacing="2">
-                    <TextBlock Text="SPAZIO" Style="{StaticResource SectionLabel}" />
-                    <StackPanel x:Name="NavMain" Spacing="2" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Spacing="2" Margin="0,18,0,0">
-                    <TextBlock Text="STRUMENTI" Style="{StaticResource SectionLabel}" />
-                    <StackPanel x:Name="NavTools" Spacing="2" />
-                </StackPanel>
-                <StackPanel Grid.Row="3" Spacing="2">
-                    <Border Style="{StaticResource DividerStyle}" Margin="8,0,8,10" />
-                    <StackPanel x:Name="NavFoot" Spacing="2" />
-                </StackPanel>
-            </Grid>
+        <!-- Barra laterale, da 1024 in su: marchio e voci a pillola, come su Android. La riempie il codice. -->
+        <StackPanel x:Name="Side" Grid.Column="0" Padding="16,40,16,16" Spacing="4" />
 
-            <!-- Questo dispositivo, come l'account in un'app di sistema. -->
-            <Border Grid.Row="2" Background="{ThemeResource BgSurface}" BorderBrush="{ThemeResource LineSeparator}" BorderThickness="1" CornerRadius="12" Padding="10">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="16" Background="{ThemeResource AccentSubtle}">
-                        <FontIcon Glyph="&#xE7F4;" FontSize="15" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{ThemeResource AccentOnSubtle}" />
-                    </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="SideDevice" Style="{StaticResource BodyText}" FontFamily="{StaticResource FontSansMedium}" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="SideVersion" Style="{StaticResource Footnote}" Foreground="{ThemeResource LabelTertiary}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
-
-        <!-- Testata con il gradiente ASCII; sotto, le cinque pagine (una alla volta, ricostruite dal codice). Titolo e contenuto stanno sulla stessa colonna. -->
-        <Grid x:Name="ContentArea" Grid.Row="0" Grid.Column="1" Background="{ThemeResource BgCanvas}">
+        <!-- Testata con le fibre e il titolo; sotto, una pagina alla volta, ricostruita dal codice. -->
+        <Grid x:Name="ContentArea" Grid.Column="1" Background="{ThemeResource BgCanvas}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="132" />
                 <RowDefinition Height="*" />
@@ -83,43 +23,29 @@
             <Grid x:Name="Header">
                 <WebView2 x:Name="HeaderWeb" />
                 <Border x:Name="HeaderFade" IsHitTestVisible="False" />
-                <Grid x:Name="TitleBox" MaxWidth="840" Margin="32,0" VerticalAlignment="Bottom" IsHitTestVisible="False">
-                    <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" Margin="0,0,0,12" />
+                <Grid x:Name="TitleBox" VerticalAlignment="Bottom" Margin="0,0,0,12" IsHitTestVisible="False">
+                    <TextBlock x:Name="PageTitle" Style="{StaticResource Title1}" />
                 </Grid>
             </Grid>
             <Grid Grid.Row="1">
-                <ScrollViewer x:Name="Page5">
-                    <StackPanel x:Name="Col5" MaxWidth="840" Margin="32,4,32,40" Spacing="12">
-                        <!-- Scheda grande della Home: MicroSlats dietro il saluto. -->
-                        <Grid x:Name="HomeHero" Height="208" CornerRadius="24" Background="{StaticResource BrandGradient}">
-                            <WebView2 x:Name="HomeWeb" />
-                            <Border x:Name="HomeFade" IsHitTestVisible="False" />
-                            <StackPanel VerticalAlignment="Bottom" Margin="24,0,24,20" Spacing="2" IsHitTestVisible="False">
-                                <TextBlock x:Name="HomeHello" Style="{StaticResource Title1}" Foreground="White" />
-                                <TextBlock x:Name="HomeSub" Style="{StaticResource Footnote}" Foreground="#E6F0FF" />
-                            </StackPanel>
-                        </Grid>
-                        <StackPanel x:Name="Host5" Spacing="12" />
-                    </StackPanel>
-                </ScrollViewer>
-                <ScrollViewer x:Name="Page0" Visibility="Collapsed"><StackPanel x:Name="Host0" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="PageA" Visibility="Collapsed"><StackPanel x:Name="HostA" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="PageB" Visibility="Collapsed"><StackPanel x:Name="HostB" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="PageS" Visibility="Collapsed"><StackPanel x:Name="HostS" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
-                <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" MaxWidth="840" Margin="32,4,32,40" Spacing="12" HorizontalAlignment="Stretch" /></ScrollViewer>
+                <ScrollViewer x:Name="Page0"><StackPanel x:Name="Host0" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
+                <ScrollViewer x:Name="Page1" Visibility="Collapsed"><StackPanel x:Name="Host1" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
+                <ScrollViewer x:Name="Page2" Visibility="Collapsed"><StackPanel x:Name="Host2" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
+                <ScrollViewer x:Name="Page3" Visibility="Collapsed"><StackPanel x:Name="Host3" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
+                <ScrollViewer x:Name="Page4" Visibility="Collapsed"><StackPanel x:Name="Host4" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
+                <ScrollViewer x:Name="Page5" Visibility="Collapsed"><StackPanel x:Name="Host5" Margin="16,12,16,24" Spacing="12" /></ScrollViewer>
             </Grid>
+            <!-- La pillola dei dispositivi sotto "Home", che si allarga in scheda. -->
+            <Grid x:Name="MorphLayer" Grid.RowSpan="2" />
+            <!-- Barra di vetro in basso, sotto i 1024. -->
+            <Grid x:Name="Bottom" Grid.Row="1" VerticalAlignment="Bottom" Margin="20,0,20,10" MaxWidth="440" Height="66" Visibility="Collapsed" />
         </Grid>
 
-        <!-- Barra in basso, sotto i 1024. -->
-        <Border x:Name="Bottom" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource BarStyle}" Visibility="Collapsed">
-            <Grid x:Name="BottomTabs" ColumnSpacing="4" />
-        </Border>
+        <!-- L'app volante: tieni premuto un riquadro della Home. -->
+        <Grid x:Name="PanelLayer" Grid.ColumnSpan="2" Visibility="Collapsed" />
 
         <!-- Configurazione iniziale: sopra a tutto, finché non è completata. -->
-        <Grid x:Name="Onboard" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{ThemeResource BgCanvas}">
+        <Grid x:Name="Onboard" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{ThemeResource BgCanvas}">
             <WebView2 x:Name="OnboardWeb" />
             <Border x:Name="OnboardFade" IsHitTestVisible="False" />
             <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -131,7 +57,7 @@
         </Grid>
 
         <!-- Visualizzatore di foto: sopra al contenuto, sotto ai pallini della finestra. -->
-        <Grid x:Name="Viewer" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0">
+        <Grid x:Name="Viewer" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0">
             <Border Background="#F2090A0C" Tapped="OnViewerBackdrop" />
             <ScrollViewer x:Name="ViewerScroll" Margin="88,52,88,96" ZoomMode="Enabled" MinZoomFactor="1" MaxZoomFactor="6"
                           HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" HorizontalScrollMode="Auto" VerticalScrollMode="Auto"
@@ -141,13 +67,13 @@
                 </Grid>
             </ScrollViewer>
             <Button x:Name="ViewerPrev" Style="{StaticResource ViewerRound}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="24,0,0,0" Click="OnViewerPrev">
-                <FontIcon Glyph="&#xE76B;" FontSize="16" />
+                <Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="M 14.5 5 L 7.5 12 L 14.5 19" Stroke="White" StrokeThickness="2.1" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" /></Canvas></Viewbox>
             </Button>
             <Button x:Name="ViewerNext" Style="{StaticResource ViewerRound}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,24,0" Click="OnViewerNext">
-                <FontIcon Glyph="&#xE76C;" FontSize="16" />
+                <Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="M 9.5 5 L 16.5 12 L 9.5 19" Stroke="White" StrokeThickness="2.1" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" /></Canvas></Viewbox>
             </Button>
             <Button Style="{StaticResource ViewerRound}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,48,24,0" Click="OnViewerClose">
-                <FontIcon Glyph="&#xE711;" FontSize="14" />
+                <Viewbox Width="16" Height="16"><Canvas Width="24" Height="24"><Path Data="M 6 6 L 18 18 M 18 6 L 6 18" Stroke="White" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" /></Canvas></Viewbox>
             </Button>
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" Spacing="2">
                 <TextBlock x:Name="ViewerName" Foreground="White" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="560" />
@@ -160,7 +86,7 @@
         </Grid>
 
         <!-- Scheda dell'aggiornamento: anello, dettagli e le tre fasi. -->
-        <Border x:Name="UpdateCard" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0" Style="{StaticResource CardStyle}"
+        <Border x:Name="UpdateCard" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0" Style="{StaticResource CardStyle}"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24" Width="344">
             <StackPanel Spacing="14">
                 <Grid ColumnSpacing="14">
@@ -170,7 +96,7 @@
                         <TextBlock x:Name="UpdatePercent" Style="{StaticResource Footnote}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                        <TextBlock x:Name="UpdateTitle" Style="{StaticResource SectionTitle}" />
+                        <TextBlock x:Name="UpdateTitle" Style="{StaticResource BodyMedium}" />
                         <TextBlock x:Name="UpdateDetail" Style="{StaticResource Footnote}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
@@ -179,7 +105,7 @@
         </Border>
 
         <!-- Barra del titolo personalizzata, in stile macOS: tre pallini a sinistra, il resto trascina la finestra. -->
-        <Grid x:Name="TitleBar" Grid.RowSpan="2" Grid.ColumnSpan="2" Height="44" VerticalAlignment="Top">
+        <Grid x:Name="TitleBar" Grid.ColumnSpan="2" Height="44" VerticalAlignment="Top">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="86" />
                 <ColumnDefinition Width="*" />

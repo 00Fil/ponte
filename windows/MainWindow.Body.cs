@@ -54,33 +54,20 @@ public sealed partial class MainWindow
         foreach (var el in _hosts[_tab].Children.Take(3)) Enter(el, sub == null ? -12 : 12, 0, 320);
     }
 
-    private Grid BdBar(double frac, Windows.UI.Color color)
+    /// <summary>Un macro (MacroBar): nome a sinistra, valore e obiettivo a destra, barra sottile sotto.</summary>
+    private StackPanel BdMacro(string label, double v, double goal, Windows.UI.Color color)
     {
-        frac = double.IsNaN(frac) ? 0 : Math.Clamp(frac, 0, 1);
-        var g = new Grid { Height = 8 };
-        g.Children.Add(new Border { Background = B("BgSunken"), CornerRadius = new CornerRadius(4) });
-        var fill = new Border { Background = Sb(color), CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left };
-        g.SizeChanged += (_, e) => fill.Width = Math.Max(0, e.NewSize.Width * frac);
-        g.Children.Add(fill);
-        return g;
+        var value = HStack(0, Semi(BdN(v), 13), T(goal > 0 ? $" / {BdN(goal)} g" : " g", 11, "LabelTertiary"));
+        value.Children.OfType<TextBlock>().Last().VerticalAlignment = VerticalAlignment.Bottom;
+        var name = T(label, 13, "LabelSecondary");
+        return VStack(5, Cols("*a", 8, name, value), Progress(goal > 0 ? v / goal : 0, Sb(color), 6, B("BgSunken")));
     }
 
-    private StackPanel BdMacro(string label, double v, double goal, Windows.UI.Color c)
+    private StackPanel BdMacros(Nut tot, Goals g)
     {
-        var p = new StackPanel { Spacing = 4 };
-        p.Children.Add(T(label, 12, "LabelTertiary"));
-        p.Children.Add(T(goal > 0 ? $"{BdN(v)} / {BdN(goal)} g" : $"{BdN(v)} g", 15, "LabelPrimary", true));
-        p.Children.Add(BdBar(goal > 0 ? v / goal : 0, c));
-        return p;
-    }
-
-    private Grid BdMacros(Nut tot, Goals g)
-    {
-        var grid = new Grid { ColumnSpacing = 14 };
-        for (var i = 0; i < 3; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var cols = new[] { BdMacro("Proteine", tot.P, g.P, MacroP), BdMacro("Carboidrati", tot.C, g.C, MacroC), BdMacro("Grassi", tot.F, g.F, MacroF) };
-        for (var i = 0; i < 3; i++) { Grid.SetColumn(cols[i], i); grid.Children.Add(cols[i]); }
-        return grid;
+        var col = VStack(12, BdMacro("Proteine", tot.P, g.P, MacroP), BdMacro("Carboidrati", tot.C, g.C, MacroC), BdMacro("Grassi", tot.F, g.F, MacroF));
+        col.VerticalAlignment = VerticalAlignment.Center;
+        return col;
     }
 
     private static Nut BdDayTotal(BodyState b, string day) => b.Entries.Where(e => e.Day == day).Aggregate(default(Nut), (a, e) => a + e.N);
@@ -94,64 +81,118 @@ public sealed partial class MainWindow
         var tot = BdDayTotal(b, today);
         var g = b.Goals;
 
-        var hero = new StackPanel { Spacing = 12 };
-        hero.Children.Add(T("Oggi", 13, "LabelTertiary"));
-        hero.Children.Add(T($"{BdN(tot.Kcal)} / {g.Kcal} kcal", 34, "LabelPrimary", true));
-        hero.Children.Add(BdBar(g.Kcal > 0 ? tot.Kcal / g.Kcal : 0, tot.Kcal > g.Kcal ? MacroF : C("AccentDefault")));
-        hero.Children.Add(T(tot.Kcal > g.Kcal ? $"{BdN(tot.Kcal - g.Kcal)} kcal oltre l'obiettivo" : $"{BdN(Math.Max(0, g.Kcal - tot.Kcal))} kcal rimaste", 13, "LabelSecondary"));
-        hero.Children.Add(BdMacros(tot, g));
-        h.Children.Add(Widget(hero));
+        // oggi
+        var goals = Bare(Semi("Obiettivi", 13, "AccentDefault"), () => BdGo("goals"), "Obiettivi", 8);
+        var over = tot.Kcal > g.Kcal;
+        var left = Semi(BdN(Math.Abs(g.Kcal - tot.Kcal)), 31);
+        var leftWord = T(over ? "kcal oltre" : "kcal rimaste", 11, "LabelTertiary");
+        left.HorizontalAlignment = leftWord.HorizontalAlignment = HorizontalAlignment.Center;
+        var ring = Ring(g.Kcal > 0 ? tot.Kcal / g.Kcal : 0, 132, 13, VStack(0, left, leftWord), over ? Sb(Third) : null);
+        var stats = Cols("****", 8,
+            BdStat("Mangiate", BdN(tot.Kcal) + " kcal"), BdStat("Fibre", $"{BdN(tot.Fiber)} / {g.Fiber} g"),
+            BdStat("Zuccheri", BdN(tot.Sugar) + " g"), BdStat("Sale", BdG(tot.Salt) + " g"));
+        var hero = VStack(16,
+            Cols("*a", 8, Semi("Oggi", 13, "LabelSecondary"), goals),
+            Cols("a*", 24, ring, BdMacros(tot, g)),
+            new Border { Height = 1, Background = B("LineSeparator") },
+            stats);
+        h.Children.Add(BdTile(hero, () => { _bdDay = today; BdGo("diary"); }, "Diario"));
 
-        var acts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 26, HorizontalAlignment = HorizontalAlignment.Center };
-        acts.Children.Add(ActionBubble("", "Diario", true, () => { _bdDay = today; BdGo("diary"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Piano", false, () => { BdGo("plan"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Alimenti", false, () => { BdGo("foods"); return Task.CompletedTask; }));
-        acts.Children.Add(ActionBubble("", "Obiettivi", false, () => { BdGo("goals"); return Task.CompletedTask; }));
+        h.Children.Add(BdNow(b, today));
+
+        // azioni
+        var acts = HStack(48,
+            Round("+", "Pasto", true, () => { _bdDay = today; BdGo("diary"); }),
+            Round(Tab.Calendar, "Piano", false, () => BdGo("plan")),
+            Round(Tab.Clipboard, "Alimenti", false, () => BdGo("foods")));
+        acts.HorizontalAlignment = HorizontalAlignment.Center;
+        acts.Margin = new Thickness(0, 4, 0, 4);
         h.Children.Add(acts);
 
-        // prossimo pasto del piano
+        h.Children.Add(BdWeight(b, today));
+
+        // ultimi sette giorni
+        var days = Enumerable.Range(0, 7).Select(i => DateTime.Today.AddDays(i - 6)).ToList();
+        var logged = days.Select(d => BdDayTotal(b, BodyStore.DayKey(d)).Kcal).Where(v => v > 0).ToList();
+        h.Children.Add(Panelled(VStack(16,
+            Cols("*a", 8, Semi("Ultimi 7 giorni", 13, "LabelSecondary"), T(logged.Count > 0 ? $"media {BdN(logged.Average())} kcal" : "", 13, "LabelTertiary")),
+            BdWeek(b, days)), new Thickness(24)));
+    }
+
+    /// <summary>Riquadro di vetro cliccabile a tutta larghezza.</summary>
+    private Button BdTile(UIElement content, Action click, string name)
+    {
+        var t = Tile(content, click, null, name, new Thickness(24));
+        t.HorizontalAlignment = HorizontalAlignment.Stretch;
+        return t;
+    }
+
+    private StackPanel BdStat(string label, string value, Windows.UI.Color? tint = null)
+    {
+        var name = T(label, 13, "LabelTertiary");
+        if (tint is { } c) name.Foreground = Sb(c);
+        return VStack(1, name, T(value, 16, "LabelPrimary", true));
+    }
+
+    /// <summary>Il prossimo pasto del piano: quello di adesso (fino a 45 minuti dopo) o il primo dei giorni seguenti.</summary>
+    private Button BdNow(BodyState b, string today)
+    {
         var dow = ((int)DateTime.Today.DayOfWeek + 6) % 7;
         var nowMin = DateTime.Now.Hour * 60 + DateTime.Now.Minute;
-        var next = b.Slots.FirstOrDefault(s => s.Dow == dow && s.Minute >= nowMin - 30);
-        var tomorrow = false;
-        if (next == null) { next = b.Slots.Where(s => s.Dow == (dow + 1) % 7).OrderBy(s => s.Minute).FirstOrDefault(); tomorrow = next != null; }
-        if (next != null)
+        var next = b.Slots.Where(s => s.Dow == dow && s.Minute >= nowMin - 45).MinBy(s => s.Minute);
+        var ahead = 0;
+        for (var k = 1; next == null && k <= 7; k++)
         {
-            var p = new StackPanel { Spacing = 8 };
-            p.Children.Add(T(tomorrow ? "Domani" : "Prossimo pasto", 13, "LabelTertiary"));
-            p.Children.Add(T($"{BdClock(next.Minute)}  {next.Label}", 20, "LabelPrimary", true));
-            var line = T(string.Join(" · ", next.Items.Select(i => $"{i.Name} {BdN(i.Grams)} g")), 13, "LabelSecondary");
-            line.TextWrapping = TextWrapping.Wrap;
-            line.TextTrimming = TextTrimming.None;
-            p.Children.Add(line);
-            var t = next.Total;
-            p.Children.Add(T($"{BdN(t.Kcal)} kcal · P {BdN(t.P)} · C {BdN(t.C)} · G {BdN(t.F)}", 13, "LabelTertiary"));
-            if (!tomorrow)
-            {
-                var slot = next;
-                var log = Btn("Segna come mangiato", () => { _r.Bd.LogSlot(slot, today); }, "PrimaryButton");
-                log.HorizontalAlignment = HorizontalAlignment.Left;
-                p.Children.Add(log);
-            }
-            h.Children.Add(Widget(p));
+            next = b.Slots.Where(s => s.Dow == (dow + k) % 7).MinBy(s => s.Minute);
+            ahead = k;
         }
+        if (next == null)
+            return BdTile(Cols("*a", 8, Semi("Piano settimanale", 13, "LabelSecondary"), Semi("Imposta", 13, "AccentDefault")), () => BdGo("plan"), "Piano settimanale");
 
-        // peso
-        var w = new StackPanel { Spacing = 10 };
-        w.Children.Add(T("Peso", 13, "LabelTertiary"));
-        if (b.Weights.Count > 0)
+        var slot = next;
+        var tot = slot.Total;
+        var when = ahead == 0 ? "Adesso" : ahead == 1 ? "Domani" : It.TextInfo.ToTitleCase(DateTime.Today.AddDays(ahead).ToString("dddd", It));
+        var items = VStack(2);
+        foreach (var i in slot.Items) items.Children.Add(Cols("*a", 12, T(i.Name, 16), T(BdN(i.Grams) + " g", 16, "LabelTertiary")));
+        var p = VStack(12,
+            Cols("*a", 8, Semi($"{when} · {BdClock(slot.Minute)}", 13, "LabelSecondary"), T(BdN(tot.Kcal) + " kcal", 13, "LabelTertiary")),
+            T(string.IsNullOrWhiteSpace(slot.Label) ? BodyStore.Meals[slot.Meal] : slot.Label, 25, "LabelPrimary", true),
+            items);
+        if (ahead == 0 && slot.Items.Count > 0)
         {
-            var last = b.Weights[^1];
-            var first = b.Weights[0];
-            var delta = last.Kg - first.Kg;
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14 };
-            head.Children.Add(T(BdG(last.Kg) + " kg", 34, "LabelPrimary", true));
-            if (b.Weights.Count > 1) head.Children.Add(new TextBlock { Text = (delta > 0 ? "+" : delta < 0 ? "−" : "") + BdG(Math.Abs(delta)) + " kg dall'inizio", FontSize = 13, Foreground = B("LabelSecondary"), VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 6) });
-            w.Children.Add(head);
-            if (g.GoalKg10 > 0) w.Children.Add(T($"Obiettivo {BdG(g.GoalKg10 / 10.0)} kg · mancano {BdG(Math.Max(0, last.Kg - g.GoalKg10 / 10.0))} kg", 13, "LabelSecondary"));
-            if (b.Weights.Count > 1) w.Children.Add(BdWeightChart(b.Weights));
+            var done = slot.Items.All(i => b.Entries.Any(e => e.Day == today && e.Meal == slot.Meal && e.Name == i.Name && e.FoodId == i.FoodId));
+            var macros = HStack(16, BdStat("P", BdN(tot.P) + " g", MacroP), BdStat("C", BdN(tot.C) + " g", MacroC), BdStat("G", BdN(tot.F) + " g", MacroF));
+            FrameworkElement end = done ? Semi("Registrato", 13, "AccentDefault") : Btn("Registra", () => { _r.Bd.LogSlot(slot, today); }, "PrimaryButton");
+            end.VerticalAlignment = VerticalAlignment.Center;
+            p.Children.Add(Cols("*a", 16, macros, end));
         }
-        var box = new TextBox { PlaceholderText = "Peso di oggi (kg)", Text = _bdWeight, Width = 200 };
+        return BdTile(p, () => BdGo("plan"), "Piano");
+    }
+
+    private Border BdWeight(BodyState b, string today)
+    {
+        var w = VStack(12, Semi("Peso", 13, "LabelSecondary"));
+        var last = b.Weights.Count > 0 ? b.Weights[^1] : null;
+        var value = Semi(last != null ? BdG(last.Kg) + " kg" : "—", 31);
+        var head = Cols("*a", 12, value, null);
+        if (last != null)
+        {
+            // confronto con la pesata di circa una settimana fa
+            var limit = BodyStore.KeyTime(last.Day).AddDays(-6);
+            var prev = b.Weights.LastOrDefault(x => BodyStore.KeyTime(x.Day) <= limit);
+            if (prev != null)
+            {
+                var d = last.Kg - prev.Kg;
+                var delta = T((d > 0 ? "+" : d < 0 ? "−" : "") + BdG(Math.Abs(d)) + " kg in 7 giorni", 13, "LabelTertiary");
+                delta.VerticalAlignment = VerticalAlignment.Bottom;
+                delta.Margin = new Thickness(0, 0, 0, 6);
+                Grid.SetColumn(delta, 1);
+                head.Children.Add(delta);
+            }
+        }
+        w.Children.Add(head);
+        if (b.Weights.Count > 1) w.Children.Add(BdWeightChart(b.Weights, b.Goals.GoalKg10 / 10.0));
+        var box = new TextBox { PlaceholderText = "Peso di oggi (kg)", Text = _bdWeight, VerticalAlignment = VerticalAlignment.Center };
         box.TextChanged += (_, _) => _bdWeight = box.Text;
         var save = Btn("Registra", () =>
         {
@@ -160,21 +201,74 @@ public sealed partial class MainWindow
             _r.Bd.SetWeight(today, (int)Math.Round(v.Value * 10));
             _bdWeight = "";
         }, "SecondaryButton");
-        var rowW = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        rowW.Children.Add(box);
-        rowW.Children.Add(save);
-        w.Children.Add(rowW);
-        h.Children.Add(Widget(w));
+        w.Children.Add(Cols("*a", 10, box, save));
+        return Panelled(w, new Thickness(24));
     }
 
-    private FrameworkElement BdWeightChart(List<Weigh> ws)
+    /// <summary>Andamento degli ultimi 60 giorni, con la linea tratteggiata dell'obiettivo.</summary>
+    private FrameworkElement BdWeightChart(List<Weigh> ws, double goal)
     {
-        var tail = ws.Count > 60 ? ws.Skip(ws.Count - 60).ToList() : ws;
+        const double height = 120;
+        var from = DateTime.Today.AddDays(-60);
+        var tail = ws.Where(x => BodyStore.KeyTime(x.Day) >= from).ToList();
+        if (tail.Count < 2) tail = ws.TakeLast(2).ToList();
         var lo = tail.Min(x => x.Kg); var hi = tail.Max(x => x.Kg);
+        if (goal > 0) { lo = Math.Min(lo, goal); hi = Math.Max(hi, goal); }
         var span = Math.Max(0.5, hi - lo);
-        var pts = new PointCollection();
-        for (var i = 0; i < tail.Count; i++) pts.Add(new Point(100.0 * i / Math.Max(1, tail.Count - 1), 100 - (tail[i].Kg - lo) / span * 100));
-        return new Polyline { Points = pts, Stroke = B("AccentDefault"), StrokeThickness = 2.5, StrokeLineJoin = PenLineJoin.Round, Stretch = Stretch.Fill, Height = 90, Margin = new Thickness(0, 6, 0, 6) };
+        double Y(double kg) => 4 + (height - 8) * (1 - (kg - lo) / span);
+        var t0 = BodyStore.KeyTime(tail[0].Day);
+        var total = Math.Max(1, (BodyStore.KeyTime(tail[^1].Day) - t0).TotalDays);
+        var line = new Polyline { Stroke = B("AccentDefault"), StrokeThickness = 2.5, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+        var target = new Line { Stroke = B("LabelTertiary"), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 5, 5 }, Visibility = goal > 0 ? Visibility.Visible : Visibility.Collapsed };
+        var canvas = new Canvas { Height = height, Children = { target, line } };
+        canvas.SizeChanged += (_, e) =>
+        {
+            var pts = new PointCollection();
+            foreach (var x in tail) pts.Add(new Point(2 + (e.NewSize.Width - 4) * (BodyStore.KeyTime(x.Day) - t0).TotalDays / total, Y(x.Kg)));
+            line.Points = pts;
+            target.X2 = e.NewSize.Width;
+            target.Y1 = target.Y2 = Y(goal);
+        };
+        return canvas;
+    }
+
+    /// <summary>Le calorie degli ultimi sette giorni (WeekBars): oggi pieno, oltre l'obiettivo col terzo colore.</summary>
+    private Grid BdWeek(BodyState b, List<DateTime> days)
+    {
+        const double height = 96;
+        var goal = (double)b.Goals.Kcal;
+        var vals = days.Select(d => BdDayTotal(b, BodyStore.DayKey(d)).Kcal).ToList();
+        var top = Math.Max(Math.Max(vals.Max(), goal * 1.15), 1);
+        var bars = Cols("*******", 10);
+        var names = Cols("*******", 10);
+        for (var i = 0; i < 7; i++)
+        {
+            var v = vals[i];
+            var bar = new Border
+            {
+                Height = v > 0 ? Math.Max(4, height * v / top) : 4, VerticalAlignment = VerticalAlignment.Bottom,
+                CornerRadius = new CornerRadius(v > 0 ? 6 : 2),
+                Background = v <= 0 ? B("BgSunken") : i == 6 ? B("AccentDefault") : v > goal * 1.05 ? Sb(Alpha(Third, 0.7)) : Sb(Alpha(C("AccentDefault"), 0.35)),
+            };
+            Grid.SetColumn(bar, i); bars.Children.Add(bar);
+            var name = T(days[i].ToString("ddd", It)[..1].ToUpper(It), 11, i == 6 ? "LabelPrimary" : "LabelTertiary");
+            name.HorizontalAlignment = HorizontalAlignment.Center;
+            Grid.SetColumn(name, i); names.Children.Add(name);
+        }
+        var plot = new Grid { Height = height, Children = { bars } };
+        if (goal > 0)
+        {
+            var target = new Line { Stroke = Sb(Alpha(C("LabelTertiary"), 0.6)), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 5, 5 }, Y1 = height * (1 - goal / top), Y2 = height * (1 - goal / top) };
+            plot.SizeChanged += (_, e) => target.X2 = e.NewSize.Width;
+            plot.Children.Add(target);
+        }
+        var rows = new Grid { RowSpacing = 6 };
+        rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(names, 1);
+        rows.Children.Add(plot);
+        rows.Children.Add(names);
+        return rows;
     }
 
     // ---------------------------------------------------------------- diario
@@ -184,50 +278,44 @@ public sealed partial class MainWindow
         var b = _r.Bd.State;
         h.Children.Add(BackRow("Corpo", "Diario", () => BdGo(null)));
         var day = BodyStore.KeyTime(_bdDay);
-        var nav = new Grid { ColumnSpacing = 10 };
-        nav.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nav.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        nav.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nav.Children.Add(Btn("‹", () => { _bdDay = BodyStore.DayKey(day.AddDays(-1)); RenderBody(); }));
+        Button Step(Ico icon, int d, string name) =>
+            BubbleButton(Center(Icons.Of(icon, B("LabelSecondary"), 18)), 36, () => { _bdDay = BodyStore.DayKey(day.AddDays(d)); RenderBody(); }, name);
         var title = T(day.Date == DateTime.Today ? "Oggi" : day.ToString("dddd d MMMM", It), 16, "LabelPrimary", true);
-        title.HorizontalAlignment = HorizontalAlignment.Center; title.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(title, 1); nav.Children.Add(title);
-        var nx = Btn("›", () => { _bdDay = BodyStore.DayKey(day.AddDays(1)); RenderBody(); });
-        Grid.SetColumn(nx, 2); nav.Children.Add(nx);
-        h.Children.Add(nav);
+        h.Children.Add(Cols("a*a", 10, Step(Ico.Back, -1, "Giorno precedente"), Center(title), Step(Ico.Forward, 1, "Giorno successivo")));
 
         var tot = BdDayTotal(b, _bdDay);
-        var sum = new StackPanel { Spacing = 10 };
-        sum.Children.Add(T($"{BdN(tot.Kcal)} / {b.Goals.Kcal} kcal", 24, "LabelPrimary", true));
-        sum.Children.Add(BdBar(b.Goals.Kcal > 0 ? tot.Kcal / b.Goals.Kcal : 0, tot.Kcal > b.Goals.Kcal ? MacroF : C("AccentDefault")));
-        sum.Children.Add(BdMacros(tot, b.Goals));
-        h.Children.Add(Widget(sum));
+        var kcal = Semi(BdN(tot.Kcal), 25);
+        var of = T($"/ {b.Goals.Kcal}", 11, "LabelTertiary");
+        kcal.HorizontalAlignment = of.HorizontalAlignment = HorizontalAlignment.Center;
+        var ring = Ring(b.Goals.Kcal > 0 ? tot.Kcal / b.Goals.Kcal : 0, 96, 10, VStack(0, kcal, of), tot.Kcal > b.Goals.Kcal ? Sb(Third) : null);
+        h.Children.Add(Panelled(Cols("a*", 24, ring, BdMacros(tot, b.Goals)), new Thickness(24)));
 
         for (var meal = 0; meal < 4; meal++)
         {
             var m = meal;
             var list = b.Entries.Where(e => e.Day == _bdDay && e.Meal == m).ToList();
-            var card = new StackPanel { Spacing = 8 };
-            var head = new Grid();
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.Children.Add(T(BodyStore.Meals[m], 16, "LabelPrimary", true));
-            var kc = T($"{BdN(list.Sum(e => e.N.Kcal))} kcal", 13, "LabelTertiary");
-            Grid.SetColumn(kc, 1); head.Children.Add(kc);
-            card.Children.Add(head);
+            var names = VStack(1, T(BodyStore.Meals[m], 16, "LabelPrimary", true));
+            if (list.Count > 0) names.Children.Add(T($"{BdN(list.Sum(e => e.N.Kcal))} kcal", 13, "LabelTertiary"));
+            names.VerticalAlignment = VerticalAlignment.Center;
+            var add = BubbleButton(Center(Icons.Of(Ico.Plus, White, 18)), 36, () => { _bdMeal = m; _bdQuery = ""; _bdResults = null; BdGo("add"); }, "Aggiungi a " + BodyStore.Meals[m], Alpha(C("AccentDefault"), 0.85));
+            var card = VStack(8, Cols("*a", 12, names, add));
             foreach (var e in list)
             {
                 var en = e;
-                var tr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-                tr.Children.Add(Btn("−", () => _r.Bd.SetGrams(en, Math.Max(10, en.Grams - 10))));
-                tr.Children.Add(Btn("+", () => _r.Bd.SetGrams(en, en.Grams + 10)));
-                tr.Children.Add(Btn("Elimina", () => _r.Bd.RemoveEntry(en.Id)));
-                card.Children.Add(Row(e.Name, $"{BdG(e.Grams)} g · {BdN(e.N.Kcal)} kcal · P {BdN(e.N.P)} · C {BdN(e.N.C)} · G {BdN(e.N.F)}", tr));
+                Button Small(Ico icon, Action click, string name) => BubbleButton(Center(Icons.Of(icon, B("LabelSecondary"), 15)), 32, click, name);
+                var tools = HStack(6,
+                    Small(Ico.Minus, () => _r.Bd.SetGrams(en, Math.Max(10, en.Grams - 10)), "10 g in meno"),
+                    Small(Ico.Plus, () => _r.Bd.SetGrams(en, en.Grams + 10), "10 g in più"),
+                    Small(Ico.Trash, () => _r.Bd.RemoveEntry(en.Id), "Elimina"));
+                tools.VerticalAlignment = VerticalAlignment.Center;
+                var info = VStack(1, T(e.Name, 16),
+                    T((e.Grams > 0 ? BdG(e.Grams) + " g · " : "") + $"P {BdN(e.N.P)} · C {BdN(e.N.C)} · G {BdN(e.N.F)}", 12, "LabelTertiary"));
+                var amount = T(BdN(e.N.Kcal), 16);
+                amount.VerticalAlignment = VerticalAlignment.Center;
+                card.Children.Add(new Border { Height = 1, Background = B("LineSeparator") });
+                card.Children.Add(Cols("*aa", 12, info, amount, tools));
             }
-            var add = Btn("Aggiungi", () => { _bdMeal = m; _bdQuery = ""; _bdResults = null; BdGo("add"); });
-            add.HorizontalAlignment = HorizontalAlignment.Left;
-            card.Children.Add(add);
-            h.Children.Add(Widget(card));
+            h.Children.Add(Panelled(card, new Thickness(24, 16, 24, 16)));
         }
     }
 
@@ -238,7 +326,7 @@ public sealed partial class MainWindow
         var b = _r.Bd.State;
         h.Children.Add(BackRow("Diario", BodyStore.Meals[_bdMeal], () => BdGo("diary")));
 
-        var q = new TextBox { PlaceholderText = "Cerca un alimento, esselunga … o codice a barre", Text = _bdQuery };
+        var q = new TextBox { PlaceholderText = "Alimento o codice a barre", Text = _bdQuery };
         q.TextChanged += (_, _) => _bdQuery = q.Text;
         async Task Go()
         {
@@ -256,15 +344,15 @@ public sealed partial class MainWindow
         bar.Children.Add(q);
         var go = Btn(_bdBusy ? "Cerco…" : "Cerca", Go, "PrimaryButton");
         Grid.SetColumn(go, 1); bar.Children.Add(go);
-        h.Children.Add(Widget(bar));
+        h.Children.Add(Panelled(bar));
 
         var qt = _bdQuery.Trim();
         var saved = b.Foods.Where(f => qt.Length == 0 || (f.Name + " " + f.Brand).Contains(qt, StringComparison.CurrentCultureIgnoreCase)).Take(30).ToList();
-        if (saved.Count > 0) { h.Children.Add(T("I miei alimenti", 13, "LabelTertiary")); h.Children.Add(Widget(BdFoodList(saved, true))); }
+        if (saved.Count > 0) { h.Children.Add(T("I miei alimenti", 13, "LabelTertiary")); h.Children.Add(Panelled(BdFoodList(saved, true))); }
         if (_bdResults != null)
         {
             h.Children.Add(T("Risultati", 13, "LabelTertiary"));
-            h.Children.Add(_bdResults.Count == 0 ? Widget(T("Nessun risultato", 14, "LabelSecondary")) : Widget(BdFoodList(_bdResults, false)));
+            h.Children.Add(_bdResults.Count == 0 ? Panelled(T("Nessun risultato", 14, "LabelSecondary")) : Panelled(BdFoodList(_bdResults, false)));
         }
     }
 
@@ -300,7 +388,7 @@ public sealed partial class MainWindow
     {
         var b = _r.Bd.State;
         h.Children.Add(BackRow("Corpo", "Alimenti", () => BdGo(null)));
-        if (b.Foods.Count == 0) { h.Children.Add(Widget(T("Nessun alimento salvato", 14, "LabelSecondary"))); return; }
+        if (b.Foods.Count == 0) { h.Children.Add(Panelled(T("Nessun alimento salvato", 14, "LabelSecondary"))); return; }
         var list = new StackPanel { Spacing = 10 };
         foreach (var f in b.Foods)
         {
@@ -308,7 +396,7 @@ public sealed partial class MainWindow
             var n = food.Per100;
             list.Children.Add(Row(food.Name + (food.Brand.Length > 0 ? " · " + food.Brand : ""), $"{BdN(n.Kcal)} kcal · P {BdN(n.P)} · C {BdN(n.C)} · G {BdN(n.F)} per 100 g · porzione {food.Serving} g", Btn("Elimina", () => _r.Bd.RemoveFood(food.Id))));
         }
-        h.Children.Add(Widget(list));
+        h.Children.Add(Panelled(list));
     }
 
     // ---------------------------------------------------------------- piano settimanale
@@ -324,8 +412,8 @@ public sealed partial class MainWindow
         sum.Children.Add(T(BdDaysFull[_bdDow], 20, "LabelPrimary", true));
         sum.Children.Add(T($"{BdN(tot.Kcal)} / {b.Goals.Kcal} kcal", 15, "LabelSecondary"));
         sum.Children.Add(BdMacros(tot, b.Goals));
-        h.Children.Add(Widget(sum));
-        if (slots.Count == 0) h.Children.Add(Widget(T("Nessun pasto in questo giorno", 14, "LabelSecondary")));
+        h.Children.Add(Panelled(sum));
+        if (slots.Count == 0) h.Children.Add(Panelled(T("Nessun pasto in questo giorno", 14, "LabelSecondary")));
         foreach (var s in slots)
         {
             var slot = s;
@@ -335,10 +423,10 @@ public sealed partial class MainWindow
             var t = slot.Total;
             p.Children.Add(T($"{BdN(t.Kcal)} kcal · P {BdN(t.P)} · C {BdN(t.C)} · G {BdN(t.F)}", 13, "LabelTertiary"));
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(Btn("Segna come mangiato", () => _r.Bd.LogSlot(slot, BodyStore.DayKey()), "SecondaryButton"));
+            row.Children.Add(Btn("Registra", () => _r.Bd.LogSlot(slot, BodyStore.DayKey()), "SecondaryButton"));
             row.Children.Add(Btn("Elimina", () => _r.Bd.RemoveSlot(slot.Id)));
             p.Children.Add(row);
-            h.Children.Add(Widget(p));
+            h.Children.Add(Panelled(p));
         }
     }
 
@@ -362,7 +450,7 @@ public sealed partial class MainWindow
         form.Children.Add(Field("Peso obiettivo (kg)", goal));
         form.Children.Add(Field("Altezza (cm)", height));
         form.Children.Add(Field("Età", age));
-        h.Children.Add(Widget(form));
+        h.Children.Add(Panelled(form));
         int I(TextBox t, int def) => BdParse(t.Text) is { } d ? (int)Math.Round(d) : def;
         var save = Btn("Salva", () =>
         {

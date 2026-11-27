@@ -7,8 +7,8 @@ using Microsoft.UI.Xaml.Shapes;
 namespace Ponte;
 
 /// <summary>
-/// Agenda come su Android: mese con puntini e giorno selezionato, "Prossimi", editor degli eventi, e Google Calendar tramite
-/// l'indirizzo segreto iCal (sola lettura). Scadenze dei compiti ed esami dello Studio compaiono in automatico.
+/// Agenda come su Android: tasti Cose da fare, pomodoro e Google, mese con puntini e giorno selezionato, editor degli eventi.
+/// Google Calendar entra tramite l'indirizzo segreto iCal (sola lettura). Scadenze dei compiti ed esami compaiono in automatico.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -31,7 +31,6 @@ public sealed partial class MainWindow
     }
 
     private string? _agSub;
-    private int _agMode;
     private DateTime _agCursor = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime _agSel = DateTime.Today;
     private AgDraft? _agDraft;
@@ -95,126 +94,153 @@ public sealed partial class MainWindow
             case "edit": AgEditor(h); break;
             case "ics": AgIcs(h); break;
             case "set": StSettings(h, _r.Plan.State); break;
+            case "study":
+                h.Children.Add(BackRow("Agenda", "Studio", () => AgGo(null)));
+                StDashboard(h, _r.Plan.State);
+                break;
+            case "todo": RenderTodo(h); break;
             default: AgMain(h); break;
         }
     }
 
     private void AgMain(StackPanel h)
     {
-        var top = new Grid { ColumnSpacing = 12 };
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Segmented("agmode", new[] { "Mese", "Studio" }, _agMode == 2 ? 1 : 0, i => { _agMode = i == 1 ? 2 : 0; RenderAgenda(); }));
-        var gb = Btn("Google Calendar", () => AgGo("ics"));
-        Grid.SetColumn(gb, 1);
-        top.Children.Add(gb);
+        var top = HStack(12, AgTodoButton(), AgTomatoButton(), Btn("Google", () => AgGo("ics"), "SecondaryButton"));
+        top.HorizontalAlignment = HorizontalAlignment.Right;
         h.Children.Add(top);
 
-        if (_agMode == 2) { StDashboard(h, _r.Plan.State); return; }
-        if (_r.S.IcsUrl.Length == 0)
+        var first = _agCursor;
+        var offset = ((int)first.DayOfWeek + 6) % 7;
+        var gridStart = first.AddDays(-offset);
+        var all = AgItems(gridStart, gridStart.AddDays(42));
+
+        var card = new StackPanel { Spacing = 10 };
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.Children.Add(BubbleButton(Center(Icons.Of(Ico.Back, B("LabelSecondary"), 18)), 36, () => { _agCursor = _agCursor.AddMonths(-1); RenderAgenda(); }, "Mese precedente"));
+        var title = T(Cap(_agCursor.ToString("MMMM yyyy", It)), 20, "LabelPrimary", true);
+        title.HorizontalAlignment = HorizontalAlignment.Center; title.VerticalAlignment = VerticalAlignment.Center;
+        title.Tapped += (_, _) => { _agCursor = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1); _agSel = DateTime.Today; RenderAgenda(); };
+        Grid.SetColumn(title, 1);
+        head.Children.Add(title);
+        var next = BubbleButton(Center(Icons.Of(Ico.Forward, B("LabelSecondary"), 18)), 36, () => { _agCursor = _agCursor.AddMonths(1); RenderAgenda(); }, "Mese successivo");
+        Grid.SetColumn(next, 2);
+        head.Children.Add(next);
+        card.Children.Add(head);
+
+        var grid = new Grid { RowSpacing = 2 };
+        for (var i = 0; i < 7; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < 7; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var wd = new[] { "L", "M", "M", "G", "V", "S", "D" };
+        for (var i = 0; i < 7; i++)
         {
-            var c = new StackPanel { Spacing = 8 };
-            c.Children.Add(T("Collega Google Calendar", 15, "LabelPrimary", true));
-            c.Children.Add(Btn("Collega", () => AgGo("ics"), "PrimaryButton"));
-            h.Children.Add(Widget(c));
+            var t = T(wd[i], 12, "LabelTertiary"); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 0, 0, 4);
+            Grid.SetColumn(t, i);
+            grid.Children.Add(t);
         }
-
-        if (_agMode == 0)
+        for (var k = 0; k < 42; k++)
         {
-            var first = _agCursor;
-            var offset = ((int)first.DayOfWeek + 6) % 7;
-            var gridStart = first.AddDays(-offset);
-            var all = AgItems(gridStart, gridStart.AddDays(42));
-
-            var card = new StackPanel { Spacing = 10 };
-            var head = new Grid();
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.Children.Add(BubbleButton("", 36, () => { _agCursor = _agCursor.AddMonths(-1); RenderAgenda(); }));
-            var title = T(Cap(_agCursor.ToString("MMMM yyyy", It)), 20, "LabelPrimary", true);
-            title.HorizontalAlignment = HorizontalAlignment.Center; title.VerticalAlignment = VerticalAlignment.Center;
-            title.Tapped += (_, _) => { _agCursor = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1); _agSel = DateTime.Today; RenderAgenda(); };
-            Grid.SetColumn(title, 1);
-            head.Children.Add(title);
-            var next = BubbleButton("", 36, () => { _agCursor = _agCursor.AddMonths(1); RenderAgenda(); });
-            Grid.SetColumn(next, 2);
-            head.Children.Add(next);
-            card.Children.Add(head);
-
-            var grid = new Grid { RowSpacing = 2 };
-            for (var i = 0; i < 7; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var i = 0; i < 7; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var wd = new[] { "L", "M", "M", "G", "V", "S", "D" };
-            for (var i = 0; i < 7; i++)
-            {
-                var t = T(wd[i], 12, "LabelTertiary"); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 0, 0, 4);
-                Grid.SetColumn(t, i);
-                grid.Children.Add(t);
-            }
-            for (var k = 0; k < 42; k++)
-            {
-                var day = gridStart.AddDays(k);
-                var inMonth = day.Month == _agCursor.Month;
-                var sel = day.Date == _agSel.Date;
-                var today = day.Date == DateTime.Today;
-                var cell = new Border { Height = 52, CornerRadius = new CornerRadius(14), Margin = new Thickness(1), Background = sel ? B("AccentDefault") : Sb(Microsoft.UI.Colors.Transparent) };
-                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 3 };
-                var num = T(day.Day.ToString(), 15, sel ? "LabelPrimary" : today ? "AccentDefault" : inMonth ? "LabelPrimary" : "LabelDisabled", today);
-                num.HorizontalAlignment = HorizontalAlignment.Center;
-                if (sel) num.Foreground = Sb(Microsoft.UI.Colors.White);
-                col.Children.Add(num);
-                var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, Height = 6 };
-                foreach (var c in AgOn(all, day.Date).Select(i => i.Color).Distinct().Take(3))
-                    dots.Children.Add(new Ellipse { Width = 5, Height = 5, Fill = sel ? Sb(Microsoft.UI.Colors.White) : Sb(c) });
-                col.Children.Add(dots);
-                cell.Child = col;
-                var d = day;
-                cell.Tapped += (_, _) => { _agSel = d.Date; if (d.Month != _agCursor.Month) _agCursor = new DateTime(d.Year, d.Month, 1); RenderAgenda(); };
-                Bounce(cell, 1.05f);
-                Grid.SetColumn(cell, k % 7);
-                Grid.SetRow(cell, 1 + k / 7);
-                grid.Children.Add(cell);
-            }
-            card.Children.Add(grid);
-            h.Children.Add(Widget(card));
-
-            var dh = new Grid();
-            dh.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            dh.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var dl = new StackPanel();
-            dl.Children.Add(T(DayLabel(_agSel), 20, "LabelPrimary", true));
-            dl.Children.Add(T(Cap(_agSel.ToString("d MMMM yyyy", It)), 12, "LabelTertiary"));
-            dh.Children.Add(dl);
-            var add = Btn("＋ Evento", () => { AgNew(_agSel); AgGo("edit"); }, "PrimaryButton");
-            Grid.SetColumn(add, 1);
-            dh.Children.Add(add);
-            h.Children.Add(dh);
-
-            var list = AgOn(all, _agSel.Date);
-            if (list.Count == 0) h.Children.Add(T("Niente in programma.", 13, "LabelTertiary"));
-            foreach (var i in list) h.Children.Add(AgRow(i));
+            var day = gridStart.AddDays(k);
+            var inMonth = day.Month == _agCursor.Month;
+            var sel = day.Date == _agSel.Date;
+            var today = day.Date == DateTime.Today;
+            var cell = new Border { Height = 52, CornerRadius = new CornerRadius(14), Margin = new Thickness(1), Background = sel ? B("AccentDefault") : Sb(Microsoft.UI.Colors.Transparent) };
+            var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 3 };
+            var num = T(day.Day.ToString(), 15, sel ? "LabelPrimary" : today ? "AccentDefault" : inMonth ? "LabelPrimary" : "LabelDisabled", today);
+            num.HorizontalAlignment = HorizontalAlignment.Center;
+            if (sel) num.Foreground = Sb(Microsoft.UI.Colors.White);
+            col.Children.Add(num);
+            var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, Height = 6 };
+            foreach (var c in AgOn(all, day.Date).Select(i => i.Color).Distinct().Take(3))
+                dots.Children.Add(new Ellipse { Width = 5, Height = 5, Fill = sel ? Sb(Microsoft.UI.Colors.White) : Sb(c) });
+            col.Children.Add(dots);
+            cell.Child = col;
+            var d = day;
+            cell.Tapped += (_, _) => { _agSel = d.Date; if (d.Month != _agCursor.Month) _agCursor = new DateTime(d.Year, d.Month, 1); RenderAgenda(); };
+            Bounce(cell, 1.05f);
+            Grid.SetColumn(cell, k % 7);
+            Grid.SetRow(cell, 1 + k / 7);
+            grid.Children.Add(cell);
         }
-        else
+        card.Children.Add(grid);
+        h.Children.Add(Panelled(card, new Thickness(16)));
+
+        var dh = new Grid();
+        dh.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        dh.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var dl = new StackPanel();
+        dl.Children.Add(T(DayLabel(_agSel), 20, "LabelPrimary", true));
+        dl.Children.Add(T(Cap(_agSel.ToString("d MMMM yyyy", It)), 12, "LabelTertiary"));
+        dh.Children.Add(dl);
+        var add = BubbleButton(Center(Icons.Of(Ico.Plus, White, 20)), 44, () => { AgNew(_agSel); AgGo("edit"); }, "Nuovo evento", Alpha(C("AccentDefault"), 0.85));
+        Grid.SetColumn(add, 1);
+        dh.Children.Add(add);
+        h.Children.Add(dh);
+
+        var list = AgOn(all, _agSel.Date);
+        if (list.Count == 0) h.Children.Add(T("Niente in programma", 13, "LabelTertiary"));
+        foreach (var i in list) h.Children.Add(AgRow(i));
+    }
+
+    /// <summary>Pillola di vetro alta 44 con un segno e, se serve, un numero accanto.</summary>
+    private Button AgPill(FrameworkElement icon, string value, Action click, string name)
+    {
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        var row = HStack(8, icon);
+        if (value.Length > 0)
         {
-            var add = Btn("＋ Evento", () => { AgNew(DateTime.Today); AgGo("edit"); }, "PrimaryButton");
-            add.HorizontalAlignment = HorizontalAlignment.Right;
-            h.Children.Add(add);
-            var all = AgItems(DateTime.Today, DateTime.Today.AddDays(45));
-            var any = false;
-            for (var k = 0; k < 45; k++)
-            {
-                var day = DateTime.Today.AddDays(k);
-                var list = AgOn(all, day);
-                if (list.Count == 0) continue;
-                any = true;
-                var dt = T(DayLabel(day), 15, "LabelSecondary", true);
-                dt.Margin = new Thickness(0, 8, 0, 0);
-                h.Children.Add(dt);
-                foreach (var i in list) h.Children.Add(AgRow(i));
-            }
-            if (!any) h.Children.Add(T("Niente nei prossimi 45 giorni.", 13, "LabelTertiary"));
+            var t = T(value, 16, "LabelPrimary", true);
+            t.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(t);
         }
+        row.HorizontalAlignment = HorizontalAlignment.Center;
+        var face = new Border
+        {
+            Height = 44, MinWidth = 46, CornerRadius = new CornerRadius(22), Padding = new Thickness(11, 0, 11, 0),
+            Background = Drop(), BorderBrush = Hairline, BorderThickness = new Thickness(1), Child = row,
+        };
+        var b = Bare(face, click, name, 22);
+        ToolTipService.SetToolTip(b, name);
+        Bounce(b, 1.08f);
+        return b;
+    }
+
+    /// <summary>Spunta e quante cose restano.</summary>
+    private Button AgTodoButton()
+    {
+        var n = _r.Plan.State.Tasks.Count(t => !t.Done);
+        return AgPill(Bubble(Icons.Of(Ico.Check, White, 13), 22, C("AccentDefault")), n > 0 ? n.ToString(It) : "", () => AgGo("todo"), "Cose da fare");
+    }
+
+    /// <summary>Il pomodoro disegnato: porta allo Studio e col timer acceso mostra il tempo che resta.</summary>
+    private Button AgTomatoButton()
+    {
+        const double w = 22;
+        var art = new Canvas { Width = w, Height = w };
+        void Dot(double r, double x, double y, Windows.UI.Color color)
+        {
+            var e = new Ellipse { Width = r * 2, Height = r * 2, Fill = Sb(color) };
+            Canvas.SetLeft(e, x - r);
+            Canvas.SetTop(e, y - r);
+            art.Children.Add(e);
+        }
+        Dot(w * 0.40, w / 2, w * 0.56, Argb(255, 0xE5, 0x48, 0x3B));
+        Dot(w * 0.10, w * 0.36, w * 0.44, Argb(90, 255, 255, 255));
+        var leaf = new Polygon { Fill = Sb(Argb(255, 0x3F, 0xAE, 0x5A)) };
+        foreach (var (x, y) in new[] { (0.50, 0.22), (0.26, 0.10), (0.42, 0.26), (0.50, 0.04), (0.58, 0.26), (0.76, 0.10) })
+            leaf.Points.Add(new Windows.Foundation.Point(w * x, w * y));
+        art.Children.Add(leaf);
+
+        var running = _r.Plan.State.Timer.Running;
+        var pill = AgPill(art, running ? TimerText() : "", () => AgGo("study"), "Studio");
+        if (running && ((Border)pill.Content).Child is StackPanel row && row.Children[^1] is TextBlock clock)
+        {
+            EnsureTicks();
+            _ticks.Add(() => { clock.Text = TimerText(); TimerCheck(); });
+        }
+        return pill;
     }
 
     private Border AgRow(AgItem i)
@@ -269,12 +295,12 @@ public sealed partial class MainWindow
         bar.Children.Add(BackRow("Agenda", "Evento", () => AgGo(null)));
         if (i.Kind == 0)
         {
-            var pen = BubbleButton("\uE70F", 44, () =>
+            var pen = BubbleButton(Center(Icons.Of(Ico.Pencil, White, 18)), 44, () =>
             {
                 var e = (Ev)i.Ref!;
                 _agDraft = new AgDraft { Id = e.Id, Title = e.Title, Place = e.Place, Note = e.Note, Start = Loc(e.Start), End = e.AllDay ? Loc(e.End).AddDays(-1) : Loc(e.End), AllDay = e.AllDay, Color = e.Color, Remind = e.Remind };
                 AgGo("edit");
-            }, true, "Modifica");
+            }, "Modifica", C("AccentDefault"));
             Grid.SetColumn(pen, 1);
             bar.Children.Add(pen);
         }
@@ -293,7 +319,7 @@ public sealed partial class MainWindow
         tt.Children.Add(title); tt.Children.Add(wt);
         Grid.SetColumn(tt, 1);
         head.Children.Add(tt);
-        h.Children.Add(Widget(head, null, new Thickness(20)));
+        h.Children.Add(Panelled(head, new Thickness(20)));
 
         string note = i.Ref switch { Ev e => e.Note, ExtEvent x => x.Note, _ => "" };
         Border Info(string label, string value)
@@ -351,7 +377,7 @@ public sealed partial class MainWindow
         var existing = d.Id.Length > 0;
         h.Children.Add(BackRow("Agenda", existing ? "Modifica" : "Nuovo evento", () => AgGo(null)));
 
-        var title = new TextBox { Text = d.Title, PlaceholderText = "Es. Lezione di analisi" };
+        var title = new TextBox { Text = d.Title, PlaceholderText = "Titolo" };
         title.TextChanged += (_, _) => d.Title = title.Text;
         var place = new TextBox { Text = d.Place, PlaceholderText = "Aula, indirizzo o link" };
         place.TextChanged += (_, _) => d.Place = place.Text;
@@ -391,7 +417,7 @@ public sealed partial class MainWindow
         rs.Children.Add(Text("Promemoria", "Footnote"));
         rs.Children.Add(ChipScroll(Reminders.Select(r => (UIElement)Chip(r.Label, d.Remind == r.Min, () => { d.Remind = r.Min; RenderAgenda(); }))));
         form.Children.Add(rs);
-        h.Children.Add(Widget(form));
+        h.Children.Add(Panelled(form, new Thickness(24)));
 
         var save = Btn(existing ? "Salva" : "Aggiungi", () =>
         {
@@ -431,6 +457,6 @@ public sealed partial class MainWindow
             row.Children.Add(Btn("Scollega", async () => { _r.S.IcsUrl = ""; _r.S.Save(); await _r.Plan.RefreshExternal(); AgGo("ics"); }));
         c.Children.Add(row);
         c.Children.Add(status);
-        h.Children.Add(Widget(c));
+        h.Children.Add(Panelled(c, new Thickness(24)));
     }
 }

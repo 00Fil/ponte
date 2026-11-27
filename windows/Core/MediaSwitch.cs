@@ -4,6 +4,9 @@ using Windows.Media.Control;
 
 namespace Ponte;
 
+/// <summary>Cosa sta suonando su un altro dispositivo.</summary>
+public sealed record RemoteMedia(string Title, string Artist, bool Playing, DateTime At);
+
 /// <summary>
 /// Passaggio istantaneo della musica: quando su questo PC parte un contenuto multimediale gli altri dispositivi
 /// vengono messi in pausa (messaggio <c>media.take</c>); quando parte altrove, qui si mette in pausa ciò che suona.
@@ -20,7 +23,25 @@ public sealed class MediaSwitch
     public MediaSwitch(Router r) => _r = r;
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Title, DateTime At)> _remote = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, RemoteMedia> _known = new();
     private int _beat;
+
+    /// <summary>L'ultimo brano visto su ogni altro dispositivo, anche in pausa.</summary>
+    public IReadOnlyDictionary<string, RemoteMedia> Known =>
+        _known.Where(x => DateTime.UtcNow - x.Value.At < TimeSpan.FromMinutes(10)).ToDictionary(x => x.Key, x => x.Value);
+
+    /// <summary>Comando al player di un altro dispositivo: play, pause, next, prev.</summary>
+    public void Cmd(string id, string a)
+    {
+        _r.Send(Proto.NewMsg("media.cmd", ("to", id), ("a", a), ("v", 0L)));
+        // risposta ottimista: il player cambia subito, poi arriva lo stato vero
+        if (a is "pause" or "play" && _known.TryGetValue(id, out var m))
+        {
+            _known[id] = m with { Playing = a == "play" };
+            if (a == "pause") _remote.TryRemove(id, out _); else _remote[id] = (m.Title, DateTime.UtcNow);
+        }
+        _r.Raise();
+    }
 
     /// <summary>Chi sta suonando adesso (id dispositivo -> titolo). Include questo PC.</summary>
     public Dictionary<string, string> PlayingNow()
@@ -104,6 +125,11 @@ public sealed class MediaSwitch
         if (from.Length == 0) return;
         var playing = m["playing"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
         if (playing) _remote[from] = (m.S("title"), DateTime.UtcNow); else _remote.TryRemove(from, out _);
+        var title = m.S("title");
+        var changed = !_known.TryGetValue(from, out var old) || old.Playing != playing || old.Title != title;
+        if (title.Length > 0) _known[from] = new RemoteMedia(title, m.S("artist"), playing, DateTime.UtcNow);
+        else _known.TryRemove(from, out _);
+        if (changed) _r.Raise();
     }
 
     public void OnPauseReq()

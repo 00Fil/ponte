@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -7,8 +8,7 @@ using Microsoft.UI.Xaml.Shapes;
 namespace Ponte;
 
 /// <summary>
-/// Studio come su Android: pomodoro (anello, materia, durate), obiettivo di oggi e serie, materie, compiti con scadenza,
-/// esami con conto alla rovescia, flashcard a ripetizione dilazionata, statistiche. Gli stessi dati di Android, sincronizzati.
+/// Studio come su Android: pomodoro (anello e durate), obiettivo di oggi, serie e statistiche. Gli stessi dati di Android, sincronizzati.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -42,7 +42,7 @@ public sealed partial class MainWindow
         return n < 0 ? "passato" : n == 0 ? "oggi" : n == 1 ? "domani" : $"tra {n} giorni";
     }
 
-    private void StBack(StackPanel h, string title, string? to = null, string parent = "Studio") => h.Children.Add(BackRow(parent, title, () => AgGo(null)));
+    private void StBack(StackPanel h, string title, string? to = null, string parent = "Studio") => h.Children.Add(BackRow(parent, title, () => AgGo(to)));
 
     // ---------------------------------------------------------------- cruscotto
     private void StDashboard(StackPanel h, PlanState p)
@@ -60,7 +60,7 @@ public sealed partial class MainWindow
         tc.Children.Add(hd);
         tc.Children.Add(Bar(Math.Min(1.0, (double)today / goal), today >= goal ? "PositiveOnSubtle" : "AccentDefault", 8));
         tc.Children.Add(T("Obiettivo " + Hm(goal) + (today >= goal ? " · raggiunto" : ""), 12, "LabelTertiary"));
-        h.Children.Add(Widget(tc));
+        h.Children.Add(Panelled(tc, new Thickness(24)));
         StStatsBody(h, p);
     }
 
@@ -163,13 +163,14 @@ public sealed partial class MainWindow
         c.Children.Add(btns);
         if (t.Running && focus)
         {
-            var song = Btn("⏭  +1:00", () => { _r.Np.Next(); _r.Plan.TimerPenalty(60_000); });
+            var next = HStack(8, Icons.Player(Transport.Next, B("LabelPrimary"), 16), T("+1:00", 13));
+            var song = Chip("", false, () => { _r.Np.Next(); _r.Plan.TimerPenalty(60_000); });
+            song.Content = new Border { Height = 36, CornerRadius = new CornerRadius(18), Padding = new Thickness(14, 0, 14, 0), Background = B("BgSunken"), Child = Center(next) };
+            AutomationProperties.SetName(song, "Brano successivo, un minuto in più");
             song.HorizontalAlignment = HorizontalAlignment.Center;
             c.Children.Add(song);
         }
-        var card = Widget(c, null, new Thickness(24));
-        card.CornerRadius = new CornerRadius(36);
-        return card;
+        return Panelled(c, new Thickness(24));
     }
 
     // ---------------------------------------------------------------- moduli comuni
@@ -236,9 +237,7 @@ public sealed partial class MainWindow
             Grid.SetColumn(t, i); days.Children.Add(t);
         }
         c.Children.Add(days);
-        h.Children.Add(Widget(c, null, new Thickness(20)));
-
-
+        h.Children.Add(Panelled(c, new Thickness(20)));
     }
 
     // ---------------------------------------------------------------- impostazioni
@@ -260,14 +259,13 @@ public sealed partial class MainWindow
 
     private void StSettings(StackPanel h, PlanState p)
     {
-        StBack(h, "Pomodoro", null, "Agenda");
+        StBack(h, "Pomodoro", "study");
         var c = new StackPanel { Spacing = 6 };
         c.Children.Add(Stepper("Concentrazione", p.Get("focus", 25), "min", 5, 90, 5, v => _r.Plan.SetCfg("focus", v)));
         c.Children.Add(Stepper("Pausa", p.Get("short", 5), "min", 1, 30, 1, v => _r.Plan.SetCfg("short", v)));
         c.Children.Add(Stepper("Pausa lunga", p.Get("long", 15), "min", 5, 60, 5, v => _r.Plan.SetCfg("long", v)));
         c.Children.Add(Stepper("Pomodori per la pausa lunga", p.Get("rounds", 4), "", 2, 8, 1, v => _r.Plan.SetCfg("rounds", v)));
         c.Children.Add(Stepper("Obiettivo di oggi", p.Get("goal", 120), "min", 30, 600, 30, v => _r.Plan.SetCfg("goal", v)));
-        h.Children.Add(Widget(c));
-        h.Children.Add(T("Le durate valgono dal prossimo pomodoro e sono le stesse su tutti i tuoi dispositivi.", 12, "LabelTertiary"));
+        h.Children.Add(Panelled(c, new Thickness(24, 12, 24, 12)));
     }
 }
