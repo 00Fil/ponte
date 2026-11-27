@@ -33,6 +33,16 @@ public sealed class Settings
     public Dictionary<string, string> FileFolders { get; set; } = new();
     /// <summary>Indirizzo segreto iCal del tuo Google Calendar (sola lettura).</summary>
     public string IcsUrl { get; set; } = "";
+    /// <summary>Cartelle del backup su questo PC (null finché non si apre la prima volta), con le date dell'ultima copia e verifica.</summary>
+    public List<BackupFolder>? BackupFolders { get; set; }
+    public long LastBackup { get; set; }
+    public long LastVerifiedOk { get; set; }
+    /// <summary>Foto del fisico: fotocamera scelta, guida (0 sagoma, 1 griglia, 2 niente) e secondi del timer.</summary>
+    public string BodyCamId { get; set; } = "";
+    public int BodyGuide { get; set; }
+    public int BodyTimer { get; set; } = 5;
+    /// <summary>Telecamere nascoste su questo PC.</summary>
+    public List<int> CamHidden { get; set; } = new();
     /// <summary>Configurazione iniziale completata.</summary>
     public bool Onboarded { get; set; }
     /// <summary>Ultimi indirizzi diretti noti di ogni dispositivo: servono quando il server non è raggiungibile.</summary>

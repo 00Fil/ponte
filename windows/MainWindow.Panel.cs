@@ -149,7 +149,7 @@ public sealed partial class MainWindow
             holder.Child = Center(Icons.Glyph(Tab.Clipboard, B("AccentOnSubtle"), 24));
         });
         var file = Round(Tab.Upload, "Invia file", false, () => _ = PickFilesAsync());
-        var row = HStack(40, clip, file);
+        var row = HStack(40, clip, file, Round(Tab.Drive, "Backup", false, () => Open("backup")));
         row.HorizontalAlignment = HorizontalAlignment.Center;
         body.Children.Add(row);
         body.Children.Add(PanelButtons(Btn("Appunti", () => Open("clips")), Btn("Immagini", () => Open("images"))));
@@ -172,7 +172,7 @@ public sealed partial class MainWindow
             var track = me ? (_r.Np.Active ? _r.Np.Title : "") : known.TryGetValue(id, out var m) ? m.Title : playing.TryGetValue(id, out var pt) ? pt : "";
             var head = _r.Hp.Holder == id;
             var status = on ? (track.Length > 0 ? track : "In riproduzione") : head ? "Cuffie collegate" : "Fermo";
-            var face = Bubble(Icons.Glyph(Tab.Devices, B(on ? "AccentDefault" : "LabelSecondary"), 16), 30, Alpha(C("AccentDefault"), on ? 0.22 : 0.08));
+            var face = Bubble(DeviceFace(id, 30, 3, Icons.Glyph(Tab.Devices, B(on ? "AccentDefault" : "LabelSecondary"), 16)), 30, Alpha(C("AccentDefault"), on ? 0.22 : 0.08));
             face.VerticalAlignment = VerticalAlignment.Center;
             var text = VStack(0, Semi(me ? "Questo PC" : _r.DeviceName(id), 13), T(status, 11, on ? "AccentDefault" : "LabelTertiary"));
             text.VerticalAlignment = VerticalAlignment.Center;
@@ -205,7 +205,8 @@ public sealed partial class MainWindow
         var connected = _r.Hp.List.FirstOrDefault(x => x.Connected);
         var holder = _r.Hp.Holder;
         if (connected == null && holder == null) return null;
-        var ring = Ring(connected != null ? 1 : 0, 52, 4, Icons.Glyph(Tab.Headphones, B("LabelPrimary"), 22));
+        // dentro l'anello l'immagine di chi ha le cuffie
+        var ring = Ring(connected != null ? 1 : 0, 52, 4, DeviceFace(holder, 36, 3, Icons.Glyph(Tab.Headphones, B("LabelPrimary"), 22)));
         var text = VStack(0, Semi(connected?.Name ?? "Cuffie", 16),
             T(holder == null ? "Libere" : holder == _r.DeviceId ? "Questo PC" : _r.DeviceName(holder), 13, "LabelSecondary"));
         text.VerticalAlignment = VerticalAlignment.Center;

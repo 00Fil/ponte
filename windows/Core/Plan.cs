@@ -268,6 +268,15 @@ public sealed class Plan
     public void SaveSubject(Subject s) => Mutate(() => Put("sub", s.Id.Length == 0 ? NewId() : s.Id, new JsonObject { ["ti"] = s.Name, ["c"] = s.Color }));
     public void RemoveSubject(string id) => Mutate(() => Del("sub", id));
     public void SaveTask(StudyTask t) => Mutate(() => Put("tk", t.Id.Length == 0 ? NewId() : t.Id, new JsonObject { ["ti"] = t.Title, ["s"] = t.Subject, ["due"] = t.Due, ["f"] = t.Done ? 1 : 0, ["fd"] = t.Done ? (t.DoneAt > 0 ? t.DoneAt : Now) : 0L }));
+    /// <summary>Argomenti in coda a quelli che la materia ha già, nell'ordine dato.</summary>
+    public void AddTopics(string subject, IReadOnlyList<string> titles)
+    {
+        var last = State.Topics.Where(t => t.Subject == subject).Select(t => t.Due).DefaultIfEmpty(0).Max();
+        Mutate(() =>
+        {
+            for (var i = 0; i < titles.Count; i++) Put("tk", NewId(), new JsonObject { ["ti"] = titles[i], ["s"] = subject, ["due"] = last + 1 + i, ["f"] = 0 });
+        });
+    }
     public void RemoveTask(string id) => Mutate(() => Del("tk", id));
     public void SaveExam(Exam e) => Mutate(() => Put("ex", e.Id.Length == 0 ? NewId() : e.Id, new JsonObject { ["ti"] = e.Title, ["s"] = e.Subject, ["t"] = e.Date }));
     public void RemoveExam(string id) => Mutate(() => Del("ex", id));

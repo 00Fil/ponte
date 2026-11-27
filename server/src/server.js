@@ -370,13 +370,17 @@ export async function start({
         if (st && st.from === dev.id) streams.delete(m.sid);
       } else if (m.t === 'clip') {
         saveClip(m);
-      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'media.state', 'media.pause', 'media.cmd', 'fin', 'plan', 'body'].includes(m.t)) {
+      } else if (!['notif', 'audio.route', 'bt.claim', 'bt.state', 'focus', 'audio.lock', 'media.take', 'media.state', 'media.pause', 'media.cmd', 'fin', 'plan', 'body', 'cam.watch', 'cam.state', 'cam.frame', 'cam.cmd'].includes(m.t)) {
         return;
       }
+
+      // Le immagini delle telecamere vanno solo a chi le ha chieste, e si scartano se è indietro.
+      if (m.t.startsWith('cam.') && typeof m.to !== 'string') return;
 
       const out = JSON.stringify(m);
       if (typeof m.to === 'string') {
         const t = devices.get(m.to);
+        if (m.t === 'cam.frame' && t && t.ws.bufferedAmount >= MAX_BUFFERED) return;
         if (t && t.ws.readyState === t.ws.OPEN) t.ws.send(out);
       } else {
         for (const [id, d] of devices) if (id !== dev.id && d.ws.readyState === d.ws.OPEN) d.ws.send(out);

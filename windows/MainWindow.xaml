@@ -85,6 +85,9 @@
             </StackPanel>
         </Grid>
 
+        <!-- Foto del fisico: la fotocamera e la foto a tutto schermo. La riempie il codice. -->
+        <Grid x:Name="BodyLayer" Grid.ColumnSpan="2" Visibility="Collapsed" Background="Black" RequestedTheme="Dark" />
+
         <!-- Scheda dell'aggiornamento: anello, dettagli e le tre fasi. -->
         <Border x:Name="UpdateCard" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0" Style="{StaticResource CardStyle}"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24" Width="344">

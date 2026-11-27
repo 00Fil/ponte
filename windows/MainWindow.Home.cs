@@ -31,6 +31,8 @@ public sealed partial class MainWindow
         var h = Reset("Home");
         h.Spacing = Gap;
         HookHome(h);
+        _camTileShow = null;
+        if (_homeCams) { RenderCams(h); return; }
         var width = double.IsNaN(_hosts[0].Width) ? 688 : _hosts[0].Width;
         _homeWidth = width;
         var cell = Math.Floor((width - Gap) / 2);
@@ -40,17 +42,18 @@ public sealed partial class MainWindow
         var balance = BalanceTile(cell);
         var todo = TodoTile(cell);
         var body = BodyTile(width, Math.Max(cell * 0.82, 150));
-        var audio = AudioTile(width, Math.Max(cell * 0.62, 184));
+        // telecamere: tenendo premuto il riquadro si allarga a tutta riga e l'audio si fa da parte
+        var media = CamRow(AudioTile(cell), cell, width);
         h.Children.Add(Cols("**", Gap, plan, pair));
         h.Children.Add(Cols("**", Gap, balance, todo));
         h.Children.Add(body);
-        h.Children.Add(audio);
+        h.Children.Add(media);
 
         // l'ingresso a cascata solo la prima volta, non a ogni aggiornamento
         if (!_homeIntro || Root.ActualWidth <= 0) return;
         _homeIntro = false;
         var i = 0;
-        foreach (var el in new FrameworkElement[] { plan, pair, balance, todo, body, audio }) Intro(el, 70 * i++);
+        foreach (var el in new FrameworkElement[] { plan, pair, balance, todo, body, media }) Intro(el, 70 * i++);
     }
 
     private void HookHome(StackPanel h)
@@ -501,8 +504,8 @@ public sealed partial class MainWindow
     private byte[]? _artBytes;
     private BitmapImage? _artBitmap;
 
-    /// <summary>La musica di qualunque dispositivo: copertina, comandi e, sotto, chi sta suonando.</summary>
-    private Button AudioTile(double width, double height)
+    /// <summary>La musica di qualunque dispositivo, nel quadrato: in alto copertina e dispositivi, al centro il brano, in basso i comandi.</summary>
+    private Button AudioTile(double cell)
     {
         var np = _r.Np;
         var remotes = _r.Media.Known.Where(x => x.Key != _r.DeviceId).ToList();
@@ -515,21 +518,18 @@ public sealed partial class MainWindow
         var has = other != null || np.Active;
         if (has && title.Length == 0) title = "Senza titolo";
 
-        // copertina
-        var side = height - 34;
-        var cover = new Border { Width = side, Height = side, CornerRadius = new CornerRadius(18), Background = B("BgSunken") };
-        var art = new Grid { Width = side, Height = side, Children = { cover } };
-        var note = Bubble(Icons.Glyph(Tab.Headphones, White, 24), 44, C("AccentDefault"));
-        art.Children.Add(Center(note));
-        if (remote == null && np.Active && np.Art is { } bytes) _ = Cover(cover, note, bytes);
-        if (playing)
+        var cover = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(12), Background = B("BgSunken") };
+        var art = new Grid { Width = 42, Height = 42, Children = { cover } };
+        var note = Center(Icons.Glyph(Tab.Headphones, B("LabelSecondary"), 18));
+        art.Children.Add(note);
+        var local = remote == null && np.Active && np.Art != null;
+        // senza copertina, l'immagine del dispositivo che sta suonando
+        if (!local && has && DevicePics.Get(remote ?? _r.DeviceId) is { } pic)
         {
-            var bars = EqBars();
-            bars.HorizontalAlignment = HorizontalAlignment.Right;
-            bars.VerticalAlignment = VerticalAlignment.Bottom;
-            bars.Margin = new Thickness(0, 0, 10, 10);
-            art.Children.Add(bars);
+            note.Visibility = Visibility.Collapsed;
+            art.Children.Add(Center(new Image { Source = pic, Stretch = Stretch.Uniform, Width = 26, Height = 26 }));
         }
+        if (local && np.Art is { } bytes) _ = Cover(cover, note, bytes);
 
         void Send(string a)
         {
@@ -539,40 +539,50 @@ public sealed partial class MainWindow
             else np.Toggle();
         }
 
-        var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        info.Children.Add(T(remote != null ? _r.DeviceName(remote) : "Questo PC", 13, playing ? "AccentDefault" : "LabelSecondary"));
-        info.Children.Add(Semi(has ? title : "Silenzio", 16, has ? "LabelPrimary" : "LabelTertiary"));
-        if (artist.Length > 0) info.Children.Add(T(artist, 13, "LabelSecondary"));
-        if (has)
-        {
-            var prev = BubbleButton(Center(Icons.Player(Transport.Prev, B("LabelPrimary"), 16)), 38, () => Send("prev"), "Indietro");
-            var play = BubbleButton(Center(Icons.Player(playing ? Transport.Pause : Transport.Play, White, 20)), 46, () => Send("toggle"), playing ? "Pausa" : "Riproduci", C("AccentDefault"));
-            var next = BubbleButton(Center(Icons.Player(Transport.Next, B("LabelPrimary"), 16)), 38, () => Send("next"), "Avanti");
-            prev.VerticalAlignment = next.VerticalAlignment = VerticalAlignment.Center;
-            var keys = HStack(12, prev, play, next);
-            keys.Margin = new Thickness(0, 4, 0, 4);
-            info.Children.Add(keys);
-        }
+        // dispositivi: anello blu se suonano; un tocco li ferma o li fa ripartire
         var now = _r.Media.PlayingNow();
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
-        foreach (var id in new[] { _r.DeviceId }.Concat(_r.Devices.Select(d => d.Id).Where(d => d != _r.DeviceId)).Take(6))
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var id in new[] { _r.DeviceId }.Concat(_r.Devices.Select(d => d.Id).Where(d => d != _r.DeviceId)).Take(cell < 190 ? 2 : 3))
         {
             var dev = id;
             var me = id == _r.DeviceId;
             var on = me ? np.Playing : now.ContainsKey(id);
-            var bubble = Bubble(Icons.Glyph(Tab.Devices, B(on ? "AccentDefault" : "LabelSecondary"), 15), 30);
+            var bubble = Bubble(DeviceFace(id, 28, 4, Icons.Glyph(Tab.Devices, B(on ? "AccentDefault" : "LabelSecondary"), 14)), 28);
             if (on) { bubble.BorderBrush = B("AccentDefault"); bubble.BorderThickness = new Thickness(1.5); }
             var name = me ? "Questo PC" : _r.DeviceName(id);
-            var b = BubbleButton(bubble, 30, () =>
+            row.Children.Add(BubbleButton(bubble, 28, () =>
             {
                 if (me) np.Toggle();
                 else if (on) _r.Media.StopOn(dev);
                 else _r.Media.Cmd(dev, "play");
-            }, name);
-            row.Children.Add(b);
+            }, name));
         }
-        info.Children.Add(row);
-        return HomeTile(Cols("a*", 16, art, info), height, () => Open("audio"), () => OpenPanel("audio"), "Audio");
+
+        var where = T(remote != null ? _r.DeviceName(remote) : "Questo PC", 11, playing ? "AccentDefault" : "LabelTertiary", true);
+        FrameworkElement place = where;
+        if (playing)
+        {
+            var bars = EqBars(B("AccentDefault"));
+            bars.VerticalAlignment = VerticalAlignment.Center;
+            place = Cols("a*", 6, bars, where);
+        }
+        var info = VStack(1, place, Semi(has ? title : "Silenzio", 16, has ? "LabelPrimary" : "LabelTertiary"), T(artist.Length > 0 ? artist : " ", 13, "LabelSecondary"));
+        info.VerticalAlignment = VerticalAlignment.Center;
+
+        var prev = BubbleButton(Center(Icons.Player(Transport.Prev, B("LabelPrimary"), 15)), 36, () => Send("prev"), "Indietro");
+        var play = BubbleButton(Center(Icons.Player(playing ? Transport.Pause : Transport.Play, White, 18)), 44, () => Send("toggle"), playing ? "Pausa" : "Riproduci", C("AccentDefault"));
+        var next = BubbleButton(Center(Icons.Player(Transport.Next, B("LabelPrimary"), 15)), 36, () => Send("next"), "Avanti");
+        prev.VerticalAlignment = next.VerticalAlignment = VerticalAlignment.Center;
+        var keys = Cols("a*a*a", 0, prev, null, play, null, next);
+
+        var content = new Grid { RowDefinitions = { new RowDefinition { Height = GridLength.Auto }, new RowDefinition(), new RowDefinition { Height = GridLength.Auto } } };
+        var top = Cols("a*", 8, art, row);
+        Grid.SetRow(info, 1);
+        Grid.SetRow(keys, 2);
+        content.Children.Add(top);
+        content.Children.Add(info);
+        content.Children.Add(keys);
+        return Tile(content, () => Open("audio"), () => OpenPanel("audio"), "Audio", new Thickness(14));
     }
 
     private async Task Cover(Border cover, UIElement placeholder, byte[] bytes)
@@ -589,13 +599,13 @@ public sealed partial class MainWindow
     }
 
     /// <summary>Quattro barre che salgono e scendono mentre qualcosa suona.</summary>
-    private static StackPanel EqBars()
+    private static StackPanel EqBars(Brush ink)
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Height = 16 };
         int[] speed = { 520, 680, 440, 600 };
         foreach (var ms in speed)
         {
-            var bar = new Border { Width = 3, Height = 16, CornerRadius = new CornerRadius(1.5), Background = White };
+            var bar = new Border { Width = 3, Height = 16, CornerRadius = new CornerRadius(1.5), Background = ink };
             bar.Loaded += (_, _) =>
             {
                 try

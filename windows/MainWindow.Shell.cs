@@ -42,7 +42,8 @@ public sealed partial class MainWindow
         var esc = new KeyboardAccelerator { Key = VirtualKey.Escape };
         esc.Invoked += (_, a) =>
         {
-            if (_panel != null) { ClosePanel(); a.Handled = true; }
+            if (_bdOver != null) { BdBack(); a.Handled = true; }
+            else if (_panel != null) { ClosePanel(); a.Handled = true; }
             else if (_devOpen) { SetDevOpen(false); a.Handled = true; }
         };
         Root.KeyboardAccelerators.Add(esc);
@@ -282,7 +283,7 @@ public sealed partial class MainWindow
         {
             var dev = d;
             var sel = _devPick == d.Id;
-            var bubble = Bubble(Icons.Glyph(Tab.Devices, B(sel ? "AccentDefault" : "LabelTertiary"), 24), 56, sel ? Alpha(C("AccentDefault"), 0.22) : null);
+            var bubble = Bubble(DeviceFace(d.Id, 56, 5, Icons.Glyph(Tab.Devices, B(sel ? "AccentDefault" : "LabelTertiary"), 24)), 56, sel ? Alpha(C("AccentDefault"), 0.22) : null);
             var face = new Grid { Width = 56, Height = 56, HorizontalAlignment = HorizontalAlignment.Center, Children = { bubble } };
             if (d.Id != _r.DeviceId)
                 face.Children.Add(new Ellipse
@@ -319,6 +320,11 @@ public sealed partial class MainWindow
                 if (open.Caps.Contains("notif-src")) what.Add("notifiche");
                 info.Children.Add(Row("Funzioni", string.Join(" · ", what)));
             }
+            var has = DevicePics.Get(open.Id) != null;
+            var pick = Btn(has ? "Cambia immagine" : "Scegli immagine", () => _ = PickDevicePicAsync(open.Id), "SecondaryButton");
+            pick.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var drop = has ? Btn("Rimuovi", () => { DevicePics.Remove(open.Id); DevicePicChanged(); }) : null;
+            info.Children.Add(Cols("*a", 8, pick, drop));
             var drawer = new Border { Background = Sb(Alpha(C("LabelPrimary"), 0.07)), Padding = new Thickness(16), Child = info };
             card.Children.Add(drawer);
         }

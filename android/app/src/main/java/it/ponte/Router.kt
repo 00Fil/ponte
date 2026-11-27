@@ -126,7 +126,7 @@ class Router(val ctx: Context, val prefs: Prefs) {
     }
 
     fun caps(): List<String> = buildList {
-        add("clip"); add("files"); add("audio-sink")
+        add("clip"); add("files"); add("audio-sink"); add("cams")
         if (prefs.notifications) add("notif-src")
     }
 
@@ -180,15 +180,21 @@ class Router(val ctx: Context, val prefs: Prefs) {
 
     // ---- invio e ricezione ----
 
-    fun send(m: JSONObject) {
+    /** Byte in attesa sui collegamenti che portano a quel dispositivo. */
+    fun queuedTo(id: String): Long = (links.filter { it.peerId == id }.ifEmpty { links.filter { it.kind == "hub" } }).maxOfOrNull { it.queued() } ?: 0L
+
+    /** [sent] viene chiamata quando il messaggio è stato scritto sui collegamenti (serve a chi manda molto, per non accumulare). */
+    fun send(m: JSONObject, sent: (() -> Unit)? = null) {
         m.put("from", deviceId)
         seen[m.getString("id")] = true
         val text = m.toString()
         val to = m.optString("to").ifEmpty { null }
         val hubUp = links.any { it.kind == "hub" }
         // Il Bluetooth è lento: si usa solo quando quel dispositivo non è raggiungibile in altro modo.
+        // Le immagini delle telecamere non ci passano mai.
+        val heavy = m.optString("t").startsWith("cam.")
         val usable = links.filter { l ->
-            l.kind != "bt" || (!hubUp && links.none { it.kind == "lan" && it.peerId == l.peerId })
+            l.kind != "bt" || (!heavy && !hubUp && links.none { it.kind == "lan" && it.peerId == l.peerId })
         }
         val targets = if (to != null) {
             usable.filter { it.peerId == to }.ifEmpty { usable.filter { it.kind == "hub" } }
@@ -196,7 +202,10 @@ class Router(val ctx: Context, val prefs: Prefs) {
             usable
         }
         // Le scritture su socket non possono stare sul thread principale (NetworkOnMainThreadException).
-        sender.execute { for (l in targets) try { l.sendJson(text) } catch (_: Exception) {} }
+        sender.execute {
+            for (l in targets) try { l.sendJson(text) } catch (_: Exception) {}
+            sent?.invoke()
+        }
     }
 
     fun onText(text: String, link: Link) {
@@ -244,6 +253,8 @@ class Router(val ctx: Context, val prefs: Prefs) {
             "fin" -> finance.onRemote(m.optJSONObject("doc"))
             "plan" -> plan.onRemote(m.optJSONObject("doc"))
             "body" -> body.onRemote(m.optJSONObject("doc"))
+            "cam.watch" -> CamRelay.onWatch(this, m)
+            "cam.cmd" -> CamRelay.onCmd(this, m)
         }
     }
 

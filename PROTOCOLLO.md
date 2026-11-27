@@ -30,7 +30,7 @@ Sulla LAN il primo frame è `hello` con il campo `proof = hex(HMAC-SHA256(chiave
 
 | `t` | Campi | Note |
 |---|---|---|
-| `hello` | `name`, `platform` (`windows`/`android`), `caps[]`, `proof?` | Primo messaggio su ogni collegamento. `caps`: `clip`, `files`, `audio-src`, `audio-sink`, `notif-src`, `notif-sink` |
+| `hello` | `name`, `platform` (`windows`/`android`), `caps[]`, `proof?` | Primo messaggio su ogni collegamento. `caps`: `clip`, `files`, `audio-src`, `audio-sink`, `notif-src`, `notif-sink`, `cams` (gira le immagini delle telecamere) |
 | `devices` | `list[{id,name,platform,caps}]` | Solo hub → client, a ogni cambio |
 | `clip` | `text` | Appunti di testo. Massimo 1 MiB |
 | `file.begin` | `fid`, `name`, `kind` (`screenshot`/`file`), `mime`, `size` | `fid`: 8–64 caratteri `[A-Za-z0-9_-]` |
@@ -45,6 +45,17 @@ Sulla LAN il primo frame è `hello` con il campo `proof = hex(HMAC-SHA256(chiave
 | `focus` | `ago` (ms dall'ultimo input) | Il mittente è il dispositivo in uso. Chi riceve calcola l'ora dell'input come arrivo meno `ago` (senza orologi da sincronizzare): in uso è chi ha l'input più recente, e nessuno se sono passati più di 10 minuti. Inviato al passaggio di mano o dopo 30 s di inattività, al più ogni 15 s. |
 | `media.take` | — | Su questo dispositivo è appena partito un contenuto multimediale: gli altri che stanno suonando si mettono in pausa (salvo blocco, audio ricevuto da Relay o partenza simultanea, dove vince l'id minore). Un dispositivo non annuncia nulla per 5 s dopo una pausa ricevuta. |
 | `audio.lock` | `by` (id o stringa vuota) | Blocco del passaggio automatico: le cuffie restano a `by` finché non si sblocca. |
+
+## Telecamere
+
+Il motore delle telecamere c'è solo su Android: gli altri dispositivi le vedono attraverso il telefono (`caps` con `cams`). Tutti i messaggi hanno `to`, non passano mai dal Bluetooth, e l'hub scarta i `cam.frame` verso chi ha più di 512 KiB in coda.
+
+| `t` | Campi | Note |
+|---|---|---|
+| `cam.watch` | `view` (`tile`/`grid`/`full`/`off`), `ch` (canale in primo piano o -1), `hd`, `hide[]`, `alerts` | Chi guarda lo ripete ogni 4 s; dopo 12 s di silenzio il telefono chiude. `tile`: il canale `ch` due volte al secondo, gli altri ogni 5 s; `grid`: ogni canale visibile circa una volta al secondo; `full`: solo `ch`, in continuo |
+| `cam.state` | `ready` (telecamere configurate), `status`, `error`, `live[]`, `seen[]`, `alerts?[{time,channel,type,img}]` | Risposta a ogni `cam.watch`. `status`: 0 in corso, 6 collegato, 10 password errata. `alerts` solo se chiesti; `time` in secondi, `img` indirizzo firmato della foto |
+| `cam.frame` | `ch`, `w`, `h`, `jpg` (base64) | L'ultima immagine del canale |
+| `cam.cmd` | `ch`, `light` (`smart`/`light`/`ir`/`daylight`/`night`) | Modo dell'immagine |
 
 ## Audio
 

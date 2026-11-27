@@ -19,6 +19,8 @@ public sealed class Router
     public BodyStore Bd { get; }
     public Plan Plan { get; }
     public NowPlaying Np { get; }
+    public Backup Backup { get; }
+    public CamRelay Cams { get; }
 
     private readonly HubLink _hub;
     private readonly LanMesh _lan;
@@ -51,6 +53,8 @@ public sealed class Router
         Bd = new BodyStore(this);
         Plan = new Plan(this);
         Np = new NowPlaying(this);
+        Backup = new Backup(this);
+        Cams = new CamRelay(this);
         _hub = new HubLink(this);
         _lan = new LanMesh(this);
         _bt = new BtMesh(this);
@@ -214,13 +218,13 @@ public sealed class Router
         }
     }
 
-    private List<ILink> Targets(string? to)
+    private List<ILink> Targets(string? to, bool heavy = false)
     {
         lock (_lock)
         {
             // Il Bluetooth è lento: si usa solo quando quel dispositivo non è raggiungibile in altro modo.
             var hubUp = _links.Any(l => l.Kind == "hub");
-            var usable = _links.Where(l => l.Kind != "bt" || (!hubUp && !_links.Any(x => x.Kind == "lan" && x.PeerId == l.PeerId))).ToList();
+            var usable = _links.Where(l => l.Kind != "bt" || (!heavy && !hubUp && !_links.Any(x => x.Kind == "lan" && x.PeerId == l.PeerId))).ToList();
             if (to == null) return usable;
             var direct = usable.Where(l => l.PeerId == to).ToList();
             return direct.Count > 0 ? direct : usable.Where(l => l.Kind == "hub").ToList();
@@ -233,7 +237,9 @@ public sealed class Router
         MarkSeen(m.S("id"));
         var text = m.ToJsonString();
         var to = m.S("to");
-        foreach (var l in Targets(to.Length > 0 ? to : null)) l.SendJson(text);
+        // le telecamere non passano mai dal Bluetooth
+        var heavy = m.S("t").StartsWith("cam.", StringComparison.Ordinal);
+        foreach (var l in Targets(to.Length > 0 ? to : null, heavy)) l.SendJson(text);
     }
 
     public bool SendAudio(string sinkId, byte[] packet)
@@ -285,6 +291,12 @@ public sealed class Router
                 break;
             case "plan":
                 Plan.OnRemote(m["doc"] as JsonObject);
+                break;
+            case "cam.state":
+                Cams.OnState(m);
+                break;
+            case "cam.frame":
+                Cams.OnFrame(m);
                 break;
             case "clip":
                 Clip.OnRemote(m.S("text"), m.S("from"));

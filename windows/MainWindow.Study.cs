@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml.Shapes;
 namespace Ponte;
 
 /// <summary>
-/// Studio come su Android: pomodoro (anello e durate), obiettivo di oggi, serie e statistiche. Gli stessi dati di Android, sincronizzati.
+/// Studio come su Android: argomento da fare ora, esami, pomodoro (anello e durate), obiettivo di oggi, serie e statistiche. Gli stessi dati di Android, sincronizzati.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -47,6 +47,8 @@ public sealed partial class MainWindow
     // ---------------------------------------------------------------- cruscotto
     private void StDashboard(StackPanel h, PlanState p)
     {
+        h.Children.Add(NowStudyCard(p));
+        h.Children.Add(ExamsCard(p));
         h.Children.Add(Pomodoro(p));
         var today = MinutesOn(p, DateTime.Today, DateTime.MaxValue);
         var goal = p.Get("goal", 120);

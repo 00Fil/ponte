@@ -9,7 +9,7 @@ namespace Ponte;
 
 /// <summary>
 /// Corpo come su Android: calorie e macro del giorno, prossimo pasto del piano, peso con andamento, diario con ricerca (CREA, Open Food Facts, Esselunga),
-/// alimenti salvati, piano settimanale e obiettivi. Stessi dati del telefono. Le foto del fisico si scattano e restano sul telefono.
+/// alimenti salvati, piano settimanale e obiettivi. Stessi dati del telefono. Le foto del fisico (BodyPhotos) restano invece su questo PC.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -43,6 +43,7 @@ public sealed partial class MainWindow
             case "foods": BdFoods(h); break;
             case "plan": BdPlan(h); break;
             case "goals": BdGoals(h); break;
+            case "gallery": BdGallery(h); break;
             default: BdDashboard(h); break;
         }
     }
@@ -101,14 +102,16 @@ public sealed partial class MainWindow
         h.Children.Add(BdNow(b, today));
 
         // azioni
-        var acts = HStack(48,
+        var acts = HStack(36,
             Round("+", "Pasto", true, () => { _bdDay = today; BdGo("diary"); }),
             Round(Tab.Calendar, "Piano", false, () => BdGo("plan")),
+            Round(Tab.Camera, "Foto", false, OpenBodyCamera),
             Round(Tab.Clipboard, "Alimenti", false, () => BdGo("foods")));
         acts.HorizontalAlignment = HorizontalAlignment.Center;
         acts.Margin = new Thickness(0, 4, 0, 4);
         h.Children.Add(acts);
 
+        h.Children.Add(BdLapseCard(b));
         h.Children.Add(BdWeight(b, today));
 
         // ultimi sette giorni
@@ -205,11 +208,10 @@ public sealed partial class MainWindow
         return Panelled(w, new Thickness(24));
     }
 
-    /// <summary>Andamento degli ultimi 60 giorni, con la linea tratteggiata dell'obiettivo.</summary>
-    private FrameworkElement BdWeightChart(List<Weigh> ws, double goal)
+    /// <summary>Andamento delle pesate (di norma gli ultimi 60 giorni; 0 = tutte quelle date), con la linea tratteggiata dell'obiettivo.</summary>
+    private FrameworkElement BdWeightChart(List<Weigh> ws, double goal, int days = 60, double height = 120)
     {
-        const double height = 120;
-        var from = DateTime.Today.AddDays(-60);
+        var from = days > 0 ? DateTime.Today.AddDays(-days) : DateTime.MinValue;
         var tail = ws.Where(x => BodyStore.KeyTime(x.Day) >= from).ToList();
         if (tail.Count < 2) tail = ws.TakeLast(2).ToList();
         var lo = tail.Min(x => x.Kg); var hi = tail.Max(x => x.Kg);

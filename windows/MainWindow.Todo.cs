@@ -16,28 +16,8 @@ public sealed partial class MainWindow
         p.Tasks.Where(t => !t.Done).OrderBy(t => t.Due > 0 ? t.Due : long.MaxValue).ThenBy(t => t.Title).ToList();
 
     /// <summary>Prima le cose libere dell'università, poi gli argomenti d'esame nell'ordine in cui conviene farli.</summary>
-    private static List<StudyTask> TodoUni(PlanState p)
-    {
-        var today = Ms(DateTime.Today);
-        var free = p.Topics.Where(t => t.Subject == "uni" && !t.Done);
-        var next = p.Subjects.Select(s =>
-        {
-            var exams = p.Exams.Where(e => e.Subject == s.Id).ToList();
-            var exam = exams.Where(e => e.Date >= today).OrderBy(e => e.Date).FirstOrDefault() ?? exams.OrderByDescending(e => e.Date).FirstOrDefault();
-            var topics = p.Topics.Where(t => t.Subject == s.Id).ToList();
-            var open = topics.Where(t => !t.Done).ToList();
-            int? days = exam == null ? null : (Loc(exam.Date).Date - DateTime.Today).Days;
-            var usable = days is { } d ? Math.Max(d - 1, 1) : 30;
-            var perDay = (int)Math.Ceiling(open.Count / (double)usable);
-            var pressure = open.Count == 0 || days < 0 ? -1 : open.Count / (double)usable + (exam == null ? -100 : 0);
-            var doneToday = topics.Count(t => t.Done && t.DoneAt >= today);
-            return (Open: open, Days: days, Pressure: pressure, Later: doneToday < perDay ? 0 : 1, Date: exam?.Date ?? long.MaxValue);
-        })
-            .Where(c => c.Open.Count > 0 && (c.Days ?? 0) >= 0)
-            .OrderBy(c => c.Later).ThenByDescending(c => c.Pressure).ThenBy(c => c.Date)
-            .SelectMany(c => c.Open);
-        return free.Concat(next).ToList();
-    }
+    private static List<StudyTask> TodoUni(PlanState p) =>
+        p.Topics.Where(t => t.Subject == "uni" && !t.Done).Concat(ByUrgency(p).SelectMany(c => c.Open)).ToList();
 
     private List<StudyTask> TodoOpen(PlanState p) => _todoUni ? TodoUni(p) : TodoLife(p);
 

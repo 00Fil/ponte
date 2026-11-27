@@ -48,6 +48,7 @@ public sealed partial class MainWindow
     {
         var h = Reset("Condividi");
         h.Spacing = 12;
+        if (_backupOpen) { _shareBody = null; RenderBackup(h); return; }
 
         // due azioni tonde, centrate
         var holder = new Border { Child = Center(Icons.Glyph(Tab.Clipboard, B("AccentOnSubtle"), 24)) };
@@ -58,7 +59,7 @@ public sealed partial class MainWindow
             await Task.Delay(1000);
             holder.Child = Center(Icons.Glyph(Tab.Clipboard, B("AccentOnSubtle"), 24));
         });
-        var acts = HStack(40, clip, Round(Tab.Upload, "Invia file", false, () => _ = PickFilesAsync()));
+        var acts = HStack(40, clip, Round(Tab.Upload, "Invia file", false, () => _ = PickFilesAsync()), Round(Tab.Drive, "Backup", false, () => { OpenBackup(); RenderShare(); }));
         acts.HorizontalAlignment = HorizontalAlignment.Center;
         acts.Margin = new Thickness(0, 20, 0, 16);
         h.Children.Add(acts);
@@ -171,7 +172,7 @@ public sealed partial class MainWindow
             var code = !link && txt.Length is >= 4 and <= 12 && !txt.Contains(' ') && txt.Count(char.IsDigit) >= 4;
             var kind = link ? "Link" : code ? "Codice" : c.Text.Count(ch => ch == '\n') >= 2 ? "Testo lungo" : "Testo";
 
-            var bubble = Bubble(Center(Icons.Glyph(c.Mine ? Tab.House : Tab.Devices, B("LabelPrimary"), 20)), 40, Alpha(DeviceTone(c.Mine ? "me" : c.From), 0.34));
+            var bubble = Bubble(DeviceFace(c.Mine ? _r.DeviceId : c.From, 40, 5, Icons.Glyph(c.Mine ? Tab.House : Tab.Devices, B("LabelPrimary"), 20)), 40, Alpha(DeviceTone(c.Mine ? "me" : c.From), 0.34));
             bubble.VerticalAlignment = VerticalAlignment.Top;
             var who = HStack(8, T(c.Mine ? "Questo PC" : _r.DeviceName(c.From), 13, "LabelSecondary", true), T("· " + kind, 13, link ? "AccentDefault" : "LabelTertiary"));
             var time = T(when.ToString("t", CultureInfo.CurrentCulture), 13, "LabelTertiary");

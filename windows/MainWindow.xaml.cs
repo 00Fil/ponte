@@ -53,6 +53,8 @@ public sealed partial class MainWindow : Window
         {
             if (_exiting) return;
             e.Cancel = true;
+            // la fotocamera non resta accesa dietro una finestra chiusa
+            if (_bdOver == "camera") CloseBodyLayer();
             AppWindow.Hide();
             // Finestra nascosta: il gradiente si ferma, niente consumo.
             HeaderWeb.Visibility = Visibility.Collapsed;
@@ -63,6 +65,8 @@ public sealed partial class MainWindow : Window
         Root.SizeChanged += (_, _) => ApplyLayout();
         _r.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
         InitShell();
+        InitCameras();
+        VisibilityChanged += (_, e) => { if (!e.Visible && _bdOver == "camera") CloseBodyLayer(); };
 
         try { Select(_r.S.Token.Length == 0 ? 5 : 0); }
         catch (Exception e) { Crash.Log(e, "Primo disegno"); }
@@ -228,9 +232,11 @@ public sealed partial class MainWindow : Window
         ClosePanel();
         switch (to)
         {
-            case "clips": _shareTab = 0; _folder = null; Select(1); break;
-            case "images": _shareTab = 1; _folder = null; Select(1); break;
-            case "share": Select(1); break;
+            case "clips": _shareTab = 0; _folder = null; _backupOpen = false; Select(1); break;
+            case "images": _shareTab = 1; _folder = null; _backupOpen = false; Select(1); break;
+            case "share": _backupOpen = false; Select(1); break;
+            case "backup": OpenBackup(); Select(1); break;
+            case "cams": _homeCams = true; _camsTab = 0; _camsEdit = false; _homeHold = DateTime.MinValue; Select(0); CamPulse(); break;
             case "finance": _finSub = null; Select(2); break;
             case "fin-add": _finSub = "add"; Select(2); break;
             case "agenda": _agSub = null; Select(3); break;

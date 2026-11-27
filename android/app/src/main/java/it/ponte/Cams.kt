@@ -58,6 +58,10 @@ object Cams {
     @Volatile private var paused = false
     /** Canale a tutto schermo: niente limite di immagini al secondo e si tiene il flusso principale. */
     @Volatile var focus = -1
+    /** Richieste da un altro dispositivo (CamRelay): i flussi restano aperti anche con l'app in secondo piano. */
+    @Volatile private var remote = false
+    @Volatile private var remoteFocus = -1
+    @Volatile private var remoteHd = false
     private val bufs = ConcurrentHashMap<Int, java.nio.ByteBuffer>()
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -99,7 +103,7 @@ object Cams {
 
     private fun openRaw(ch: Int, b: Int) {
         val c = engine() ?: return
-        if (handle == 0L || paused || !open.add(ch to b)) return
+        if (handle == 0L || (paused && !remote) || !open.add(ch to b)) return
         try { c.nativeOpenStream(handle, b, ch, ch, ch, false) } catch (_: Throwable) { open.remove(ch to b) }
     }
 
@@ -112,11 +116,30 @@ object Cams {
     /** Tutto schermo: si apre l'alta qualità senza chiudere quella leggera, che resta a vista finché la prima non arriva. */
     /** Tutto schermo: resta il flusso già aperto (immagine subito in tempo reale); l'alta qualità solo se richiesta. */
     fun enter(ch: Int) { focus = ch; openRaw(ch, 1); if (hd.value) openRaw(ch, 0) }
-    fun leave(ch: Int) { if (focus == ch) focus = -1; close(ch, 0) }
-    fun setHd(ch: Int, on: Boolean) { hd.value = on; if (on) openRaw(ch, 0) else { close(ch, 0); bigAt.remove(ch) } }
+    fun leave(ch: Int) { if (focus == ch) focus = -1; closeHd(ch) }
+    fun setHd(ch: Int, on: Boolean) { hd.value = on; if (on) openRaw(ch, 0) else closeHd(ch) }
+
+    /** Chiude l'alta qualità, se non serve ancora a qualcuno (qui o altrove). */
+    private fun closeHd(ch: Int) {
+        if ((remoteHd && remoteFocus == ch) || (hd.value && focus == ch)) return
+        close(ch, 0); bigAt.remove(ch)
+    }
+
+    /** Un altro dispositivo sta guardando: [full] è il canale che ha a tutto schermo (o -1), [high] se lo vuole in HD. */
+    @Synchronized
+    fun remoteDemand(on: Boolean, full: Int = -1, high: Boolean = false) {
+        val was = remoteFocus
+        remote = on
+        remoteFocus = if (on) full else -1
+        remoteHd = on && high
+        if (was >= 0 && (was != remoteFocus || !remoteHd)) closeHd(was)
+        if (!on) { if (paused) open.toList().forEach { (ch, b) -> close(ch, b) }; return }
+        live.value.forEach { openRaw(it, 1) }
+        if (remoteHd && remoteFocus >= 0) openRaw(remoteFocus, 0)
+    }
 
     /** App in secondo piano: si chiudono i flussi; al ritorno si riaprono subito quelli leggeri di tutte le cam. */
-    fun pause() { paused = true; open.toList().forEach { (ch, b) -> close(ch, b) } }
+    fun pause() { paused = true; if (!remote) open.toList().forEach { (ch, b) -> close(ch, b) } }
     fun resume() { paused = false; live.value.forEach { openRaw(it, 1) }; if (focus >= 0) openRaw(focus, 0) }
 
     fun send(json: String, ch: Int = 0) {
@@ -181,7 +204,7 @@ object Cams {
         override fun frame(key: String, w: Int, h: Int, data: ByteArray?, len: Int, channel: Int, ptr: Long) {
             if (w <= 0 || h <= 0 || ptr == 0L || data != null || len < w * h * 4 || !CamMem.ok) return
             val now = System.currentTimeMillis()
-            if (channel == focus) {
+            if (channel == focus || channel == remoteFocus) {
                 // a tutto schermo: appena arriva l'alta qualità, quella leggera non sostituisce più l'immagine
                 if (w >= 1000) bigAt[channel] = now
                 else if (now - (bigAt[channel] ?: 0L) < 1500) return

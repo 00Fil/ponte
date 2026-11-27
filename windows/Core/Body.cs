@@ -41,7 +41,7 @@ public sealed class BodyState
 
 /// <summary>
 /// Corpo, identico ad Android (it.ponte.Body): alimenti, diario, piano settimanale, pesate e obiettivi come registri "l'ultimo che scrive vince",
-/// sincronizzati dal server (/api/body) e tra i dispositivi col messaggio "body". Le foto restano sul telefono.
+/// sincronizzati dal server (/api/body) e tra i dispositivi col messaggio "body". Le foto del fisico non passano di qui: restano sul dispositivo.
 /// </summary>
 public sealed class BodyStore
 {
