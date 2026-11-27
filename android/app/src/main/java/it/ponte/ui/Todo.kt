@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -146,7 +148,17 @@ fun TodoTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onL
     val uni = todoMode.intValue == 1
     val open = if (uni) uniOpen(p) else p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
     GlassTile(modifier, Tint.blue, index, onClick, onLong) {
-        Column(Modifier.fillMaxSize().padding(Space.s4), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        var dx by remember { mutableStateOf(0f) }
+        Column(
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onDragEnd = { if (dx < -40f) todoMode.intValue = 1 else if (dx > 40f) todoMode.intValue = 0 },
+                    onDragCancel = { dx = 0f },
+                ) { _, d -> dx += d }
+            }.padding(Space.s4),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconBubble(12)
                 Text(if (uni) "Uni" else "Life", style = CanoneType.footnote.copy(fontWeight = FontWeight.SemiBold), color = c.labelSecondary,
