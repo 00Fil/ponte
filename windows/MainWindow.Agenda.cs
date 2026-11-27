@@ -211,7 +211,7 @@ public sealed partial class MainWindow
     private Button AgTodoButton()
     {
         var n = _r.Plan.State.Tasks.Count(t => !t.Done);
-        return AgPill(Bubble(Icons.Of(Ico.Check, White, 13), 22, C("AccentDefault")), n > 0 ? n.ToString(It) : "", () => AgGo("todo"), "Cose da fare");
+        return AgPill(Bubble(Icons.Of(Ico.Check, White, 13), 22, C("AccentDefault")), n > 0 ? n.ToString(It) : "", () => AgGo("todo"), "To-do");
     }
 
     /// <summary>Il pomodoro disegnato: porta allo Studio e col timer acceso mostra il tempo che resta.</summary>

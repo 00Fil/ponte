@@ -125,9 +125,11 @@ class LanMesh(private val r: Router) {
         if (clean.isEmpty()) return
         r.prefs.peers = r.prefs.peers + (id to clean)
         // Si collega solo chi ha l'id minore: nasce un solo collegamento per coppia.
-        if (r.deviceId >= id || r.hasLanLink(id) || !connecting.add(id)) return
+        if (r.hasLanLink(id) || !connecting.add(id)) return
+        val late = r.deviceId >= id
         r.scope.launch {
             try {
+                if (late) { delay(8_000); if (r.hasLanLink(id)) return@launch }
                 for (host in clean) {
                     val s = Socket()
                     try {
@@ -198,15 +200,29 @@ class LanMesh(private val r: Router) {
         null
     }
 
+    /** Indirizzi di trasmissione di ogni scheda di rete attiva: il broadcast generico non esce da tutte. */
+    private fun broadcastTargets(): List<InetAddress> {
+        val out = LinkedHashSet<InetAddress>()
+        try { out += InetAddress.getByName("255.255.255.255") } catch (_: Exception) {}
+        try {
+            java.net.NetworkInterface.getNetworkInterfaces()?.toList()?.forEach { n ->
+                if (n.isUp && !n.isLoopback) n.interfaceAddresses.forEach { a -> a.broadcast?.let { out += it } }
+            }
+        } catch (_: Exception) {}
+        return out.toList()
+    }
+
     private suspend fun announce() {
+        var n = 0
         while (r.scope.isActive) {
             val sock = udp
+            if (sock == null || sock.isClosed) { delay(300); if (++n < 20) continue }
+            n = 0
             if (sock != null && !sock.isClosed) {
                 val data = JSONObject().put("p", "ponte").put("id", r.deviceId).put("name", r.prefs.name).put("port", LAN_TCP_PORT)
                     .toString().toByteArray()
-                try {
-                    sock.send(DatagramPacket(data, data.size, InetAddress.getByName("255.255.255.255"), LAN_UDP_PORT))
-                } catch (_: IOException) {
+                for (t in broadcastTargets()) {
+                    try { sock.send(DatagramPacket(data, data.size, t, LAN_UDP_PORT)) } catch (_: IOException) {}
                 }
             }
             delay(if (r.screenOn) 10_000 else 120_000)
@@ -225,11 +241,14 @@ class LanMesh(private val r: Router) {
                 val id = m.optString("id")
                 if (id.isEmpty() || id == r.deviceId || r.hasLanLink(id)) continue
                 // Si collega solo chi ha l'id minore: nasce un solo collegamento per coppia.
-                if (r.deviceId >= id || !connecting.add(id)) continue
+                if (!connecting.add(id)) continue
+                val late = r.deviceId >= id
                 val host = p.address.hostAddress ?: continue
                 val port = m.optInt("port", LAN_TCP_PORT)
                 r.scope.launch {
                     try {
+                        // Chi ha l'id maggiore aspetta: se l'altro non riesce a collegarsi (firewall) lo fa lui.
+                        if (late) { delay(8_000); if (r.hasLanLink(id)) return@launch }
                         val s = Socket()
                         s.connect(InetSocketAddress(host, port), 3_000)
                         tcpLink(r, s).run()

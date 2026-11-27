@@ -39,7 +39,7 @@ public sealed partial class MainWindow
         var pair = PairCube(cell);
         var balance = BalanceTile(cell);
         var todo = TodoTile(cell);
-        var body = BodyTile(width, Math.Max(cell * 0.62, 136));
+        var body = BodyTile(width, Math.Max(cell * 0.82, 150));
         var audio = AudioTile(width, Math.Max(cell * 0.62, 184));
         h.Children.Add(Cols("**", Gap, plan, pair));
         h.Children.Add(Cols("**", Gap, balance, todo));
@@ -140,7 +140,7 @@ public sealed partial class MainWindow
         var holder = new Grid { Height = cell - 2, CornerRadius = new CornerRadius(27) };
         RoundClip(holder, 27);
         var ticks = new List<Action>();
-        var swiped = false;
+        Func<bool>? swipe = null;
 
         void Show(int page)
         {
@@ -170,31 +170,15 @@ public sealed partial class MainWindow
         }
 
         Show(_planPage);
-        var tile = HomeTile(holder, cell, () => { if (swiped) { swiped = false; return; } Open(_planPage == 0 ? "agenda" : "studio"); }, () => OpenPanel("agenda"), "Agenda e studio", 0);
+        var tile = HomeTile(holder, cell, () => { if (swipe?.Invoke() != true) Open(_planPage == 0 ? "agenda" : "studio"); }, () => OpenPanel("agenda"), "Agenda e studio", 0);
 
-        double? from = null;
-        tile.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) => { swiped = false; from = e.GetCurrentPoint(tile).Position.X; }), true);
-        tile.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => from = null), true);
-        tile.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler((_, e) =>
+        swipe = SideSwipe(tile, d =>
         {
-            if (from is not { } x) return;
-            var dx = e.GetCurrentPoint(tile).Position.X - x;
-            if (Math.Abs(dx) < 40) return;
-            from = null;
-            swiped = true;
-            var to = dx < 0 ? 1 : 0;
+            var to = d > 0 ? 1 : 0;
             if (to == _planPage) return;
             Show(to);
-            Enter(holder, dx < 0 ? 40 : -40, 0, 320);
-        }), true);
-        tile.PointerWheelChanged += (_, e) =>
-        {
-            var p = e.GetCurrentPoint(tile).Properties;
-            if (!p.IsHorizontalMouseWheel) return;
-            e.Handled = true;
-            var to = p.MouseWheelDelta > 0 ? 1 : 0;
-            if (to != _planPage) { Show(to); Enter(holder, to == 1 ? 40 : -40, 0, 320); }
-        };
+            Enter(holder, d * 40, 0, 320);
+        });
         return tile;
     }
 
@@ -471,7 +455,18 @@ public sealed partial class MainWindow
         var fit = Math.Clamp((int)((cell - 70) / 28), 1, 5);
         foreach (var t in open.Take(fit)) list.Children.Add(TodoRow(t, true));
         var content = Rows("a*", 6, Cols("a*a", 8, IconBubble(Tab.Cap), pick, count), list);
-        return HomeTile(content, cell, () => Open("todo"), () => OpenPanel("agenda"), "Cose da fare");
+        Func<bool>? swiped = null;
+        var tile = HomeTile(content, cell, () => { if (swiped?.Invoke() != true) Open("todo"); }, () => OpenPanel("agenda"), "To-do");
+        // di lato si passa da Life a Uni
+        swiped = SideSwipe(tile, d =>
+        {
+            var uni = d > 0;
+            if (uni == _todoUni) return;
+            _todoUni = uni;
+            _homeHold = DateTime.MinValue;
+            DispatcherQueue.TryEnqueue(RenderHome);
+        });
+        return tile;
     }
 
     // ---------------------------------------------------------------- corpo

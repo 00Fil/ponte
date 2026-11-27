@@ -161,6 +161,37 @@ public sealed partial class MainWindow
         return () => { var f = fired; fired = false; return f; };
     }
 
+    /// <summary>
+    /// Scorrimento di lato (dito, mouse trascinato o rotella orizzontale): [step] riceve 1 verso la pagina dopo, -1 verso quella prima.
+    /// Ritorna true una volta se il clic che segue va ignorato.
+    /// </summary>
+    private static Func<bool> SideSwipe(FrameworkElement el, Action<int> step)
+    {
+        var swiped = false;
+        double? from = null;
+        el.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) => { swiped = false; from = e.GetCurrentPoint(el).Position.X; }), true);
+        el.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => from = null), true);
+        el.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (from is not { } x) return;
+            var point = e.GetCurrentPoint(el);
+            if (!point.IsInContact) { from = null; return; }
+            var dx = point.Position.X - x;
+            if (Math.Abs(dx) < 40) return;
+            from = null;
+            swiped = true;
+            step(dx < 0 ? 1 : -1);
+        }), true);
+        el.PointerWheelChanged += (_, e) =>
+        {
+            var p = e.GetCurrentPoint(el).Properties;
+            if (!p.IsHorizontalMouseWheel) return;
+            e.Handled = true;
+            step(p.MouseWheelDelta > 0 ? 1 : -1);
+        };
+        return () => { var s = swiped; swiped = false; return s; };
+    }
+
     // ---------------------------------------------------------------- vetro
 
     private static Windows.UI.Color Lighten(Windows.UI.Color c, double white)

@@ -10,6 +10,7 @@ public sealed partial class MainWindow
 {
     private bool _todoUni;
     private string _todoText = "";
+    private int _todoSlide;
 
     private static List<StudyTask> TodoLife(PlanState p) =>
         p.Tasks.Where(t => !t.Done).OrderBy(t => t.Due > 0 ? t.Due : long.MaxValue).ThenBy(t => t.Title).ToList();
@@ -73,9 +74,15 @@ public sealed partial class MainWindow
     private void RenderTodo(StackPanel h)
     {
         var p = _r.Plan.State;
-        h.Children.Add(BackRow("Agenda", "Cose da fare", () => AgGo(null)));
-        h.Children.Add(Segmented("todo", new[] { "Life", "Uni" }, _todoUni ? 1 : 0, i => { _todoUni = i == 1; RenderAgenda(); }));
-        h.Children.Add(TodoField());
+        h.Children.Add(BackRow("Agenda", "To-do", () => AgGo(null)));
+        h.Children.Add(Segmented("todo", new[] { "Life", "Uni" }, _todoUni ? 1 : 0, i => TodoPage(i == 1)));
+
+        // Life e Uni sono due pagine: si passa dall'una all'altra anche scorrendo di lato
+        var page = new StackPanel { Spacing = 12, Background = Clear, MinHeight = 360 };
+        SideSwipe(page, d => TodoPage(d > 0));
+        h.Children.Add(page);
+        if (_todoSlide != 0) { Enter(page, 40 * _todoSlide, 0, 320); _todoSlide = 0; }
+        page.Children.Add(TodoField());
 
         var open = TodoOpen(p);
         var list = new StackPanel();
@@ -90,7 +97,7 @@ public sealed partial class MainWindow
             if (i > 0) list.Children.Add(new Border { Height = 1, Margin = new Thickness(38, 0, 0, 0), Background = B("LineSeparator") });
             list.Children.Add(TodoRow(open[i]));
         }
-        h.Children.Add(Panelled(list));
+        page.Children.Add(Panelled(list));
 
         var done = _todoUni
             ? p.Topics.Where(t => t.Done).OrderByDescending(t => t.DoneAt).ToList()
@@ -109,7 +116,15 @@ public sealed partial class MainWindow
         top.MinHeight = 36;
         var old = VStack(0, top);
         foreach (var t in done.Take(20)) old.Children.Add(TodoRow(t));
-        h.Children.Add(Panelled(old));
+        page.Children.Add(Panelled(old));
+    }
+
+    private void TodoPage(bool uni)
+    {
+        if (uni == _todoUni) return;
+        _todoUni = uni;
+        _todoSlide = uni ? 1 : -1;
+        DispatcherQueue.TryEnqueue(RenderAgenda);
     }
 
     /// <summary>Superficie di vetro che contiene un elenco (GlassTile senza tocco).</summary>
