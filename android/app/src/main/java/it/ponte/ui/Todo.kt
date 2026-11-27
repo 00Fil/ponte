@@ -160,9 +160,7 @@ fun TodoTile(r: Router, modifier: Modifier, index: Int, onClick: () -> Unit, onL
 }
 
 /** Pagina To-do nell'Agenda. */
-fun LazyListScope.todoItems(r: Router, p: PlanState) {
-    item { TodoSwitch(Modifier.fillMaxWidth()) }
-    val uni = todoMode.intValue == 1
+fun LazyListScope.todoItems(r: Router, p: PlanState, uni: Boolean) {
     item { AddTodo(r, subject = if (uni) "uni" else "") }
     val open = if (uni) uniOpen(p) else p.tasks.filter { !it.done }.sortedWith(compareBy({ if (it.due > 0) it.due else Long.MAX_VALUE }, { it.title }))
     val done = if (uni) p.topics.filter { it.done }.sortedByDescending { it.doneAt } else p.tasks.filter { it.done }
@@ -187,6 +185,26 @@ fun LazyListScope.todoItems(r: Router, p: PlanState) {
                 }
                 done.take(20).forEach { TodoRow(r, it) }
             }
+        }
+    }
+}
+
+/** To-do a due pagine, Life e Uni, da scorrere di lato come l'Agenda. */
+@Composable
+fun TodoPager(r: Router, p: PlanState, onBack: () -> Unit) {
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = todoMode.intValue) { 2 }
+    val scope = rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(pager.currentPage) { todoMode.intValue = pager.currentPage }
+    androidx.compose.runtime.LaunchedEffect(todoMode.intValue) { if (pager.currentPage != todoMode.intValue) pager.animateScrollToPage(todoMode.intValue) }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.padding(horizontal = Space.s4).padding(top = Space.s2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                BackRow("Agenda", "To-do") { onBack() }
+                GlassSegmented(listOf("Life", "Uni"), pager.currentPage, { scope.launch { pager.animateScrollToPage(it) } }, Modifier.fillMaxWidth())
+            }
+        }
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth()) { pg ->
+            ScreenList("To-do") { todoItems(r, p, pg == 1) }
         }
     }
 }

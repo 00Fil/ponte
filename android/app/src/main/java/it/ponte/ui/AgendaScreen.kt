@@ -199,10 +199,7 @@ fun AgendaScreen(r: Router, sub: String?, onSub: (String?) -> Unit) {
     ) { page ->
         when (page) {
             "set" -> StudySettings(r) { onSub("study") }
-            "todo" -> ScreenList("To-do") {
-                item { BackRow("Agenda", "To-do") { onSub(null) } }
-                todoItems(r, plan)
-            }
+            "todo" -> TodoPager(r, plan) { onSub(null) }
             "study" -> ScreenList("Studio") {
                 item { BackRow("Agenda", "Studio") { onSub(null) } }
                 studyItems(r, plan) { onSub("set") }

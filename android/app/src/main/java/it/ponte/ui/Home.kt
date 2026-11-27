@@ -118,7 +118,7 @@ fun HomeScreen(r: Router, go: (String) -> Unit) {
                             BalanceCard(r, money, sq, { go("finance") }) { panel = "finance" }
                             TodoTile(r, sq, 4, { go("todo") }) { panel = "agenda" }
                         }
-                        BodyTile(r, Modifier.fillMaxWidth().height(cell * 0.62f)) { go("body") }
+                        BodyTile(r, Modifier.fillMaxWidth().height(maxOf(cell * 0.82f, 150.dp))) { go("body") }
                         // cam: tenendo premuto la card si allarga a tutta riga e cresce in altezza, l'audio si fa da parte
                         val grow by androidx.compose.animation.core.animateFloatAsState(if (camBig) 1f else 0f, androidx.compose.animation.core.spring(0.78f, 260f), label = "cam")
                         Row {

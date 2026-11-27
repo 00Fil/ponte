@@ -138,7 +138,28 @@ public sealed class LanMesh
             _ = Task.Run(() => ListenAsync(_udp, ct));
             _ = Task.Run(() => AnnounceAsync(_udp, ct));
             _ = Task.Run(() => RedialKnownAsync(ct));
+            _ = Task.Run(AllowFirewall);
         }
+    }
+
+    /// <summary>Una sola volta chiede il permesso di amministratore per aprire le porte locali nel firewall di Windows.</summary>
+    private static void AllowFirewall()
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Ponte");
+            Directory.CreateDirectory(dir);
+            var mark = Path.Combine(dir, "firewall.ok");
+            var exe = Environment.ProcessPath;
+            if (File.Exists(mark) || string.IsNullOrEmpty(exe)) return;
+            var args = $"/c netsh advfirewall firewall delete rule name=\"Relay\" & " +
+                $"netsh advfirewall firewall add rule name=\"Relay\" dir=in action=allow program=\"{exe}\" protocol=tcp localport={Proto.LanTcpPort} profile=any & " +
+                $"netsh advfirewall firewall add rule name=\"Relay\" dir=in action=allow program=\"{exe}\" protocol=udp localport={Proto.LanUdpPort} profile=any";
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", args) { Verb = "runas", UseShellExecute = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden });
+            p?.WaitForExit(20000);
+            if (p != null && p.HasExited && p.ExitCode == 0) File.WriteAllText(mark, exe);
+        }
+        catch (Exception) { }
     }
 
     /// <summary>
@@ -154,12 +175,18 @@ public sealed class LanMesh
         if (clean.Count == 0) return;
         lock (_r.S.Peers) _r.S.Peers[id] = clean;
         try { _r.S.Save(); } catch (Exception) { }
-        if (string.CompareOrdinal(_r.DeviceId, id) >= 0 || _r.HasLanLink(id)) return;
+        if (_r.HasLanLink(id)) return;
+        var late = string.CompareOrdinal(_r.DeviceId, id) >= 0;
         lock (_connecting) if (!_connecting.Add(id)) return;
         _ = Task.Run(async () =>
         {
             try
             {
+                if (late)
+                {
+                    try { await Task.Delay(8000, ct); } catch (Exception) { return; }
+                    if (_r.HasLanLink(id)) return;
+                }
                 foreach (var a in clean)
                 {
                     var c = new TcpClient();
@@ -272,10 +299,21 @@ public sealed class LanMesh
                 var id = m.S("id");
                 if (id.Length == 0 || id == _r.DeviceId || _r.HasLanLink(id)) continue;
                 // Si collega solo chi ha l'id minore: nasce un solo collegamento per coppia.
-                if (string.CompareOrdinal(_r.DeviceId, id) >= 0) continue;
-                lock (_connecting) if (!_connecting.Add(id)) continue;
                 var host = res.RemoteEndPoint.Address;
                 var port = (int)m.L("port", Proto.LanTcpPort);
+                if (string.CompareOrdinal(_r.DeviceId, id) >= 0)
+                {
+                    // Chi ha l'id maggiore aspetta; se l'altro non riesce a collegarsi (firewall) si collega lui.
+                    _ = Task.Run(async () =>
+                    {
+                        try { await Task.Delay(8000, ct); } catch (Exception) { return; }
+                        if (_r.HasLanLink(id)) return;
+                        lock (_connecting) if (!_connecting.Add(id)) return;
+                        await ConnectAsync(id, host, port, ct);
+                    });
+                    continue;
+                }
+                lock (_connecting) if (!_connecting.Add(id)) continue;
                 _ = Task.Run(() => ConnectAsync(id, host, port, ct));
             }
         }
