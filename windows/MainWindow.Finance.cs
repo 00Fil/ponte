@@ -82,20 +82,35 @@ public sealed partial class MainWindow
             outcomes.Children.Add(pct);
         }
         var line = new Border { Height = 1, Background = B("LineSeparator") };
-        h.Children.Add(Panelled(VStack(16, head, MoneyText("fin.total", m.TotalCents, 44), line, PeriodRow(), Cols("**", 12, incomes, outcomes)), new Thickness(24)));
+        var balance = Panelled(VStack(16, head, MoneyText("fin.total", m.TotalCents, 44), line, PeriodRow(), Cols("**", 12, incomes, outcomes)), new Thickness(24));
 
         var acts = Cols("****", 0,
             Round("−", "Spesa", true, () => { _income = false; FinGo("add"); }),
             Round("+", "Entrata", false, () => { _income = true; FinGo("add"); }),
             Round("€", "Contanti", false, () => { _cashSpend = true; _tally = new(); FinGo("cash"); }),
             Round("≡", "Movimenti", false, () => FinGo("moves")));
-        h.Children.Add(acts);
 
         var forecast = T("", 13, "LabelTertiary");
         var chart = PaceChart(m, forecast);
         HideChart(forecast);
-        h.Children.Add(Panelled(VStack(12, Cols("*a", 8, CardLabel("Andamento"), forecast), chart), new Thickness(24)));
+        var pace = Panelled(VStack(12, Cols("*a", 8, CardLabel("Andamento"), forecast), chart), new Thickness(24));
+        var where = FinWhere(inPeriod);
+        var recent = FinRecent(m);
 
+        var n = Spread;
+        if (n == 1)
+        {
+            foreach (var block in new UIElement?[] { balance, acts, pace, where, recent })
+                if (block != null) h.Children.Add(block);
+        }
+        else if (recent == null) h.Children.Add(Even(new UIElement?[] { balance, acts }, new UIElement?[] { pace }));
+        else if (n == 2) h.Children.Add(Even(new UIElement?[] { balance, acts, pace }, new UIElement?[] { where, recent }));
+        else h.Children.Add(Even(new UIElement?[] { balance, acts }, new UIElement?[] { pace, where }, new UIElement?[] { recent }));
+    }
+
+    /// <summary>Le quattro categorie dove è uscito di più nel periodo.</summary>
+    private Border? FinWhere(List<Tx> inPeriod)
+    {
         var by = inPeriod.Where(t => t.Cents < 0).GroupBy(t => t.Cat).Select(g => (Cat: g.Key, V: -g.Sum(t => t.Cents))).OrderByDescending(x => x.V).Take(4).ToList();
         if (by.Count > 0)
         {
@@ -108,11 +123,15 @@ public sealed partial class MainWindow
                 rows.Children.Add(VStack(5, Cols("*a", 8, name, value),
                     Progress(by[i].V / (double)top, i == 0 ? B("AccentDefault") : Sb(Alpha(C("AccentDefault"), 0.45)), 6, B("BgSunken"))));
             }
-            h.Children.Add(Panelled(VStack(12, CardLabel("Dove spendi"), HideChart(rows)), new Thickness(24)));
+            return Panelled(VStack(12, CardLabel("Dove spendi"), HideChart(rows)), new Thickness(24));
         }
+        return null;
+    }
 
+    private Button? FinRecent(Money m)
+    {
         var last = m.Txs.OrderByDescending(t => t.Ts).Take(5).ToList();
-        if (last.Count == 0) return;
+        if (last.Count == 0) return null;
         var chevron = Icons.Of(Ico.Forward, B("LabelTertiary"), 14);
         var list = new StackPanel();
         var title = Cols("*a", 8, CardLabel("Ultimi movimenti"), chevron);
@@ -137,7 +156,7 @@ public sealed partial class MainWindow
         }
         var recent = Tile(list, () => FinGo("moves"), null, "Ultimi movimenti", new Thickness(24, 16, 24, 16));
         recent.HorizontalAlignment = HorizontalAlignment.Stretch;
-        h.Children.Add(recent);
+        return recent;
     }
 
     private TextBlock CardLabel(string text)
@@ -279,10 +298,13 @@ public sealed partial class MainWindow
         var h = new StackPanel { Spacing = 12 };
         host.Children.Add(h);
         h.Children.Add(BackRow("Finanze", _income ? "Nuova entrata" : "Nuova spesa", () => FinGo(null)));
-        h.Children.Add(Segmented("finadd", new[] { "Spesa", "Entrata" }, _income ? 1 : 0, i => { _income = i == 1; _cat = ""; RenderFinance(); }));
+        // pagina larga: importo e scelte a sinistra, tastierino a destra
+        var large = Spread > 1;
+        var form = large ? new StackPanel { Spacing = 12 } : h;
+        form.Children.Add(Segmented("finadd", new[] { "Spesa", "Entrata" }, _income ? 1 : 0, i => { _income = i == 1; _cat = ""; RenderFinance(); }));
         var amt = Center(Semi("€" + (_amount.Length > 0 ? _amount : "0"), 48, _amount.Length > 0 ? "LabelPrimary" : "LabelTertiary"));
         var notes = Round(Tab.Banknote, "Banconote", false, () => { _cashSpend = !_income; _tally = new(); FinGo("cash"); });
-        h.Children.Add(Cols("a*a", 0, new Border { Width = notes.Width, MinWidth = 66 }, amt, notes));
+        form.Children.Add(Cols("a*a", 0, new Border { Width = notes.Width, MinWidth = 66 }, amt, notes));
 
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         foreach (var k in new[] { "" }.Concat(_income ? new[] { "Entrate" } : Finance.Categories.Take(Finance.Categories.Length - 1)))
@@ -302,12 +324,12 @@ public sealed partial class MainWindow
         src.Flyout = menu;
         chips.Children.Add(src);
         chips.Children.Add(Chip(_showNote ? "Nascondi nota" : "+ Nota", false, () => { _showNote = !_showNote; RenderFinance(); }));
-        h.Children.Add(HScroll(chips));
+        form.Children.Add(HScroll(chips));
         if (_showNote)
         {
             var note = new TextBox { Text = _note, PlaceholderText = "Dove o cosa" };
             note.TextChanged += (_, _) => _note = note.Text;
-            h.Children.Add(Field("Nota", note));
+            form.Children.Add(Field("Nota", note));
         }
 
         void Press(string k)
@@ -330,7 +352,7 @@ public sealed partial class MainWindow
         {
             if (i % 3 == 0) pad.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var k = keys[i];
-            var face = new Border { Height = 60, CornerRadius = new CornerRadius(20), Background = B("BgSurface"), Child = Center(T(k, 31, "LabelPrimary", true)) };
+            var face = new Border { Height = large ? 72 : 60, CornerRadius = new CornerRadius(20), Background = B("BgSurface"), Child = Center(T(k, 31, "LabelPrimary", true)) };
             var key = Bare(face, () => Press(k), k == "⌫" ? "Cancella" : k, 20);
             key.HorizontalAlignment = HorizontalAlignment.Stretch;
             if (k == "⌫") key.RightTapped += (_, _) => { _amount = ""; Press("⌫"); };
@@ -339,7 +361,8 @@ public sealed partial class MainWindow
             Grid.SetRow(key, i / 3);
             pad.Children.Add(key);
         }
-        h.Children.Add(pad);
+        if (large) h.Children.Add(Beside((Part(), form), (Part(), Column(pad))));
+        else h.Children.Add(pad);
         // si scrive anche da tastiera
         h.KeyDown += (_, e) =>
         {
@@ -363,7 +386,7 @@ public sealed partial class MainWindow
         }, "PrimaryButton");
         confirm.HorizontalAlignment = HorizontalAlignment.Stretch;
         Bounce(confirm);
-        h.Children.Add(confirm);
+        form.Children.Add(confirm);
     }
 
     // ---------------------------------------------------------------- contanti
@@ -378,13 +401,16 @@ public sealed partial class MainWindow
     {
         var m = _r.Fin.State;
         h.Children.Add(BackRow("Finanze", "Contanti", () => { _tally = new(); FinGo(null); }));
-        h.Children.Add(Segmented("cash", new[] { "Ho speso", "Ho ricevuto" }, _cashSpend ? 0 : 1, i => { _cashSpend = i == 0; _tally = new(); RenderFinance(); }));
+        // pagina larga: totale e conferma a sinistra, banconote a destra
+        var large = Spread > 1;
+        var form = large ? new StackPanel { Spacing = 12 } : h;
+        form.Children.Add(Segmented("cash", new[] { "Ho speso", "Ho ricevuto" }, _cashSpend ? 0 : 1, i => { _cashSpend = i == 0; _tally = new(); RenderFinance(); }));
         long Tally() => _tally.Sum(kv => (long)kv.Key * kv.Value);
         var big = T(Finance.Eur(Tally()), 48, "LabelTertiary", true);
         big.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         big.FontFamily = (FontFamily)Application.Current.Resources["FontMono"];
         big.HorizontalAlignment = HorizontalAlignment.Center;
-        h.Children.Add(big);
+        form.Children.Add(big);
 
         void Update()
         {
@@ -405,7 +431,8 @@ public sealed partial class MainWindow
             Grid.SetRow(note, i / 2);
             grid.Children.Add(note);
         }
-        h.Children.Add(grid);
+        if (large) h.Children.Add(Beside((Part(), form), (Part(), Column(grid))));
+        else h.Children.Add(grid);
         if (_cashSpend)
         {
             var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -414,7 +441,7 @@ public sealed partial class MainWindow
                 var kk = k;
                 chips.Children.Add(Chip(k, _cat == k, () => { _cat = _cat == kk ? "" : kk; RenderFinance(); }));
             }
-            h.Children.Add(HScroll(chips));
+            form.Children.Add(HScroll(chips));
         }
         var ok = Btn(_cashSpend ? "Registra spesa" : "Registra entrata", () =>
         {
@@ -428,7 +455,7 @@ public sealed partial class MainWindow
         }, "PrimaryButton");
         ok.HorizontalAlignment = HorizontalAlignment.Stretch;
         Bounce(ok, 1.03f);
-        h.Children.Add(ok);
+        form.Children.Add(ok);
     }
 
     private Grid Banknote(int denom, int owned, Action changed)

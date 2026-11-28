@@ -19,7 +19,6 @@ public sealed partial class MainWindow
     /// <summary>Cosa c'è sopra l'app: "camera", "photo" (Corpo), "cam" (telecamera a tutto schermo) o niente.</summary>
     private string? _bdOver;
     private int _bdRange = 1;
-    private double _bdGridWidth;
     private readonly Dictionary<string, BitmapImage> _bdImages = new();
 
     private static string BdKg(double kg) => kg.ToString("0.0", It);
@@ -200,7 +199,12 @@ public sealed partial class MainWindow
         var weigh = Btn("Peso", () => BdWeightDialog(today));
         var import = Btn("Importa", BdImport);
         foreach (var x in new[] { shoot, weigh, import }) x.HorizontalAlignment = HorizontalAlignment.Stretch;
-        h.Children.Add(Cols("***", 10, shoot, weigh, import));
+        // pagina larga: tasti e andamento a sinistra, le foto a destra
+        var large = Spread > 1;
+        var side = large ? new StackPanel { Spacing = 12 } : h;
+        var shots = large ? new StackPanel { Spacing = 12 } : h;
+        if (large) h.Children.Add(Beside((Part(), side), (Part(1.5), shots)));
+        side.Children.Add(Cols("***", 10, shoot, weigh, import));
 
         var card = VStack(16, Segmented("bdrange", new[] { "30 giorni", "90 giorni", "Tutto" }, _bdRange, i => { _bdRange = i; RenderBody(); }));
         var from = _bdRange == 2 ? DateTime.MinValue : DateTime.Today.AddDays(_bdRange == 0 ? -30 : -90);
@@ -213,7 +217,7 @@ public sealed partial class MainWindow
                 BdStat("Minimo", BdKg(pts.Min(x => x.Kg)) + " kg"), BdStat("Massimo", BdKg(pts.Max(x => x.Kg)) + " kg")));
         }
         else card.Children.Add(T("Servono due pesate", 16, "LabelTertiary"));
-        h.Children.Add(Panelled(card, new Thickness(24)));
+        side.Children.Add(Panelled(card, new Thickness(24)));
 
         var all = photos.Concat(b.Weights.Select(x => x.Day)).Distinct().OrderByDescending(d => d, StringComparer.Ordinal).ToList();
         var have = photos.ToHashSet();
@@ -222,17 +226,18 @@ public sealed partial class MainWindow
         void Fill(double width)
         {
             if (width < 1 || Math.Abs(width - built) < 1) return;
-            built = _bdGridWidth = width;
+            built = width;
             grid.Children.Clear();
             var cols = Math.Max(3, (int)((width + 8) / 176));
             var side = Math.Floor((width - 8 * (cols - 1)) / cols);
             foreach (var row in all.Chunk(cols))
                 grid.Children.Add(HStack(8, row.Select(d => (UIElement)BdCell(d, have.Contains(d), w, side)).ToArray()));
         }
-        // la larghezza dell'ultima volta: ridisegnando la pagina non salta
-        Fill(_bdGridWidth);
+        // la larghezza si conosce già dalla pagina: le foto escono subito della misura giusta
+        var page = double.IsNaN(h.Width) ? 688 : h.Width;
+        Fill(large ? Math.Floor((page - Gap) * 0.6) : page);
         grid.SizeChanged += (_, e) => Fill(e.NewSize.Width);
-        h.Children.Add(grid);
+        shots.Children.Add(grid);
     }
 
     private Button BdCell(string day, bool photo, Dictionary<string, double> w, double width)

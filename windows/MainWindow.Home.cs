@@ -35,19 +35,31 @@ public sealed partial class MainWindow
         if (_homeCams) { RenderCams(h); return; }
         var width = double.IsNaN(_hosts[0].Width) ? 688 : _hosts[0].Width;
         _homeWidth = width;
-        var cell = Math.Floor((width - Gap) / 2);
+        // stretta: due riquadri per riga; larga: quattro, con il corpo che ne prende due
+        var large = Spread > 1;
+        var cell = Math.Floor(large ? (width - 3 * Gap) / 4 : (width - Gap) / 2);
+        var span = large ? 2 * cell + Gap : width;
+        var low = Math.Max(cell, 172);
 
         var plan = PlanTile(cell);
         var pair = PairCube(cell);
         var balance = BalanceTile(cell);
         var todo = TodoTile(cell);
-        var body = BodyTile(width, Math.Max(cell * 0.82, 150));
-        // telecamere: tenendo premuto il riquadro si allarga a tutta riga e l'audio si fa da parte
-        var media = CamRow(AudioTile(cell), cell, width);
-        h.Children.Add(Cols("**", Gap, plan, pair));
-        h.Children.Add(Cols("**", Gap, balance, todo));
-        h.Children.Add(body);
-        h.Children.Add(media);
+        var body = BodyTile(span, large ? low : Math.Max(cell * 0.82, 150));
+        // telecamere: tenendo premuto il riquadro si allarga e l'audio si fa da parte; nella griglia larga la riga non cresce
+        var media = CamRow(AudioTile(cell), cell, span, large ? low : Math.Max(cell * 1.45, low));
+        if (large)
+        {
+            h.Children.Add(Cols("****", Gap, plan, pair, balance, todo));
+            h.Children.Add(Cols("**", Gap, body, media));
+        }
+        else
+        {
+            h.Children.Add(Cols("**", Gap, plan, pair));
+            h.Children.Add(Cols("**", Gap, balance, todo));
+            h.Children.Add(body);
+            h.Children.Add(media);
+        }
 
         // l'ingresso a cascata solo la prima volta, non a ogni aggiornamento
         if (!_homeIntro || Root.ActualWidth <= 0) return;
@@ -455,7 +467,7 @@ public sealed partial class MainWindow
         }
         var list = new StackPanel { Spacing = 2 };
         if (open.Count == 0) list.Children.Add(T("Tutto fatto", 16, "LabelTertiary", true));
-        var fit = Math.Clamp((int)((cell - 70) / 28), 1, 5);
+        var fit = Math.Clamp((int)((cell - 70) / 28), 1, Spread > 1 ? 7 : 5);
         foreach (var t in open.Take(fit)) list.Children.Add(TodoRow(t, true));
         var content = Rows("a*", 6, Cols("a*a", 8, IconBubble(Tab.Cap), pick, count), list);
         Func<bool>? swiped = null;
@@ -484,7 +496,7 @@ public sealed partial class MainWindow
         var next = b.Slots.Where(s => s.Dow == dow && s.Minute >= nowMin - 30).OrderBy(s => s.Minute).FirstOrDefault()
             ?? b.Slots.Where(s => s.Dow == (dow + 1) % 7).OrderBy(s => s.Minute).FirstOrDefault();
 
-        var size = height - 34;
+        var size = Math.Min(height - 34, width * 0.4);
         var kcal = Semi(BdN(tot.Kcal), Math.Clamp(size * 0.19, 14, 31));
         var ring = Ring(g.Kcal > 0 ? tot.Kcal / g.Kcal : 0, size, 12, kcal);
         ring.VerticalAlignment = VerticalAlignment.Center;

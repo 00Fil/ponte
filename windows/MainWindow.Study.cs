@@ -47,9 +47,9 @@ public sealed partial class MainWindow
     // ---------------------------------------------------------------- cruscotto
     private void StDashboard(StackPanel h, PlanState p)
     {
-        h.Children.Add(NowStudyCard(p));
-        h.Children.Add(ExamsCard(p));
-        h.Children.Add(Pomodoro(p));
+        var now = NowStudyCard(p);
+        var exams = ExamsCard(p);
+        var timer = Pomodoro(p);
         var today = MinutesOn(p, DateTime.Today, DateTime.MaxValue);
         var goal = p.Get("goal", 120);
         var tc = new StackPanel { Spacing = 10 };
@@ -62,8 +62,13 @@ public sealed partial class MainWindow
         tc.Children.Add(hd);
         tc.Children.Add(Bar(Math.Min(1.0, (double)today / goal), today >= goal ? "PositiveOnSubtle" : "AccentDefault", 8));
         tc.Children.Add(T("Obiettivo " + Hm(goal) + (today >= goal ? " · raggiunto" : ""), 12, "LabelTertiary"));
-        h.Children.Add(Panelled(tc, new Thickness(24)));
-        StStatsBody(h, p);
+        var goalCard = Panelled(tc, new Thickness(24));
+        var stats = new StackPanel();
+        StStatsBody(stats, p);
+        var n = Spread;
+        if (n == 1) foreach (var block in new UIElement[] { now, exams, timer, goalCard, stats }) h.Children.Add(block);
+        else if (n == 2) h.Children.Add(Even(new UIElement[] { now, exams }, new UIElement[] { timer, goalCard, stats }));
+        else h.Children.Add(Even(new UIElement[] { now, exams }, new UIElement[] { timer }, new UIElement[] { goalCard, stats }));
     }
 
     private Grid SubLine(PlanState p, string subject, string title, string note)
