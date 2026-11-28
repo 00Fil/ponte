@@ -185,7 +185,10 @@ public sealed partial class MainWindow
         if (_devOpen) { FillDevices(); _morph.Height = MorphHeight(); }
     }
 
-    /// <summary>Posizione della pillola: allineata alla colonna del titolo; aperta, copre tutta la colonna.</summary>
+    /// <summary>Oltre questa larghezza la scheda dei dispositivi non si allarga, anche se la pagina è più larga.</summary>
+    private const double DevWide = 688;
+
+    /// <summary>Posizione della pillola: allineata alla colonna del titolo; aperta, copre la colonna.</summary>
     private void PlaceMorph()
     {
         if (_morph == null) return;
@@ -194,9 +197,9 @@ public sealed partial class MainWindow
         if (avail <= 0 || double.IsNaN(w)) return;
         var left = Math.Max(0, (avail - w) / 2);
         _morph.Margin = new Thickness(_devOpen ? left : left + 8, 90, 0, 0);
-        _morphCard.Width = w - 2;
+        _morphCard.Width = Math.Min(w, DevWide) - 2;
         if (!_devOpen) return;
-        _morph.Width = w;
+        _morph.Width = Math.Min(w, DevWide);
         _morph.Height = MorphHeight();
     }
 
@@ -229,13 +232,13 @@ public sealed partial class MainWindow
         if (open)
         {
             _devPick = null;
-            _morphCard.Width = col - 2;
+            _morphCard.Width = Math.Min(col, DevWide) - 2;
             FillDevices();
             _morphCard.Visibility = Visibility.Visible;
             _devTimer.Start();
         }
         else _morphPill.Visibility = Visibility.Visible;
-        var w1 = open ? col : 206;
+        var w1 = open ? Math.Min(col, DevWide) : 206;
         var h1 = open ? MorphHeight() : 30;
         var l1 = open ? left : left + 8;
         Tween(360, k =>

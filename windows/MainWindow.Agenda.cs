@@ -107,7 +107,6 @@ public sealed partial class MainWindow
     {
         var top = HStack(12, AgTodoButton(), AgTomatoButton(), Btn("Google", () => AgGo("ics"), "SecondaryButton"));
         top.HorizontalAlignment = HorizontalAlignment.Right;
-        h.Children.Add(top);
 
         var first = _agCursor;
         var offset = ((int)first.DayOfWeek + 6) % 7;
@@ -146,7 +145,7 @@ public sealed partial class MainWindow
             var inMonth = day.Month == _agCursor.Month;
             var sel = day.Date == _agSel.Date;
             var today = day.Date == DateTime.Today;
-            var cell = new Border { Height = 52, CornerRadius = new CornerRadius(14), Margin = new Thickness(1), Background = sel ? B("AccentDefault") : Sb(Microsoft.UI.Colors.Transparent) };
+            var cell = new Border { Height = Spread > 1 ? 76 : 52, CornerRadius = new CornerRadius(14), Margin = new Thickness(1), Background = sel ? B("AccentDefault") : Sb(Microsoft.UI.Colors.Transparent) };
             var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 3 };
             var num = T(day.Day.ToString(), 15, sel ? "LabelPrimary" : today ? "AccentDefault" : inMonth ? "LabelPrimary" : "LabelDisabled", today);
             num.HorizontalAlignment = HorizontalAlignment.Center;
@@ -165,7 +164,7 @@ public sealed partial class MainWindow
             grid.Children.Add(cell);
         }
         card.Children.Add(grid);
-        h.Children.Add(Panelled(card, new Thickness(16)));
+        var month = Panelled(card, new Thickness(16));
 
         var dh = new Grid();
         dh.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -177,11 +176,20 @@ public sealed partial class MainWindow
         var add = BubbleButton(Center(Icons.Of(Ico.Plus, White, 20)), 44, () => { AgNew(_agSel); AgGo("edit"); }, "Nuovo evento", Alpha(C("AccentDefault"), 0.85));
         Grid.SetColumn(add, 1);
         dh.Children.Add(add);
-        h.Children.Add(dh);
 
         var list = AgOn(all, _agSel.Date);
-        if (list.Count == 0) h.Children.Add(T("Niente in programma", 13, "LabelTertiary"));
-        foreach (var i in list) h.Children.Add(AgRow(i));
+        var rows = new List<UIElement>();
+        if (list.Count == 0) rows.Add(T("Niente in programma", 13, "LabelTertiary"));
+        foreach (var i in list) rows.Add(AgRow(i));
+
+        if (Spread > 1)
+        {
+            // pagina larga: il mese a sinistra, accanto il giorno scelto
+            var day = Column(new UIElement[] { top, dh }.Concat(rows).ToArray());
+            h.Children.Add(Beside((Part(1.6), Column(month)), (Part(), day)));
+            return;
+        }
+        foreach (var block in new UIElement[] { top, month, dh }.Concat(rows)) h.Children.Add(block);
     }
 
     /// <summary>Pillola di vetro alta 44 con un segno e, se serve, un numero accanto.</summary>

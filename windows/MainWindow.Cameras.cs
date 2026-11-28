@@ -205,7 +205,7 @@ public sealed partial class MainWindow
     // ---------------------------------------------------------------- riquadro della Home
 
     /// <summary>La riga di audio e telecamere: allargando le cam, l'audio si fa da parte.</summary>
-    private StackPanel CamRow(Button audio, double cell, double full)
+    private StackPanel CamRow(Button audio, double cell, double full, double bigHeight)
     {
         // senza immagini non c'è niente da allargare
         if (!CamAvailable) _camBig = _camMenu = false;
@@ -225,7 +225,7 @@ public sealed partial class MainWindow
             side.Opacity = 1 - k;
             side.Visibility = k > 0.98 ? Visibility.Collapsed : Visibility.Visible;
             cams!.Width = cell + (full - cell) * k;
-            cams.Height = tall + (Math.Max(cell * 1.45, tall) - tall) * k;
+            cams.Height = tall + (bigHeight - tall) * k;
         }
         cams = CamsTile(() =>
         {
@@ -362,9 +362,11 @@ public sealed partial class MainWindow
     {
         var width = double.IsNaN(h.Width) ? 688 : h.Width;
         _homeWidth = width;
-        var cell = Math.Floor((width - 10) / 2);
         var list = CamList(_camsEdit);
-        foreach (var row in list.Chunk(2))
+        // pagina larga e tante cam: tre per riga
+        var cols = Spread > 1 && list.Count > 4 ? 3 : 2;
+        var cell = Math.Floor((width - 10 * (cols - 1)) / cols);
+        foreach (var row in list.Chunk(cols))
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
             foreach (var ch in row)
@@ -402,6 +404,7 @@ public sealed partial class MainWindow
     {
         var alerts = _r.Cams.Alerts;
         if (alerts.Count == 0) { h.Children.Add(T("Nessun avviso", 16, "LabelTertiary")); return; }
+        var rows = new List<UIElement>();
         foreach (var a in alerts)
         {
             var picture = new Border { Width = 112, Height = 70, CornerRadius = new CornerRadius(14), Background = Sb(CamBlack) };
@@ -412,8 +415,11 @@ public sealed partial class MainWindow
             info.VerticalAlignment = VerticalAlignment.Center;
             var tile = Tile(Cols("a*", 14, picture, info), () => CamOpen(a.Channel), null, CamKind(a.Type), new Thickness(12));
             tile.HorizontalAlignment = HorizontalAlignment.Stretch;
-            h.Children.Add(tile);
+            rows.Add(tile);
         }
+        // pagina larga: due colonne, l'ordine si legge da sinistra a destra
+        if (Spread > 1) h.Children.Add(Even(rows.Where((_, i) => i % 2 == 0).ToArray(), rows.Where((_, i) => i % 2 == 1).ToArray()));
+        else foreach (var row in rows) h.Children.Add(row);
     }
 
     // ---------------------------------------------------------------- tutto schermo

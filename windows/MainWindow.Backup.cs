@@ -25,6 +25,11 @@ public sealed partial class MainWindow
         var b = _r.Backup;
         var busy = b.Busy;
         h.Children.Add(BackRow("Condividi", "Backup", () => { _backupOpen = false; RenderShare(); }));
+        // pagina larga: spazio e cartelle a sinistra, copia e ripristino a destra
+        var large = Spread > 1;
+        var setup = large ? new StackPanel { Spacing = 12 } : h;
+        var run = large ? new StackPanel { Spacing = 12 } : h;
+        if (large) h.Children.Add(Beside((Part(), setup), (Part(), run)));
 
         // ------------------------------------------------ spazio
         var space = new StackPanel { Spacing = 10 };
@@ -38,7 +43,7 @@ public sealed partial class MainWindow
         }
         if (b.SpaceError.Length > 0) space.Children.Add(Wrapped(b.SpaceError, "CriticalOnSubtle"));
         else if (b.Space == null) space.Children.Add(T("Controllo il server…", 13, "LabelTertiary"));
-        h.Children.Add(Panelled(space, new Thickness(20)));
+        setup.Children.Add(Panelled(space, new Thickness(20)));
 
         // ------------------------------------------------ cartelle
         var folders = new StackPanel { Spacing = 12 };
@@ -67,7 +72,7 @@ public sealed partial class MainWindow
             on.VerticalAlignment = VerticalAlignment.Center;
             folders.Children.Add(Cols("a*aa", 12, icon, text, remove, on));
         }
-        h.Children.Add(Panelled(folders, new Thickness(20)));
+        setup.Children.Add(Panelled(folders, new Thickness(20)));
 
         // ------------------------------------------------ copia e verifica
         var copy = new StackPanel { Spacing = 10 };
@@ -119,7 +124,7 @@ public sealed partial class MainWindow
             copy.Children.Add(Semi($"{failed.Count} non copiati", 13, "CriticalOnSubtle"));
             foreach (var line in failed.Take(5)) copy.Children.Add(Wrapped(line, "LabelTertiary"));
         }
-        h.Children.Add(Panelled(copy, new Thickness(20)));
+        run.Children.Add(Panelled(copy, new Thickness(20)));
 
         // ------------------------------------------------ esito della verifica
         if (b.Last is { } report)
@@ -128,7 +133,7 @@ public sealed partial class MainWindow
             var dot = new Ellipse { Width = 10, Height = 10, Fill = B(report.Ok ? "Positive" : "Caution"), VerticalAlignment = VerticalAlignment.Center };
             result.Children.Add(HStack(8, dot, BackupTitle(report.Ok ? "Verifica superata" : "Verifica non superata")));
             foreach (var line in report.Lines) result.Children.Add(Wrapped(line, "LabelSecondary"));
-            h.Children.Add(Panelled(result, new Thickness(20)));
+            run.Children.Add(Panelled(result, new Thickness(20)));
         }
 
         // ------------------------------------------------ ripristino
@@ -150,7 +155,7 @@ public sealed partial class MainWindow
         var restore = Stretched(Btn("Ripristina i file mancanti", () => b.Restore(from?.Device), "SecondaryButton"));
         restore.IsEnabled = !busy && from != null;
         back.Children.Add(restore);
-        h.Children.Add(Panelled(back, new Thickness(20)));
+        run.Children.Add(Panelled(back, new Thickness(20)));
     }
 
     private TextBlock BackupTitle(string text)

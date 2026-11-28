@@ -10,6 +10,7 @@ public sealed partial class MainWindow
 {
     private bool _todoUni;
     private string _todoText = "";
+    private string _todoUniText = "";
     private int _todoSlide;
 
     private static List<StudyTask> TodoLife(PlanState p) =>
@@ -19,7 +20,8 @@ public sealed partial class MainWindow
     private static List<StudyTask> TodoUni(PlanState p) =>
         p.Topics.Where(t => t.Subject == "uni" && !t.Done).Concat(ByUrgency(p).SelectMany(c => c.Open)).ToList();
 
-    private List<StudyTask> TodoOpen(PlanState p) => _todoUni ? TodoUni(p) : TodoLife(p);
+    private List<StudyTask> TodoOpen(PlanState p) => TodoOpen(p, _todoUni);
+    private static List<StudyTask> TodoOpen(PlanState p, bool uni) => uni ? TodoUni(p) : TodoLife(p);
 
     /// <summary>Una riga: bolla di spunta e testo.</summary>
     private Grid TodoRow(StudyTask t, bool compact = false)
@@ -55,6 +57,21 @@ public sealed partial class MainWindow
     {
         var p = _r.Plan.State;
         h.Children.Add(BackRow("Agenda", "To-do", () => AgGo(null)));
+        if (Spread > 1)
+        {
+            // pagina larga: Life e Uni affiancate, senza dover passare dall'una all'altra
+            StackPanel List(string name, bool uni)
+            {
+                var title = Semi(name, 20);
+                title.Margin = new Thickness(8, 4, 0, 0);
+                var column = Column(title);
+                TodoList(column, p, uni);
+                return column;
+            }
+            _todoSlide = 0;
+            h.Children.Add(Beside((Part(), List("Life", false)), (Part(), List("Uni", true))));
+            return;
+        }
         h.Children.Add(Segmented("todo", new[] { "Life", "Uni" }, _todoUni ? 1 : 0, i => TodoPage(i == 1)));
 
         // Life e Uni sono due pagine: si passa dall'una all'altra anche scorrendo di lato
@@ -62,9 +79,15 @@ public sealed partial class MainWindow
         SideSwipe(page, d => TodoPage(d > 0));
         h.Children.Add(page);
         if (_todoSlide != 0) { Enter(page, 40 * _todoSlide, 0, 320); _todoSlide = 0; }
-        page.Children.Add(TodoField());
+        TodoList(page, p, _todoUni);
+    }
 
-        var open = TodoOpen(p);
+    /// <summary>Campo per aggiungere, cose aperte e cose fatte di una delle due liste.</summary>
+    private void TodoList(StackPanel page, PlanState p, bool uni)
+    {
+        page.Children.Add(TodoField(uni));
+
+        var open = TodoOpen(p, uni);
         var list = new StackPanel();
         if (open.Count == 0)
         {
@@ -79,14 +102,14 @@ public sealed partial class MainWindow
         }
         page.Children.Add(Panelled(list));
 
-        var done = _todoUni
+        var done = uni
             ? p.Topics.Where(t => t.Done).OrderByDescending(t => t.DoneAt).ToList()
             : p.Tasks.Where(t => t.Done).OrderByDescending(t => t.DoneAt).ToList();
         if (done.Count == 0) return;
         var head = Semi("Fatte", 13, "LabelSecondary");
         head.VerticalAlignment = VerticalAlignment.Center;
         Button? clear = null;
-        if (!_todoUni)
+        if (!uni)
         {
             var word = Semi("Svuota", 13, "AccentDefault");
             word.Margin = new Thickness(8, 4, 8, 4);
@@ -114,9 +137,13 @@ public sealed partial class MainWindow
         Padding = pad ?? new Thickness(16, 8, 16, 8), Child = content,
     };
 
-    private Grid TodoField()
+    private Grid TodoField(bool uni)
     {
-        var box = new TextBox { Text = _todoText, PlaceholderText = "Nuova cosa da fare", VerticalAlignment = VerticalAlignment.Center };
+        // affiancate, ogni lista tiene il proprio testo in corso
+        var own = uni && Spread > 1;
+        var draft = own ? _todoUniText : _todoText;
+        void Keep(string text) { if (own) _todoUniText = text; else _todoText = text; }
+        var box = new TextBox { Text = draft, PlaceholderText = "Nuova cosa da fare", VerticalAlignment = VerticalAlignment.Center };
         // il campo sta dentro la capsula di vetro: niente fondo né bordo propri
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "TextControlBorderBrushFocused" })
             box.Resources[key] = Clear;
@@ -127,8 +154,8 @@ public sealed partial class MainWindow
             var text = box.Text.Trim();
             if (text.Length == 0) return;
             box.Text = "";
-            _todoText = "";
-            _r.Plan.SaveTask(new StudyTask("", text, _todoUni ? "uni" : "", 0, false));
+            Keep("");
+            _r.Plan.SaveTask(new StudyTask("", text, uni ? "uni" : "", 0, false));
             RenderAgenda();
         }
         void Plus()
@@ -138,7 +165,8 @@ public sealed partial class MainWindow
             if (on) sign.Foreground = White;
             holder.Child = BubbleButton(sign, 40, Add, "Aggiungi", on ? C("AccentDefault") : null);
         }
-        box.TextChanged += (_, _) => { var was = _todoText.Trim().Length > 0; _todoText = box.Text; if (was != _todoText.Trim().Length > 0) Plus(); };
+        var filled = draft.Trim().Length > 0;
+        box.TextChanged += (_, _) => { Keep(box.Text); var now = box.Text.Trim().Length > 0; if (now == filled) return; filled = now; Plus(); };
         box.KeyDown += (_, e) => { if (e.Key == VirtualKey.Enter) { e.Handled = true; Add(); } };
         Plus();
         var capsule = new Border { CornerRadius = new CornerRadius(24), Background = Drop(), BorderBrush = Hairline, BorderThickness = new Thickness(1) };

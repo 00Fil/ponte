@@ -62,20 +62,26 @@ public sealed partial class MainWindow
         var acts = HStack(40, clip, Round(Tab.Upload, "Invia file", false, () => _ = PickFilesAsync()), Round(Tab.Drive, "Backup", false, () => { OpenBackup(); RenderShare(); }));
         acts.HorizontalAlignment = HorizontalAlignment.Center;
         acts.Margin = new Thickness(0, 20, 0, 16);
-        h.Children.Add(acts);
 
-        h.Children.Add(DriveUsage());
-        h.Children.Add(Segmented("share", new[] { "Appunti", "Immagini", "File" }, _shareTab, i => { _shareTab = i; _folder = null; RenderShareAnimated(); }));
+        // pagina larga: azioni e spazio fissi a sinistra, il contenuto condiviso a destra
+        var large = Spread > 1;
+        var side = large ? new StackPanel { Spacing = 12 } : h;
+        var shared = large ? new StackPanel { Spacing = 12 } : h;
+        if (large) h.Children.Add(Beside((Px(340), side), (Part(), shared)));
+        if (large) acts.Margin = new Thickness(0, 4, 0, 12);
+        side.Children.Add(acts);
+        side.Children.Add(DriveUsage(large));
+        shared.Children.Add(Segmented("share", new[] { "Appunti", "Immagini", "File" }, _shareTab, i => { _shareTab = i; _folder = null; RenderShareAnimated(); }));
         var body = new StackPanel { Spacing = 12 };
         if (_shareTab == 0)
         {
             var list = new StackPanel { Spacing = 12 };
-            h.Children.Add(SearchField(_clipQuery, "Cerca negli appunti", q => { _clipQuery = q; BuildClips(list); }));
+            shared.Children.Add(SearchField(_clipQuery, "Cerca negli appunti", q => { _clipQuery = q; BuildClips(list); }));
             BuildClips(list);
             body.Children.Add(list);
         }
         else BuildFiles(body);
-        h.Children.Add(body);
+        shared.Children.Add(body);
         _shareBody = body;
     }
 
@@ -108,7 +114,7 @@ public sealed partial class MainWindow
     private static string Size(long n) => n switch { >= 1L << 30 => (n / (double)(1L << 30)).ToString("0.0", It) + " GB", >= 1L << 20 => (n / (double)(1L << 20)).ToString("0.#", It) + " MB", >= 1L << 10 => (n / 1024.0).ToString("0", It) + " KB", _ => n + " B" };
 
     /// <summary>Lo spazio condiviso: una barra con immagini, file e appunti rispetto ai 50 GB.</summary>
-    private Border DriveUsage()
+    private Border DriveUsage(bool stacked = false)
     {
         var items = _r.Files.Items;
         var img = items.Where(f => f.Mime.StartsWith("image/")).Sum(f => f.Size);
@@ -137,7 +143,8 @@ public sealed partial class MainWindow
         }
         barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(1.0 - (double)used / DriveCap, 0.0001), GridUnitType.Star) });
 
-        var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        // nella colonna stretta le voci vanno una sotto l'altra
+        var legend = new StackPanel { Orientation = stacked ? Orientation.Vertical : Orientation.Horizontal, Spacing = stacked ? 6 : 16 };
         foreach (var p in parts)
             legend.Children.Add(HStack(6, new Ellipse { Width = 8, Height = 8, Fill = p.Col, VerticalAlignment = VerticalAlignment.Center }, T(p.Name + " " + Size(p.V), 13, "LabelSecondary")));
         var card = Widget(VStack(12, head, barRow, legend), null, new Thickness(16), 20);
@@ -394,33 +401,53 @@ public sealed partial class MainWindow
     // ================================================================ Impostazioni
 
     private string? _setSub;
+    private StackPanel? _setDetail;
 
     private void RenderSettings()
     {
         var h = Reset("Impostazioni");
         h.Spacing = 12;
-        var s = _r.S;
-        if (_setSub == null)
+        if (Spread > 1)
         {
-            var name1 = Text("Relay", "Title2");
-            var version = T($"Versione 1.0.{_r.Update.Current}", 13, "LabelTertiary");
-            var words = VStack(0, name1, version);
-            words.VerticalAlignment = VerticalAlignment.Center;
-            var brand = HStack(12, RelayMark(52), words);
-            brand.Margin = new Thickness(4, 0, 0, 8);
-            h.Children.Add(brand);
-            h.Children.Add(Category(Tab.Settings, "Sistema", "Aggiornamenti, server e questo dispositivo", Argb(255, 0x8E, 0x8E, 0x93), "sys"));
-            var group = T("MODULI", 13, "LabelTertiary");
-            group.Margin = new Thickness(12, 8, 0, 0);
-            h.Children.Add(group);
-            h.Children.Add(Category(Tab.Devices, "Condividi", "Collegamento diretto, screenshot, notifiche", Argb(255, 0x2F, 0xB5, 0xC4), "share"));
-            h.Children.Add(Category(Tab.Wallet, "Finanze", "Importi nascosti", Argb(255, 0x5D, 0xA8, 0x5B), "fin"));
-            h.Children.Add(Category(Tab.Headphones, "Audio", "Cuffie e passaggio automatico", Argb(255, 0xE8, 0x8A, 0x2E), "audio"));
+            // pagina larga: le voci restano a sinistra, accanto quella scelta
+            var open = _setSub ?? "sys";
+            var menu = new StackPanel { Spacing = 12 };
+            SettingsMenu(menu, open);
+            _setDetail = new StackPanel { Spacing = 12 };
+            SettingsPage(_setDetail, open);
+            h.Children.Add(Beside((Px(340), menu), (Part(), _setDetail)));
             return;
         }
+        _setDetail = null;
+        if (_setSub == null) { SettingsMenu(h, null); return; }
         var titles = new Dictionary<string, string> { ["sys"] = "Sistema", ["share"] = "Condividi", ["fin"] = "Finanze", ["audio"] = "Audio" };
         h.Children.Add(BackRow("Impostazioni", titles[_setSub], () => { _setSub = null; RenderSettings(); }));
-        switch (_setSub)
+        SettingsPage(h, _setSub);
+    }
+
+    /// <summary>Marchio e categorie; "open" è la voce mostrata accanto, quando c'è.</summary>
+    private void SettingsMenu(StackPanel h, string? open)
+    {
+        var name1 = Text("Relay", "Title2");
+        var version = T($"Versione 1.0.{_r.Update.Current}", 13, "LabelTertiary");
+        var words = VStack(0, name1, version);
+        words.VerticalAlignment = VerticalAlignment.Center;
+        var brand = HStack(12, RelayMark(52), words);
+        brand.Margin = new Thickness(4, 0, 0, 8);
+        h.Children.Add(brand);
+        h.Children.Add(Category(Tab.Settings, "Sistema", "Aggiornamenti, server e questo dispositivo", Argb(255, 0x8E, 0x8E, 0x93), "sys", open));
+        var group = T("MODULI", 13, "LabelTertiary");
+        group.Margin = new Thickness(12, 8, 0, 0);
+        h.Children.Add(group);
+        h.Children.Add(Category(Tab.Devices, "Condividi", "Collegamento diretto, screenshot, notifiche", Argb(255, 0x2F, 0xB5, 0xC4), "share", open));
+        h.Children.Add(Category(Tab.Wallet, "Finanze", "Importi nascosti", Argb(255, 0x5D, 0xA8, 0x5B), "fin", open));
+        h.Children.Add(Category(Tab.Headphones, "Audio", "Cuffie e passaggio automatico", Argb(255, 0xE8, 0x8A, 0x2E), "audio", open));
+    }
+
+    private void SettingsPage(StackPanel h, string page)
+    {
+        var s = _r.S;
+        switch (page)
         {
             case "sys":
                 var name = new TextBox { Text = s.Name, PlaceholderText = "PC della scrivania" };
@@ -472,7 +499,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>Voce di categoria: goccia di vetro con l'icona colorata, nome e descrizione; niente contenitore.</summary>
-    private Button Category(int glyph, string title, string note, Windows.UI.Color tint, string key)
+    private Button Category(int glyph, string title, string note, Windows.UI.Color tint, string key, string? open = null)
     {
         var ink = Lerp(tint, C("LabelPrimary"), 0.35);
         var bubble = Bubble(Center(Icons.Glyph(glyph, Sb(ink), 22)), 46);
@@ -483,11 +510,18 @@ public sealed partial class MainWindow
         var chevron = Icons.Of(Ico.Forward, B("LabelTertiary"), 16);
         chevron.VerticalAlignment = VerticalAlignment.Center;
         var row = Cols("a*a", 12, bubble, col, chevron);
-        var face = new Border { CornerRadius = new CornerRadius(28), Padding = new Thickness(4, 8, 12, 8), Background = Clear, Child = row };
-        var b = Bare(face, () => { _setSub = key; RenderSettings(); }, title, 28);
+        Brush Rest() => open == key ? Sb(Alpha(C("AccentDefault"), 0.12)) : Clear;
+        var face = new Border { CornerRadius = new CornerRadius(28), Padding = new Thickness(4, 8, 12, 8), Background = Rest(), Child = row };
+        var b = Bare(face, () =>
+        {
+            var moved = open != key;
+            _setSub = key;
+            RenderSettings();
+            if (moved && _setDetail != null) Enter(_setDetail, 0, 12, 320);
+        }, title, 28);
         b.HorizontalAlignment = HorizontalAlignment.Stretch;
-        b.PointerEntered += (_, _) => face.Background = Sb(Alpha(C("LabelPrimary"), 0.04));
-        b.PointerExited += (_, _) => face.Background = Clear;
+        b.PointerEntered += (_, _) => { if (open != key) face.Background = Sb(Alpha(C("LabelPrimary"), 0.04)); };
+        b.PointerExited += (_, _) => face.Background = Rest();
         Bounce(b, 1.02f);
         return b;
     }

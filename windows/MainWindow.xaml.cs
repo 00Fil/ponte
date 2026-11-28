@@ -26,8 +26,6 @@ public sealed partial class MainWindow : Window
     // Le stesse sei voci di Android, con le stesse icone. L'audio sta in Home e nelle Impostazioni.
     private static readonly string[] Tabs = { "Home", "Condividi", "Finanze", "Agenda", "Corpo", "Impostazioni" };
     private static readonly int[] TabIcons = { Tab.House, Tab.Devices, Tab.Wallet, Tab.Calendar, Tab.Flame, Tab.Settings };
-    /// <summary>Larghezza massima della colonna di ogni pagina, come su Android.</summary>
-    private static readonly double[] PageMax = { 720, 1024, 720, 720, 720, 720 };
 
     private readonly Router _r;
     private readonly ScrollViewer[] _pages;
@@ -154,38 +152,6 @@ public sealed partial class MainWindow : Window
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
-    private bool Wide => Root.ActualWidth >= 1024;
-
-    /// <summary>Ogni pagina è una colonna centrata con la sua larghezza massima; il titolo si allinea alla stessa colonna.</summary>
-    private void FitColumn()
-    {
-        var avail = Root.ActualWidth - (Wide ? 240 : 0);
-        if (avail <= 0) return;
-        var bottom = Wide ? 24 : 100;
-        for (var i = 0; i < _hosts.Length; i++)
-        {
-            _hosts[i].Width = Math.Max(260, Math.Min(PageMax[i], avail) - 32);
-            _hosts[i].HorizontalAlignment = HorizontalAlignment.Center;
-            _hosts[i].Margin = new Thickness(0, 12, 0, bottom);
-        }
-        foreach (var pg in _pages) pg.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-        TitleBox.Width = Math.Max(100, _hosts[_tab].Width - 16);
-        TitleBox.HorizontalAlignment = HorizontalAlignment.Center;
-        // sotto "Home" resta il posto per la pillola dei dispositivi
-        TitleBox.Margin = new Thickness(0, 0, 0, _tab == 0 ? 46 : 12);
-        PlaceMorph();
-    }
-
-    private void ApplyLayout()
-    {
-        SideCol.Width = new GridLength(Wide ? 240 : 0);
-        Side.Visibility = Wide ? Visibility.Visible : Visibility.Collapsed;
-        Bottom.Visibility = Wide ? Visibility.Collapsed : Visibility.Visible;
-        FitColumn();
-        // la Home è fatta di quadrati: se la colonna cambia larghezza si ridisegna
-        if (_tab == 0 && _homeWidth > 0 && Math.Abs(_hosts[0].Width - _homeWidth) > 0.5) RenderHome();
-    }
-
     private void Select(int i)
     {
         i = Math.Clamp(i, 0, Tabs.Length - 1);
@@ -256,7 +222,8 @@ public sealed partial class MainWindow : Window
 
     private StackPanel Reset(string title)
     {
-        // Il titolo sta nella testata animata sopra la pagina.
+        // Il titolo sta nella testata animata sopra la pagina; la sottopagina decide quanto è larga.
+        FitColumn();
         var h = _hosts[_tab];
         h.Children.Clear();
         _money.Clear();
